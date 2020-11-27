@@ -1,55 +1,45 @@
-from io import BytesIO
+from pdfme import span
+from pdfme.standard_fonts import fonts
 
-from pdfme import PDFBase
-from pdfme.utils import subs, ref
 
-pdf = PDFBase({
-    'Type': b'/Catalog',
-    'Pages': None
-})
+fonts = {
+    '/F1': fonts['helvetica'],
+    '/F1B': fonts['helveticaB'],
+    '/F1I': fonts['helveticaI'],
+    '/F1BI': fonts['helveticaBI'],
+}
 
-font = pdf.add({
-    'Type': b'/Font',
-    'Subtype': b'/Type1',
-    'Name': b'/F1',
-    'BaseFont': b'/Helvetica'
-})
+state = {
+    'width': 200,
+    'height': 300,
+    'fonts': fonts,
+    'line-height': 1.1,
+    'text-align': 'l',
+    'stream': ''
+}
 
-content = pdf.add({
-    'Filter': b'/FlateDecode',
-    '__stream__': b'BT\n/F1 24 Tf\n1 0 0 1 260 600 Tm\n(Hello World)Tj\nET'
-})
+contents = [
+    'me gusta estar al lado del camino mirando el humo mientras todo pasa ',
+    {'style': {'font': ['helveticaB', 12]}, 'content': [
+        'me gusta abrir los ojos y estar vivo tener que vermelas con la resaca ',
+        {'style': {'font': ['helveticaBI', 12]}, 'content': [
+            'entonces navegar se hace preciso'
+        ]},
+            ' en barcos que se estrellan en la nada, vivir atormentado es sentido',
+    ]},
+    ' creo que esta si es la parte mas pesada ',
+    {'style': {'color': [1,0.3,0.7]}, 'content': [
+        'en tiempos donde nadie escucha a nadie'
+    ]},
+    ' en tiempos donde',
+    {'style': {'sub': 1.2}, 'content': ['todos']},
+    ' contra ',
+    {'style': {'sup': 1.2}, 'content': ['todos']},
+    ' en tiempos egoístas y ',
+    {'style': {'font': ['helveticaB', 16]}, 'content': ['mezquinos']},
+    ' en tiempos donde siempre estamos solos'
+]
 
-pages = pdf.add({
-    'Type': b'/Pages',
-    'Kids': [],
-    'Count': 1
-})
+rest = span.inline_tag(contents, {'font': ['helvetica', 12]}, state)
 
-pdf[1]['Pages'] = ref(pages)
-
-page = pdf.add({
-    'Type': b'/Page',
-    'Parent': ref(pages),
-    'MediaBox': [0, 0, 612, 792],
-    'Resources': {
-        'ProcSet': [b'/PDF',b'/Text'],
-        'Font': {
-            'F1': ref(font)
-        }
-    },
-    'Contents': ref(content)
-})
-
-pdf[pages]['Kids'].append(ref(page))
-
-with open('test.pdf', 'wb') as f:
-    pdf.output(f)
-
-# f = BytesIO()
-# pdf.output(f)
-
-# ff = f.getvalue().decode()
-for el in pdf:
-    print(el)
-import pdb; pdb.set_trace()
+print(state['stream'])

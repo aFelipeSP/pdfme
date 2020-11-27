@@ -4,19 +4,17 @@ from uuid import uuid4
 from .objects import parse_obj
 from .utils import subs
 
-def unique_id():
-    return str(uuid4()).replace('-', '')
-
 class PDFBase:
-    def __init__(self, root, version='1.3', info=False):
+    def __init__(self, version='1.3', trailer=None):
         self.version = version
-        self.content = [root]
-        self.count = 2
-        self.i = 0
-
-        self.info = info
-        if info != False:
-            self.add(info)
+        self.content = []
+        if trailer is None:
+            self.trailer = {}
+        elif not isinstance(trailer, dict):
+            raise ValueError('trailer must be a dict')
+        else:
+            self.trailer = trailer
+        self.count = 1
 
     def add(self, obj):
         self.content.append(obj)
@@ -34,14 +32,6 @@ class PDFBase:
     def __iter__(self):
         for el in [None] + self.content:
             yield el
-
-    # def __next__(self):
-    #     if self.i < len(self.content):
-            
-    #         self.i += 1
-    #         return self.content[self.i - 1]
-    #     self.i = 0
-    #     raise StopIteration()
 
     def __len__(self):
         return len(self.content)
@@ -62,16 +52,16 @@ class PDFBase:
         for i, obj in enumerate(self.content):
             xref += str(count).zfill(10) + ' 00000 n \n'
 
-            bytes_ = subs('{} 0 obj\n', i + 1) + parse_obj(obj) + '\nendobj\n'.encode()
+            bytes_ = subs('{} 0 obj\n', i + 1) + parse_obj(obj) + '\nendobj\n'.encode('latin')
             count += len(bytes_)
             buffer.write(bytes_)
 
+        self.trailer['Size'] = self.count
+        if 'ID' not in self.trailer:
+            id_ = lambda: b'<' + str(uuid4()).replace('-', '').encode('latin') + b'>'
+            self.trailer['ID'] = [id_(), id_()]
+        trailer = parse_obj(self.trailer)
 
-        footer = xref + 'trailer\n<</Size {}/Root 1 0 R'.format(self.count)
-        if self.info:
-            footer += '/Info 2 0 R'
-        
-        footer += '/ID [<{}><{}>]>>\nstartxref\n{}\n%%EOF'.format(
-            unique_id(), unique_id(), count + 1)
-        
-        buffer.write(footer.encode())
+        footer = '\nstartxref\n{}\n%%EOF'.format(count + 1)
+
+        buffer.write((xref + 'trailer\n').encode('latin') + trailer + footer.encode('latin'))

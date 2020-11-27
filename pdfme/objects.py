@@ -15,17 +15,17 @@ def parse_obj(obj):
     elif isinstance(obj, bool):
         return b'true' if obj else b'false'
     elif isinstance(obj, (int, float)):
-        return str(obj).encode()
+        return str(obj).encode('latin')
     elif isinstance(obj, str):
-        return ('(' + re.sub(r'([()])', r'\\\1', obj) + ')').encode()
+        return ('(' + re.sub(r'([()])', r'\\\1', obj) + ')').encode('latin')
     
 
 def parse_dict(obj):
     bytes_ = b'<<'
     for key, value in obj.items():
-        bytes_ += b'/' + key.encode()
+        bytes_ += b'/' + key.encode('latin')
         ret = parse_obj(value)
-        if not ret.startswith(b'/'): bytes_ += b' '
+        if not ret[0] in [b'/', b'(', b'<']: bytes_ += b' '
         bytes_ += ret
 
     return bytes_ + b'>>'
@@ -34,7 +34,7 @@ def parse_list(obj):
     bytes_ = b'['
     for i, value in enumerate(obj):
         ret = parse_obj(value)
-        if not ret.startswith(b'/') and i != 0: bytes_ += b' '
+        if not ret[0] in [b'/', b'(', b'<'] and i != 0: bytes_ += b' '
         bytes_ += ret
 
     return bytes_ + b']'
