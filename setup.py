@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="pdfme",
-    version="0.0.2",
+    version="0.0.3",
     author="Andrés Felipe Sierra Parra",
     author_email="cepfelo@gmail.com",
     description="Create PDFs easily",
@@ -14,7 +14,8 @@ setuptools.setup(
     url="https://github.com/aFelipeSP/pdfme",
     packages=setuptools.find_packages(),
     install_requires=[
-        'jinja>=2.11.2'
+        'Jinja2>=2.11.2',
+        'cssselect2>=0.4.1'
     ],
     classifiers=[
         "Programming Language :: Python :: 3",

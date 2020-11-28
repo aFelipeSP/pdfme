@@ -94,3 +94,8 @@ class PDFPage(PDFObject):
 
         return ret
 
+
+class PDFPageManager(PDFObject):
+    def __init__(self, id_):
+        super().__init__(id_)
+        self.current_parent = PDFPages()

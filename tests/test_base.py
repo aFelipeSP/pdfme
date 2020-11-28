@@ -1,5 +1,9 @@
+from io import BytesIO
+
 from pdfme import span
 from pdfme.standard_fonts import fonts
+from pdfme import PDFBase
+from pdfme.utils import subs, ref
 
 
 fonts = {
@@ -20,9 +24,9 @@ state = {
 
 contents = [
     'me gusta estar al lado del camino mirando el humo mientras todo pasa ',
-    {'style': {'font': ['helveticaB', 12]}, 'content': [
+    {'style': {'font': ['/F1', 12]}, 'content': [
         'me gusta abrir los ojos y estar vivo tener que vermelas con la resaca ',
-        {'style': {'font': ['helveticaBI', 12]}, 'content': [
+        {'style': {'font': ['/F1BI', 12]}, 'content': [
             'entonces navegar se hace preciso'
         ]},
             ' en barcos que se estrellan en la nada, vivir atormentado es sentido',
@@ -36,10 +40,43 @@ contents = [
     ' contra ',
     {'style': {'sup': 1.2}, 'content': ['todos']},
     ' en tiempos egoístas y ',
-    {'style': {'font': ['helveticaB', 16]}, 'content': ['mezquinos']},
+    {'style': {'font': ['/F1B', 16]}, 'content': ['mezquinos']},
     ' en tiempos donde siempre estamos solos'
 ]
 
-rest = span.inline_tag(contents, {'font': ['helvetica', 12]}, state)
+rest = span.inline_tag(contents, {'font': ['/F1', 12]}, state)
 
-print(state['stream'])
+pdf = PDFBase({ 'Type': b'/Catalog', 'Pages': None })
+
+
+content = pdf.add({ '__stream__': subs('BT {} ET', state['stream']) })
+pages = pdf.add({ 'Type': b'/Pages', 'Kids': [], 'Count': 1 })
+pdf[1]['Pages'] = ref(pages)
+
+fonts_, fonts_refs = [], []
+for name, font_name in (('F1', 'Helvetica'), (''), (), ())
+
+font = pdf.add({
+    'Type': b'/Font',
+    'Subtype': b'/Type1',
+    'Name': b'/F1',
+    'BaseFont': b'/Helvetica'
+})
+
+page = pdf.add({
+    'Type': b'/Page',
+    'Parent': ref(pages),
+    'MediaBox': [0, 0, 612, 792],
+    'Resources': {
+        'ProcSet': [b'/PDF',b'/Text'],
+        'Font': {
+            'F1': ref(font)
+        }
+    },
+    'Contents': ref(content)
+})
+
+pdf[pages]['Kids'].append(ref(page))
+
+with open('test.pdf', 'wb') as f:
+    pdf.output(f)

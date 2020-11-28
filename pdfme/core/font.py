@@ -15,7 +15,7 @@ class PDFFontStandard(PDFFont):
     def __init__(self, id_, name):
         super().__init__(id_)
         if not name in STANDARD_FONTS:
-            raise Exception('name must be one of the 14 standar '
+            raise Exception('name must be one of the 14 standard '
                 'fonts: ' + str(STANDARD_FONTS))
         self.name = name
 

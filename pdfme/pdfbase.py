@@ -19,7 +19,7 @@ class PDFBase:
     def add(self, obj):
         self.content.append(obj)
         self.count += 1
-        return self.count - 1
+        return self.count - 1, obj
 
     def __getitem__(self, i):
         if i == 0: return None

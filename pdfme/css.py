@@ -18,3 +18,42 @@
 # vertical-align
 # white-space
 # width
+
+
+def parse_css_rule(css_rule):
+    attrs = {}
+    rule = {}
+    failed = False
+    saving_content = False
+    for token in css_rule:
+        if token.type == 'whitespace':
+            continue
+        elif token == ';':
+            if not failed:
+                attrs[rule['name']] = rule['content']
+            saving_content = False
+            failed = False
+            rule = {}
+        elif failed:
+            continue
+        elif not saving_content and token.type == 'ident':
+            if not 'name' in rule:
+                rule['name'] = token.value
+            else:
+                failed = True
+        elif token == ':':
+            if saving_content:
+                failed = True
+            else:
+                saving_content = True
+        else:
+            if not saving_content:
+                failed = True
+            else:
+                rule.setdefault('content', [])
+                rule['content'].append(token)
+
+    if not failed and 'name' in rule and 'content' in rule:
+        attrs[rule['name']] = rule['content']
+
+    return attrs
