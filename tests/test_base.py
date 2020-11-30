@@ -46,32 +46,33 @@ contents = [
 
 rest = span.inline_tag(contents, {'font': ['/F1', 12]}, state)
 
-pdf = PDFBase({ 'Type': b'/Catalog', 'Pages': None })
-
-
-content = pdf.add({ '__stream__': subs('BT {} ET', state['stream']) })
-pages = pdf.add({ 'Type': b'/Pages', 'Kids': [], 'Count': 1 })
+pdf = PDFBase()
+root, _ = pdf.add({ 'Type': b'/Catalog'})
+pdf.trailer['Root'] = ref(root)
+content, _ = pdf.add({ '__stream__': subs('BT 1 0 0 1 60 500 Tm{} ET', state['stream']) })
+pages, _ = pdf.add({ 'Type': b'/Pages', 'Kids': [], 'Count': 1 })
 pdf[1]['Pages'] = ref(pages)
 
-fonts_, fonts_refs = [], []
-for name, font_name in (('F1', 'Helvetica'), (''), (), ())
+fonts_= {}
+fonts_ex = (('F1', 'Helvetica'), ('F1B', 'Helvetica-Bold'), 
+    ('F1I', 'Helvetica-Oblique'), ('F1BI', 'Helvetica-BoldOblique'))
+for name, font_name in fonts_ex:
+    i, _ = pdf.add({
+        'Type': b'/Font',
+        'Subtype': b'/Type1',
+        'BaseFont': subs('/{}', font_name),
+        'Encoding': b'/WinAnsiEncoding'
+    })
+    fonts_[name] = ref(i)
 
-font = pdf.add({
-    'Type': b'/Font',
-    'Subtype': b'/Type1',
-    'Name': b'/F1',
-    'BaseFont': b'/Helvetica'
-})
 
-page = pdf.add({
+page,_ = pdf.add({
     'Type': b'/Page',
     'Parent': ref(pages),
     'MediaBox': [0, 0, 612, 792],
     'Resources': {
         'ProcSet': [b'/PDF',b'/Text'],
-        'Font': {
-            'F1': ref(font)
-        }
+        'Font': fonts_
     },
     'Contents': ref(content)
 })

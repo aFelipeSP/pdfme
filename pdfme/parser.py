@@ -1,9 +1,37 @@
 import re
 
 from .encoders import encode_stream
+from .utils import subs
+
+class PDFObject:
+    def __init__(self, id_=None, obj={}):
+        if not isinstance(id_, PDFRef):
+            raise TypeError('id_ argument must be of type PDFRef')
+        self.id = id_
+        self.value = obj
+
+    def __getitem__(self, name):
+        return self.value[name]
+
+    def __setitem__(self, name, value):
+        self.value[name] = value
+
+    def __contains__(self, name):
+        return name in self.value
+
+class PDFRef:
+    def __new__(cls, id_):
+        return int.__new__(cls, id_)
+    @property
+    def ref(self):
+        return subs('{} 0 R', self)
 
 def parse_obj(obj):
-    if isinstance(obj, dict):
+    if isinstance(obj, PDFObject):
+        return obj.value
+    elif isinstance(obj, PDFRef):
+        return obj.ref
+    elif isinstance(obj, dict):
         if '__stream__' in obj:
             return parse_stream(obj)
         else:

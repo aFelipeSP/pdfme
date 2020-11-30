@@ -19,7 +19,7 @@ A Simple HTML Document
 </style>
 </head>
 <body>
-<p class="asdf qwer">This is a very simple HTML document</p>
+<p class="asdf qwer" style="color:#457">This is a very<span>sdaf</span> simple HTML document</p>
 <p>It only has two paragraphs</p>
 </body>
 </html>'''

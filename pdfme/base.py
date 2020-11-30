@@ -1,7 +1,7 @@
 from io import BytesIO
 from uuid import uuid4
 
-from .objects import parse_obj
+from .parser import parse_obj, PDFObject, PDFRef
 from .utils import subs
 
 class PDFBase:
@@ -16,10 +16,13 @@ class PDFBase:
             self.trailer = trailer
         self.count = 1
 
-    def add(self, obj):
+    def add(self, var):
+        if not isinstance(var, dict, list, tuple, set, bytes, bool, int, float, str, PDFObject):
+            raise TypeError('object type not allowed')
+        obj = PDFObject(PDFRef(self.count), var)
         self.content.append(obj)
         self.count += 1
-        return self.count - 1, obj
+        return obj
 
     def __getitem__(self, i):
         if i == 0: return None
