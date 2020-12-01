@@ -17,7 +17,7 @@ class PDFBase:
         self.count = 1
 
     def add(self, var):
-        if not isinstance(var, dict, list, tuple, set, bytes, bool, int, float, str, PDFObject):
+        if not isinstance(var, (dict, list, tuple, set, bytes, bool, int, float, str, PDFObject)):
             raise TypeError('object type not allowed')
         obj = PDFObject(PDFRef(self.count), var)
         self.content.append(obj)
@@ -55,7 +55,8 @@ class PDFBase:
         for i, obj in enumerate(self.content):
             xref += str(count).zfill(10) + ' 00000 n \n'
 
-            bytes_ = subs('{} 0 obj\n', i + 1) + parse_obj(obj) + '\nendobj\n'.encode('latin')
+            obj_bytes = parse_obj(obj)
+            bytes_ = subs('{} 0 obj\n', i + 1) + obj_bytes + '\nendobj\n'.encode('latin')
             count += len(bytes_)
             buffer.write(bytes_)
 

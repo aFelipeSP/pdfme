@@ -151,7 +151,7 @@ colors = {
 
 def pdf_color(color, stroke=True):
     if isinstance(color, str):
-        color = colors[str]
+        color = colors[color]
 
     if isinstance(color, (int, float)) or len(color) == 1:
         if not isinstance(color, (int, float)):

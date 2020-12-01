@@ -19,7 +19,7 @@ class PDFObject:
     def __contains__(self, name):
         return name in self.value
 
-class PDFRef:
+class PDFRef(int):
     def __new__(cls, id_):
         return int.__new__(cls, id_)
     @property
@@ -28,7 +28,7 @@ class PDFRef:
 
 def parse_obj(obj):
     if isinstance(obj, PDFObject):
-        return obj.value
+        return parse_obj(obj.value)
     elif isinstance(obj, PDFRef):
         return obj.ref
     elif isinstance(obj, dict):
