@@ -56,9 +56,6 @@ class PDF:
         self.width = self.page_width - self.margins[1] - self.margins[3]
         self.height = self.page_height - self.margins[0] - self.margins[2]
 
-        self.x = self.margins[3]
-        self._y = self.page_height - self.margins[0] 
-
         self.font_family = font_family
         self.font_size = font_size
         self.stroke_width = stroke_width
@@ -111,6 +108,9 @@ class PDF:
         self.n_page = self.page_count
         self.page_count += 1
 
+        self.x = self.margins[3]
+        self._y = self.page_height - self.margins[0]
+
         if ((page_size is None and portrait is None) or (page_size ==
             [self.page_width, self.page_height] and self.portrait == portrait)
         ): return
@@ -122,7 +122,6 @@ class PDF:
             page_size = [page_size[1], page_size[0]]
 
         page['MediaBox'] = [0, 0] + page_size
-
 
     @property
     def page(self):
@@ -155,7 +154,7 @@ class PDF:
 
 
     def stream(self, instructions):
-        graphic = self.base.add({'__stream__': instructions.encode('latin')})
+        graphic = self.base.add({'__stream__': instructions })
         if not 'Contents' in self.page: self.page['Contents'] = []
         self.page['Contents'].append(graphic.id)
         
@@ -228,7 +227,10 @@ class PDF:
         self.page['Contents'].append(stream.id)
 
     def _add_font(self, font_family, mode):
-        font = self.fonts_data[font_family][mode]
+        font = self.fonts_data[font_family]['n'] \
+            if mode not in self.fonts_data[font_family] \
+            else self.fonts_data[font_family][mode]
+
         font_obj = self.base.add({
             'Type': b'/Font',
             'Subtype': b'/Type1',
@@ -238,9 +240,11 @@ class PDF:
         self.used_fonts[(font_family, mode)] = font_obj
         return font_obj
 
-
     def _used_font(self, font_family, mode):
-        font = self.fonts_data[font_family][mode]
+        font = self.fonts_data[font_family]['n'] \
+            if mode not in self.fonts_data[font_family] \
+            else self.fonts_data[font_family][mode]
+
         if (font_family, mode) in self.used_fonts:
             font_obj = self.used_fonts[(font_family, mode)]
         else:
@@ -290,9 +294,8 @@ class PDF:
             self.move_x(pdf_text.width)
 
         if not ret is None:
-            return PDFText(ret, self.fonts_data, **style)
-        else:
-            return None
+            return [ret]
+
 
     def output(self, buffer):
         self._build_pages_tree(self.pages)
