@@ -40,10 +40,10 @@ def gen_struct(n, m=4):
 
     return obj
 
-t = 1
+t = 0
 
 if t:
-    struct = gen_struct(3)
+    struct = gen_struct(9)
     style = struct.pop('style')
     content = struct[list(struct.keys())[0]]
     with open('borrar.json', 'w') as f:
@@ -53,6 +53,9 @@ else:
         content = json.load(f)
 
 pdf = PDF()
+
+pdf.stream('0.9 0.9 0.9 rg {} {} {} {} re F'.format(pdf.margins[3], pdf.margins[2],pdf.width,pdf.height))
+
 ret = pdf.text(content, text_align='j')
 
 while not ret is None:

@@ -154,7 +154,7 @@ class PDF:
 
 
     def stream(self, instructions):
-        graphic = self.base.add({'__stream__': instructions })
+        graphic = self.base.add({'__stream__': instructions.encode('latin') })
         if not 'Contents' in self.page: self.page['Contents'] = []
         self.page['Contents'].append(graphic.id)
         

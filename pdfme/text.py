@@ -17,10 +17,11 @@ class PDFText:
         text_align='l',
         line_height=1.1
     ):
-        if isinstance(content, str):
-            content = [content]
-        
+
         self.content = content
+
+        self.add_last_space({'n': self.content})
+
         self.style = dict(
             font_family = font_family,
             font_size = font_size,
@@ -37,11 +38,12 @@ class PDFText:
         self.stream = ''
         self.line = []
         self.line_spaces = {}
-        self.word = ''
+        self.word = []
         self.word_width = self.line_width = self.current_height = 0
         self.next_extra_height = self.extra_height = self.last_indent = 0
         self.max_size = self.rise = 0
         self.line_depth = None
+        self.last_space = False
 
         self.used_fonts = set([('Helvetica', 'n')])
         self.fonts = fonts
@@ -70,59 +72,58 @@ class PDFText:
                 line += ' ({})Tj'.format(el['text'])
             else:
                 line += ' ' + el
+                if el.endswith('Tf'):
+                    size = float(el.split(' ')[-2])
+                    if size > self.max_size:
+                        self.max_size = size
+                if el.endswith('Ts'):
+                    rise = float(el.split(' ')[-2])
+                    if rise < 0 and -rise > self.next_extra_height:
+                        self.next_extra_height = -rise
+                    elif rise + size > self.max_size:
+                        self.max_size = rise + self.size
 
         return line
 
-    def add_line(self, ignore_justify=False):
-        line_height = (self.max_size + self.extra_height) * self.line_height
-
-        space_width = self.get_char_size(' ')
-
-        if self.current_height + line_height > self.height: return 0
+    def add_line(self, index, content, ignore_justify=False):
+        factor = 0
+        indent = 0
         code = 1
-
-        line_instrucs = ' {{:.3f}} -{:.3f} Td{{}}'.format(line_height)
-
         if self.text_align == 'j' and not ignore_justify:
             spaces_width = 0
             for space, count in self.line_spaces.items(): spaces_width += space * count
 
             factor = (self.width - self.word_width - self.line_width +
-                spaces_width) / (spaces_width + space_width)
+                spaces_width) / (spaces_width + self.space_width)
 
             if factor > 0.7:
-                self.line[-1]['text'] += ' ' + self.word
-                self.word = ''
+                self.line[-1]['text'] += ' '
+                self.extend_line()
+                # self.line.extend(self.word)
+                self.word = []
                 self.word_width = 0
                 self.j = self.i
                 code = 2
             else:
                 factor = (self.width - self.line_width + spaces_width) / spaces_width
 
-            line = self.build_line(factor)
-            self.stream += line_instrucs.format(0, line)
-
         elif self.text_align == 'l' or (self.text_align == 'j' and ignore_justify):
-            line = self.build_line()
-            self.stream += line_instrucs.format(0, line)
+            pass
         elif self.text_align == 'r':
             indent_ = self.width - self.line_width
             indent = indent_ - self.last_indent
             self.last_indent = indent_
-
-            line = self.build_line()
-            self.stream += line_instrucs.format(indent, line)
         elif self.text_align == 'c':
             indent_ = (self.width - self.line_width)/2
             indent = indent_ - self.last_indent
             self.last_indent = indent_
 
-            line = self.build_line()
-            self.stream += line_instrucs.format(indent, line)
+        line = self.build_line(factor)
+        line_height = (self.max_size + self.extra_height) * self.line_height
+        if self.current_height + line_height > self.height: return 0
+        self.stream += ' {:.3f} -{:.3f} Td{}'.format(indent, line_height, line)
 
         self.current_height += line_height
-        self.line = []
-        self.line_width = 0
         
         self.line_spaces = {}
         self.extra_height = self.next_extra_height
@@ -136,67 +137,89 @@ class PDFText:
         else:
             self.max_size = self.rise + self.size
 
+        if self.word_width > 0:
+            self.line = self.word
+            self.line_width = self.word_width
+            self.word = []
+            self.word_width = 0
+            self.last_space = True
+        else:
+            self.last_space = False
+            self.line = []
+            self.line_width = 0
+
+        if isinstance(content, str):
+            self.last_line_info = [index, content[self.j:]]
+        self.line_depth = 0
+
         return code
 
+    def extend_line(self):
+        if (isinstance(self.line[-1], dict) and isinstance(self.word[0], dict) and
+            self.line[-1].get('space') == self.word[0].get('space')
+        ):
+            self.line[-1]['text'] += self.word[0]['text']
+            self.word = self.word[1:]
+  
+        self.line.extend(self.word)
+
     def add_content(self, content, index):
-        self.i = 0; self.j = 0
+        self.i = 0; self.j = 0           
 
-        def add_line(ignore_justify=False):
-            ret = self.add_line(ignore_justify)
-            if ret == 0: return ret
-            nonlocal last_space
-
-            if self.word_width > 0:
-                self.line = [{'space': space_width, 'text': self.word}]
-                self.line_width = self.word_width
-                self.word = ''
-                self.word_width = 0
-                last_space = True
-            else:
-                last_space = False
-            self.last_line_info = [index, content[self.j:]]
-            self.line_depth = 0
-            return ret
-
-        space_width = self.get_char_size(' ')
-        self.line.append({'space': space_width, 'text': ''})
-        last_space = False
+        self.word.append({'space': self.space_width, 'text': ''})
         n_content = len(content)
-        while self.i <= n_content:
-            last_word = self.i == n_content
-            char = None if last_word else content[self.i]
-            if last_word or char.isspace():
+        while self.i < n_content:
+            char = content[self.i]
+            if char.isspace():
                 if char == '\r':
                     pass
-                elif self.line_width + space_width + self.word_width > self.width:
-                    ret = add_line()
+                elif self.line_width + self.space_width + self.word_width > self.width:
+                    ret = self.add_line(index, content)
                     if ret == 0: return True
                     if char == '\n' and ret == 1:
-                        add_line(True)
+                        self.add_line(index, content, True)
                 else:
                     if len(self.line) == 0:
-                        self.line.append({'space': space_width, 'text': ''})
-                    if last_space:
+                        self.line.append({'space': self.space_width, 'text': ''})
+                    if self.last_space:
                         self.line[-1]['text'] += ' '
-                        self.line_spaces[space_width] = \
-                            self.line_spaces.get(space_width, 0) + 1
-                        self.line_width += space_width
+                        self.line_spaces[self.space_width] = \
+                            self.line_spaces.get(self.space_width, 0) + 1
+                        self.line_width += self.space_width
 
-                    self.line[-1]['text'] += self.word
+                    if 'úíubugy' in content:
+                        print(4)
+
+                    self.extend_line()
                     self.line_width += self.word_width
-                    last_space = True
-                    self.word = ''
+                    self.last_space = True
+                    self.word = []
                     self.word_width = 0
                     self.j = self.i
                     if char == '\n':
-                        add_line(True)
+                        self.add_line(index, content, True)
             else:
                 self.word_width += self.get_char_size(char)
                 if char in ['(', ')']:
                     char = '\\' + char
-                self.word += char
+                if len(self.word) == 0:
+                    self.word.append({'space': self.space_width, 'text': ''})
+                self.word[-1]['text'] += char
 
             self.i += 1
+    
+    def add_last_space(self, element):
+        tag = 'n' if 'n' in element else ('b' if 'b' in element else 'i')
+        if (isinstance(element[tag], str) and len(element[tag]) > 0 and 
+            element[tag][-1] != ' '
+        ):
+            element[tag] += ' '
+        elif len(element[tag]) > 0:
+            if isinstance(element[tag][-1], str):
+                if len(element[tag][-1]) > 0 and element[tag][-1][-1] != ' ':
+                    element[tag][-1] += ' '
+            else:
+                self.add_last_space(element[tag][-1])
 
     def get_char_size(self, char):
         return self.size * self.font['widths'][char] / 1000
@@ -220,29 +243,24 @@ class PDFText:
 
         self.size = f_size
         self.font = f_font
+        self.space_width = self.get_char_size(' ')
 
         font_attrs = ['font_size', 'font_family', 'font_weight', 'font_style']
         if (any(style.get(e, False) and style.get(e) != self.style.get(e)
             for e in font_attrs) or not self.init_font
         ):
-            self.init_font = True
-
             self.used_fonts.add((f_family, font_mode))
             font_name = self.font['ref']
-            self.line.append('/{} {} Tf'.format(font_name, self.size))
-
-            if self.size > self.max_size:
-                self.max_size = self.size
-        if not style.get('color') is None and style.get('color') != self.style.get('color'):
-            self.line.append(pdf_color(style['color'], False))
+            self.word.append('/{} {} Tf'.format(font_name, self.size))
+        if (not self.init_font or (not style.get('color') is None and
+            style.get('color') != self.style.get('color'))
+        ):
+            self.word.append(pdf_color(style['color'], False))
         if 'rise' in style:
             self.rise = self.size*style['rise']
-            self.line.append('{} Ts'.format(self.rise))
-            if self.rise < 0 and -self.rise > self.next_extra_height:
-                self.next_extra_height = -self.rise
-            elif self.rise + self.size > self.max_size:
-                self.max_size = self.rise + self.size
+            self.word.append('{} Ts'.format(self.rise))
 
+        self.init_font = True
         self.style.update(style)
 
     def process_content(self, element, root=True):
@@ -259,12 +277,17 @@ class PDFText:
         else:
             contents = element['n']; tag_name = 'n'
 
+        if isinstance(contents, str):
+            contents = [contents]
+
         self.change_style(style)
 
         n_contents = len(contents)
         if not self.line_depth is None:
             self.line_depth += 1
+
         i = 0
+        content = None
         for i, content in enumerate(contents):
             if isinstance(content, str):
                 ret = self.add_content(content, i)
@@ -291,13 +314,13 @@ class PDFText:
                 return element
 
         if root and len(self.line) > 0:
-            ret = self.add_line(True)
+            ret = self.add_line(i, content, True)
             if ret == 0:
                 element[tag_name] = [self.last_line_info[1]]
                 return element
 
         if self.rise != 0:
-            self.line.append('0 Ts')
+            self.word.append('0 Ts')
             self.rise = 0
 
         else:
