@@ -1,6 +1,7 @@
 import copy
 import struct
 from pathlib import Path
+import traceback
 
 from .utils import get_page_size, subs
 from . import standard_fonts as std_font
@@ -159,7 +160,7 @@ class PDF:
         self.page['Contents'].append(graphic.id)
         
 
-    def image(self, image_path, x, y, width, height):
+    def image(self, image_path, width = None, height = None, move = 'bottom'):
         if image_path in self.images:
             image_obj = self.images[image_path]
         else:
@@ -193,6 +194,7 @@ class PDF:
 
                                 break
                 except Exception:
+                    traceback.print_exc()
                     raise ValueError("Couldn't process image in {}".format(image_path))
 
                 f.seek(0)
@@ -211,7 +213,17 @@ class PDF:
             })
 
             self.images[image_path] = image_obj
-        
+
+        h = image_obj['Height']
+        w = image_obj['width']
+
+        if width is None and height is None:
+            width = self.width
+            height = width * h/w
+        elif width is None:
+            width = height * w/h
+        elif height is None:
+            height = width * h/w
         
         if not 'Resources' in self.page: self.page['Resources'] = {}
 
@@ -220,11 +232,16 @@ class PDF:
         self.page['Resources']['XObject'][image_id] = image_obj.id
 
         stream = self.base.add({'__stream__':subs('q {} 0 0 {} {} {} cm /{} Do', 
-            width, height, x, y, image_id        
+            width, height, self.x, self._y, image_id        
         )})
 
         if not 'Contents' in self.page: self.page['Contents'] = []
         self.page['Contents'].append(stream.id)
+
+        if move == 'bottom':
+            self.move_y(height)
+        if move == 'next':
+            self.move_x(width)
 
     def _add_font(self, font_family, mode):
         font = self.fonts_data[font_family]['n'] \
@@ -257,24 +274,16 @@ class PDF:
     def text(self, content,
         width = None,
         height = None,
-        font_family = None,
-        font_size = None,
         text_align = None,
         line_height = None,
-        font_weight = 'normal',
-        font_style = 'normal',
-        color = None,
         move = 'bottom'
     ):
 
         style = dict(
             width = self.width + self.margins[3] - self.x if width is None else width,
             height = self.height + self.margins[0] - self.y if height is None else height,
-            font_family = self.font_family if font_family is None else font_family,
-            font_size = self.font_size if font_size is None else font_size,
             text_align = self.text_align if text_align is None else text_align,
-            line_height = self.line_height if line_height is None else line_height,
-            color = self.fill_color if color is None else color
+            line_height = self.line_height if line_height is None else line_height
         )
 
         pdf_text = PDFText(content, self.fonts_data, **style)
@@ -294,7 +303,7 @@ class PDF:
             self.move_x(pdf_text.width)
 
         if not ret is None:
-            return [ret]
+            return ret
 
 
     def output(self, buffer):

@@ -1,3 +1,5 @@
+import re
+
 colors = {
     'aliceblue': [0.941, 0.973, 1.0],
     'antiquewhite': [0.98, 0.922, 0.844],
@@ -149,13 +151,73 @@ colors = {
     'yellowgreen': [0.605, 0.805, 0.199]
 }
 
-def pdf_color(color, stroke=True):
-    if isinstance(color, str):
-        color = colors[color]
+class PDFColor:
+    def __init__(self, color, stroke=False):
+        if isinstance(color, PDFColor):
+            self.color = color.color
+            self.stroke = color.stroke
+        else:
+            self.color = parse_color(color)
+            self.stroke = stroke
 
-    if isinstance(color, (int, float)) or len(color) == 1:
-        if not isinstance(color, (int, float)):
-            color = color[0]
+    def __eq__(self, color):
+        if color is None: return False
+        if not isinstance(color, PDFColor):
+            raise TypeError("Can't compare PDFColor with {}".format(type(color)))
+        return self.color == color.color and self.stroke == self.stroke
+
+    def __neq__(self, color):
+        if not isinstance(color, PDFColor):
+            raise TypeError("Can't compare PDFColor with {}".format(type(color)))
+        return self.color != color.color and self.stroke == self.stroke
+
+    def __str__(self):
+        if len(self.color) == 1:
+            return '{} {}'.format(self.color[0], 'G' if self.stroke else 'g')
+        if len(self.color) == 3:
+            return '{} {} {} {}'.format(*self.color[0:3], 'RG' if self.stroke else 'rg')
+
+def parse_color(color):
+    if isinstance(color, (int, float)):
+        return [color]
+    if isinstance(color, str):
+        if color in colors:
+            return colors[color]
+        elif len(color) in [4,5,7,9] and color[0] == '#':
+            try: int(color[1:], 16)
+            except:
+                raise TypeError("Couldn't parse hexagesimal color value: {}".format(color))
+
+            n = len(color)
+            if n in [4, 5]:
+                return [int(color[i:1+i] + color[i:1+i], 16) for i in range(1,4)]
+            else:
+                return [int(color[i:2+i], 16) for i in range(1,7,2)]
+        else:
+            color = re.split(',| ', color)
+
+    if not isinstance(color, (list, tuple)):
+        raise TypeError('Invalid color value type: {}'.format(type(color)))
+
+    if len(color) == 1:
+        v = color[0]
+        if isinstance(v, str):
+            try:
+                return [float(v)]
+            except:
+                raise TypeError("Couldn't parse numeric color value: {}".format(v))
+        elif isinstance(v, (int, float)):
+            return [v]
+        else:
+            raise TypeError("Invalid color value type: {}".format(type(v)))
+    elif len(color) in [3,4]:
+        try:
+            return [float(c) for c in color[:4]]
+        except:
+            raise TypeError("Couldn't parse numeric color value: {}".format(color))
+
+def pdf_color(color, stroke=False):
+    if len(color) == 1:
         return '{} {}'.format(color, 'G' if stroke else 'g')
-    if len(color) in [3,4]:
+    if len(color) in [3]:
         return '{} {} {} {}'.format(*color[0:3], 'RG' if stroke else 'rg')
