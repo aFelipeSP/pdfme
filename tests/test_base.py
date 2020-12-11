@@ -1,6 +1,6 @@
 from pdfme import PDF
 import random
-import pickle
+import json
 
 abc = 'abcdefghijklmnñopqrstuvwxyzáéíóú'
 
@@ -35,36 +35,37 @@ def gen_struct(n, m=4):
         style = ';'.join(style)
 
     if m == 0:
-        return (style, gen_text(random.randint(5, 20)))
+        return {'s': style, 'c': gen_text(random.randint(5, 20))}
 
-    obj = (style, [])
+    obj = {'s': style, 'c': []}
 
     i = 1
     while i < n:
         if i%2 == 0:
-            obj[1].append(gen_struct(max(round(n/2), 1), m-1))
+            obj['c'].append(gen_struct(max(round(n/2), 1), m-1))
         else:
-            obj[1].append(gen_text(random.randint(5, 20)))
+            obj['c'].append(gen_text(random.randint(5, 20)))
         i += 1
 
     return obj
 
-t = 1
-from fpdf import FPDF
-if t:
+t = 2
+if t == 1:
     content = gen_struct(11)
-    with open('borrar.pk', 'wb') as f:
-        pickle.dump(content, f)
+    with open('borrar.json', 'w') as f:
+        json.dump(content, f)
+elif t == 0:
+    with open('borrar.json', 'r') as f:
+        content = json.load(f)
 else:
-    with open('borrar.pk', 'rb') as f:
-        content = pickle.load(f)
+    content = 'asdfa asdfg hert cllbksdf r'
 
-# print(content)
+print(content)
 
 pdf = PDF()
 rect = '0.9 0.9 0.9 rg {} {} {} {} re F'.format(pdf.margins[3], pdf.margins[2],pdf.width,pdf.height)
-pdf.image('puppy.jpg')
 pdf.stream(rect)
+pdf.image('puppy.jpg')
 ret = pdf.text(content, text_align='j')
 
 while not ret is None:

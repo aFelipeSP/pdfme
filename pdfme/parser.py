@@ -69,8 +69,9 @@ def parse_list(obj):
 
 def parse_stream(obj):
     stream_ = obj.pop('__stream__')
+    skip_filter = obj.pop('__skip_filter__', False)
 
-    if 'Filter' in obj:
+    if 'Filter' in obj and not skip_filter:
         stream = encode_stream(stream_, obj['Filter'])
     else:
         stream = stream_
@@ -78,6 +79,8 @@ def parse_stream(obj):
     obj['Length'] = len(stream)
     ret = parse_dict(obj) + b'stream\n' + stream + b'\nendstream'
     obj['__stream__'] = stream_
+    if skip_filter:
+        obj['__skip_filter__'] = True
     return ret
 
 

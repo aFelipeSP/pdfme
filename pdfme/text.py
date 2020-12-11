@@ -7,10 +7,17 @@ class PDFText:
     def __init__(self, content, fonts, 
         width = 200,
         height = 200,
-        text_align='l',
-        line_height=1.1
+        text_align = 'l',
+        line_height = 1.1,
+        indent = 0
     ):
 
+        self.style = {'f': 'Helvetica', 'c': 0.1, 's': 11, 'r':0}
+        if isinstance(content, str):
+            content = {'s': {}, 'c': [content]}
+        elif isinstance(content, (list, tuple)):
+            content = {'s': {}, 'c': content}
+        
         self.content = content
 
         self.add_last_space(self.content)
@@ -20,7 +27,6 @@ class PDFText:
         self.text_align = text_align
         self.line_height = line_height
 
-        self.style = {'f': 'Helvetica', 'c': 0.9, 's': 11}
         self.last_state = {}
         self.state = {}
 
@@ -28,12 +34,16 @@ class PDFText:
         self.line = []
         self.line_spaces = {}
         self.word = []
-        self.word_width = self.line_width = self.current_height = 0
+        self.word_width = self.current_height = self.max_size = self.rise = 0
         self.next_extra_height = self.extra_height = self.last_indent = 0
-        self.max_size = self.rise = 0
+
+        self.line_width = indent
         self.line_depth = None
         self.last_space = None
         self.init_state = True
+
+        self.indent = indent
+        self.indent_mark = 0 
 
         self.used_fonts = set([])
         self.fonts = fonts
@@ -48,9 +58,10 @@ class PDFText:
             if len(attrs) == 0 or attrs == ['']: continue
             elif len(attrs) == 1:
                 attr = attrs[0].strip()
-                if not attr in ['b', 'i']:
+                if not attr in ['b', 'i', 'u']:
                     raise ValueError('Style elements with no paramter must '
-                        'be whether "b" for bold or "i" for italics(Oblique)')
+                        'be whether "b" for bold, "i" for italics(Oblique) or '
+                        '"u" for underline.')
                 style[attr] = True
             elif len(attrs) == 2:
                 attr = attrs[0].strip()
@@ -72,10 +83,16 @@ class PDFText:
                     except:
                         raise ValueError('Style element value for "s" is wrong:'
                             ' {}'.format(value))
-
+                elif attrs[0] == 'r':
+                    try:
+                        v = float(value)
+                        style['r'] = v
+                    except:
+                        raise ValueError('Style element value for "r" is wrong:'
+                            ' {}'.format(value))
                 else:
                     raise ValueError('Style elements with parameter must be "f"'
-                        ', "s" or "c"')
+                        ', "s", "c" or "r"')
 
             else:
                 raise ValueError('Style elements must be "b" or "i" or '
@@ -84,9 +101,9 @@ class PDFText:
         return style
 
     def process_content(self, element, root=False):
-        try: style, contents = element
-        except: raise ValueError('Element tuples must have length of 2: {}'.format(element))
-        if isinstance(style, str): style = self.parse_style_str(style)
+        style, contents = element.get('s', {}), element.get('c', [])
+        if isinstance(style, str):
+            style = self.parse_style_str(style)
         self.style.update(style)
         current_style = copy.deepcopy(self.style)
 
@@ -101,11 +118,11 @@ class PDFText:
         for i, content in enumerate(contents):
             if isinstance(content, str):
                 ret = self.add_content(content, i)
-            elif isinstance(content, tuple):
+            elif isinstance(content, dict):
                 ret = self.process_content(content)
-                self.style = current_style
+                self.style = copy.deepcopy(current_style)
             else:
-                raise ValueError('elements must be of type str or tuple {}'.format(content))
+                raise ValueError('elements must be of type str or dict: {}'.format(content))
             if ret is None:
                 pass
             elif isinstance(ret, bool) and ret:
@@ -131,10 +148,6 @@ class PDFText:
         else:
             if not self.line_depth is None:
                 self.line_depth -= 1
-
-        # if self.rise != 0:
-        #     self.word.append('0 Ts')
-        #     self.rise = 0
 
     def add_content(self, content, index):
         self.i = 0; self.j = 0
@@ -178,7 +191,8 @@ class PDFText:
 
     def init_word(self):
         if len(self.word) == 0 or self.init_state:
-            word = {'space': self.space_width, 'text': ''}
+            word = {'space': self.space_width, 'text': '',
+                'size': self.state.get('s', self.size), 'rise': self.state.get('r', 0) }
             if self.init_state:
                 word['state'] = self.state
                 self.init_state = False
@@ -222,12 +236,23 @@ class PDFText:
         if color != self.last_state.get('c'):
             self.state['c'] = color
 
+        rise, last_rise = self.style.get('r', 0), self.last_state.get('r', 0)
+        if rise != last_rise:
+            self.state['r'] = rise * self.size * (1 if last_rise == 0 else last_rise)
+            self.rise = self.state['r']
+            self.rise_effects(self.rise)
+
+        self.state['u'] = self.style.get('u', False)
+
         self.init_state = True
+
+    def rise_effects(self, rise):
+        if rise < 0 and -rise > self.next_extra_height:
+            self.next_extra_height = -rise
+        elif rise + self.size > self.max_size:
+            self.max_size = rise + self.size
     
     def word_to_line(self):
-        # if (len(self.line) > 0 and len(self.word) > 0 and
-        #     self.line[-1].get('state') == self.word[0].get('state')
-        # ):
         if (len(self.line) > 0 and len(self.word) > 0 and
             self.word[0].get('state') == None
         ):
@@ -276,17 +301,26 @@ class PDFText:
         if self.current_height + line_height > self.height:
             return 0
 
+        if self.indent_mark == 0:
+            indent += self.indent
+            self.indent_mark = 1
+        elif self.indent_mark == 1:
+            indent -= self.indent
+            self.indent_mark = 2
+
         self.stream += ' {:.3f} -{:.3f} Td{}'.format(indent, line_height, line)
 
         self.current_height += line_height
         
         self.line_spaces = {}
         self.extra_height = self.next_extra_height
+        self.next_extra_height = 0
 
         if self.word_width > 0:
             self.line = self.word
             self.line_width = self.word_width
-            self.max_size = max([w.get('state',{}).get('s',0) for w in self.word]+[self.size])
+            self.max_size = max([w.get('size') for w in self.word]+[self.size])
+            for w in self.word: self.rise_effects(w.get('rise'))
             self.word = []
             self.word_width = 0
             self.last_space = self.space_width
@@ -296,13 +330,8 @@ class PDFText:
             self.line_width = 0
             self.max_size = self.size
 
-        if self.rise == 0:
-            self.next_extra_height = 0
-        elif self.rise < 0:
-            self.next_extra_height = -self.rise
-        else:
-            if self.rise + self.size > self.max_size:
-                self.max_size = self.rise + self.size
+        
+        self.rise_effects(self.rise)
 
         if isinstance(content, str):
             text = content[self.j:]
@@ -322,6 +351,8 @@ class PDFText:
                     self.fonts[s['f']][s['m']]['ref'], round(s['s'],3))
             if 'c' in s:
                 line += ' ' + str(s['c'])
+            if 'r' in s:
+                line += ' {} Ts'.format(s['r'])
 
             if factor != 1:
                 line += ' {} Tw'.format(round(el['space'] * (factor-1), 4))
@@ -329,16 +360,16 @@ class PDFText:
         return line
 
     def add_last_space(self, element):
-        if (isinstance(element[1], str) and len(element[1]) > 0 and 
-            element[1][-1] != ' '
+        if (isinstance(element.get('c'), str) and len(element['c']) > 0
+            and element['c'][-1] != ' '
         ):
-            element[1] += ' '
-        elif len(element[1]) > 0:
-            if isinstance(element[1][-1], str):
-                if len(element[1][-1]) > 0 and element[1][-1][-1] != ' ':
-                    element[1][-1] += ' '
+            element['c'] += ' '
+        elif len(element.get('c', [])) > 0:
+            if isinstance(element['c'][-1], str):
+                if len(element['c'][-1]) > 0 and element['c'][-1][-1] != ' ':
+                    element['c'][-1] += ' '
             else:
-                self.add_last_space(element[1][-1])
+                self.add_last_space(element['c'][-1])
 
     def get_char_size(self, char):
         return self.size * self.font['widths'][char] / 1000

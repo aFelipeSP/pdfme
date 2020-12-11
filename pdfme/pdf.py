@@ -35,8 +35,8 @@ class PDF:
         font_family='Helvetica',
         font_size=11,
         stroke_width=1,
-        fill_color='black',
-        stroke_color='white',
+        fill_color=0.1,
+        stroke_color=1,
         text_align='l',
         line_height=1.1,
     ):
@@ -156,7 +156,8 @@ class PDF:
 
     def stream(self, instructions):
         graphic = self.base.add({'__stream__': instructions.encode('latin') })
-        if not 'Contents' in self.page: self.page['Contents'] = []
+        if not 'Contents' in self.page:
+            self.page['Contents'] = []
         self.page['Contents'].append(graphic.id)
         
 
@@ -177,15 +178,14 @@ class PDF:
                             (markerLow >= 0xF0 and markerLow <= 0xFD)): # JPGx
                             continue
                         else:
+                            data_size, = struct.unpack('>H', f.read(2))
+                            data = f.read(data_size - 2) if data_size > 2 else ''
                             if (
                                 (markerLow >= 0xC0 and markerLow <= 0xC3) or # SOF0 - SOF3
                                 (markerLow >= 0xC5 and markerLow <= 0xC7) or # SOF4 - SOF7
                                 (markerLow >= 0xC9 and markerLow <= 0xCB) or # SOF9 - SOF11
                                 (markerLow >= 0xCD and markerLow <= 0xCF) # SOF13 - SOF15
                             ): 
-                                data_size, = struct.unpack('>H', f.read(2))
-                                data = f.read(data_size - 2) if data_size > 2 else ''
-
                                 depth, h, w, layers = struct.unpack_from('>BHHB', data)
 
                                 if layers == 3: colspace = b'/DeviceRGB'
@@ -209,13 +209,14 @@ class PDF:
                 'ColorSpace': colspace,
                 'BitsPerComponent': int(depth),
                 'Filter': b'/DCTDecode',
+                '__skip_filter__': True,
                 '__stream__': image_data
             })
 
             self.images[image_path] = image_obj
 
         h = image_obj['Height']
-        w = image_obj['width']
+        w = image_obj['Width']
 
         if width is None and height is None:
             width = self.width
@@ -231,8 +232,8 @@ class PDF:
         image_id = 'Im{}'.format(len(self.page['Resources']['XObject']))
         self.page['Resources']['XObject'][image_id] = image_obj.id
 
-        stream = self.base.add({'__stream__':subs('q {} 0 0 {} {} {} cm /{} Do', 
-            width, height, self.x, self._y, image_id        
+        stream = self.base.add({'__stream__':subs('q {} 0 0 {} {} {} cm /{} Do Q', 
+            width, height, self.x, self._y - height, image_id        
         )})
 
         if not 'Contents' in self.page: self.page['Contents'] = []
@@ -276,6 +277,7 @@ class PDF:
         height = None,
         text_align = None,
         line_height = None,
+        indent = 0,
         move = 'bottom'
     ):
 
@@ -283,7 +285,8 @@ class PDF:
             width = self.width + self.margins[3] - self.x if width is None else width,
             height = self.height + self.margins[0] - self.y if height is None else height,
             text_align = self.text_align if text_align is None else text_align,
-            line_height = self.line_height if line_height is None else line_height
+            line_height = self.line_height if line_height is None else line_height,
+            indent = indent
         )
 
         pdf_text = PDFText(content, self.fonts_data, **style)
