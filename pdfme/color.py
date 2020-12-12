@@ -161,23 +161,28 @@ class PDFColor:
             self.stroke = stroke
 
     def __eq__(self, color):
-        if color is None: return False
+        if color is None: return self.color is None
         if not isinstance(color, PDFColor):
             raise TypeError("Can't compare PDFColor with {}".format(type(color)))
         return self.color == color.color and self.stroke == self.stroke
 
     def __neq__(self, color):
+        if color is None: return not self.color is None
         if not isinstance(color, PDFColor):
             raise TypeError("Can't compare PDFColor with {}".format(type(color)))
         return self.color != color.color and self.stroke == self.stroke
 
     def __str__(self):
+        if self.color is None:
+            return ''
         if len(self.color) == 1:
             return '{} {}'.format(self.color[0], 'G' if self.stroke else 'g')
         if len(self.color) == 3:
             return '{} {} {} {}'.format(*self.color[0:3], 'RG' if self.stroke else 'rg')
 
 def parse_color(color):
+    if color is None:
+        return None
     if isinstance(color, (int, float)):
         return [color]
     if isinstance(color, str):

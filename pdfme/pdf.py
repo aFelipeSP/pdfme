@@ -295,8 +295,10 @@ class PDF:
         for font in pdf_text.used_fonts:
             self._used_font(*font)
 
-        text = self.base.add({'__stream__':
-            subs('BT 1 0 0 1 {} {} Tm{} ET', self.x, self._y, pdf_text.stream)})
+        text = self.base.add({
+            '__stream__': pdf_text.build(self.x, self._y).encode('latin')
+        })
+
         if not 'Contents' in self.page: self.page['Contents'] = []
         self.page['Contents'].append(text.id)
 
