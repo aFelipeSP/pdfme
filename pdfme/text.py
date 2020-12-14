@@ -12,7 +12,8 @@ class PDFText:
         indent = 0
     ):
 
-        self.style = {'f': 'Helvetica', 'c': 0.1, 's': 11, 'r':0}
+        self.style = {'f': 'Helvetica', 'c': 0.1, 's': 11, 'r':0, 'bg': None}
+
         if isinstance(content, str):
             content = {'s': {}, 'c': [content]}
         elif isinstance(content, (list, tuple)):
@@ -44,6 +45,7 @@ class PDFText:
         self.init_state = True
         self.init_line_words = True
 
+        self.fills = []
         self.underlines = []
 
         self.indent = indent
@@ -52,8 +54,23 @@ class PDFText:
         self.used_fonts = set([])
         self.fonts = fonts
 
+
     def process(self):
         return self.process_content(self.content, True)
+
+
+    def add_last_space(self, element):
+        if (isinstance(element.get('c'), str) and len(element['c']) > 0
+            and element['c'][-1] != ' '
+        ):
+            element['c'] += ' '
+        elif len(element.get('c', [])) > 0:
+            if isinstance(element['c'][-1], str):
+                if len(element['c'][-1]) > 0 and element['c'][-1][-1] != ' ':
+                    element['c'][-1] += ' '
+            else:
+                self.add_last_space(element['c'][-1])
+
 
     def parse_style_str(self,style_str):
         style = {}
@@ -78,6 +95,8 @@ class PDFText:
                     style['f'] = value
                 elif attr == "c":
                     style['c'] = PDFColor(value)
+                elif attr == "bg":
+                    style['bg'] = PDFColor(value)
                 elif attrs[0] == "s":
                     try:
                         v = float(value)
@@ -103,6 +122,7 @@ class PDFText:
                     '"f:<font-family>", "s:<font-size>" or "c:<font-color>"')
 
         return style
+
 
     def process_content(self, element, root=False):
         style, contents = element.get('s', {}), element.get('c', [])
@@ -135,23 +155,24 @@ class PDFText:
                     return True
                 else:
                     index, text = self.last_line_info
-                    element_ = (element[0], [text])
+                    element_ = {'s': style, 'c': [text]}
                     if index + 1 < n_contents:
-                        element_[1].extend(contents[index + 1:])
+                        element_['c'].extend(contents[index + 1:])
                     return element_
             else:
-                element_ = (element[0], [ret])
+                element_ = {'s': style, 'c': [ret]}
                 if i + 1 < n_contents:
-                    element_[1].extend(contents[i + 1:])
+                    element_['c'].extend(contents[i + 1:])
                 return element_
 
         if root and len(self.line) > 0:
             ret = self.add_line(content, i, True)
             if ret == 0:
-                return (element[0], [self.last_line_info[1]])
+                return {'s': style, 'c': [self.last_line_info[1]]}
         else:
             if not self.line_depth is None:
                 self.line_depth -= 1
+
 
     def add_content(self, content, index):
         self.i = 0; self.j = 0
@@ -170,12 +191,14 @@ class PDFText:
                     if char == '\n' and ret == 1:
                         self.add_line(content, index, True)
                 else:
+                    if self.word[0]['text'] == 'taerg':
+                        print(3)
                     if self.last_space:
                         self.line[-1]['text'] += ' '
-                        self.line_words_space()
-                        self.line_spaces[self.last_space] = \
-                            self.line_spaces.get(self.last_space, 0) + 1
-                        self.line_width += self.last_space
+                        self.line_words.append(self.last_space)
+                        self.line_spaces[self.last_space['space']] = \
+                            self.line_spaces.get(self.last_space['space'], 0) + 1
+                        self.line_width += self.last_space['space']
 
                     self.word_to_line()
                     self.j = self.i
@@ -183,7 +206,7 @@ class PDFText:
                         self.add_line(content, index, True)
                         self.last_space = None
                     else:
-                        self.last_space = self.space_width
+                        self.last_space = {'space': self.space_width, 'state': self.state}
             else:
                 self.word_width += self.get_char_size(char)
                 if char in ['(', ')']:
@@ -193,91 +216,6 @@ class PDFText:
                 self.word[-1]['text'] += char
 
             self.i += 1
-
-    def init_word(self):
-        if len(self.word) == 0 or self.init_state:
-            word = {'space': self.space_width, 'text': '',
-                'color': self.state.get('c'),
-                'size': self.state.get('s', self.size),
-                'rise': self.state.get('r', 0),
-                'underline': self.state.get('u', False)
-            }
-            if self.init_state:
-                word['state'] = self.state
-                self.init_state = False
-            self.word.append(word)
-
-    @property
-    def font(self):
-        return self.fonts[self.font_family][self.font_mode]
-
-    def set_state(self):
-
-        self.last_state = self.state
-        self.state = {}
-
-        f_mode = ''
-        if self.style.get('b', False): f_mode += 'b'
-        if self.style.get('i', False): f_mode += 'i'
-        if f_mode == '': f_mode = 'n'
-
-        self.font_family  = self.style['f']
-        self.font_mode = 'n' if not f_mode in self.fonts[self.font_family] \
-            else f_mode
-
-        self.size = self.style['s']
-        if self.size > self.max_size:
-            self.max_size = self.size
-        self.space_width = self.get_char_size(' ')
-
-        if (self.font_family != self.last_state.get('f') or
-            self.font_mode != self.last_state.get('m') or
-            self.size != self.last_state.get('s')
-        ):
-            self.state['f'] = self.font_family
-            self.state['m'] = self.font_mode
-            self.state['s'] = self.size
-
-            self.used_fonts.add((self.font_family, self.font_mode))
-        
-        color = PDFColor(self.style['c'])
-
-        if color != self.last_state.get('c'):
-            self.state['c'] = color
-
-        rise, last_rise = self.style.get('r', 0), self.last_state.get('r', 0)
-        if rise != last_rise:
-            self.state['r'] = rise * self.size * (1 if last_rise == 0 else last_rise)
-            self.rise = self.state['r']
-            self.rise_effects(self.rise)
-
-        self.state['u'] = self.style.get('u', False)
-
-        self.init_state = True
-        self.init_line_words = True
-
-    def rise_effects(self, rise):
-        if rise < 0 and -rise > self.next_extra_height:
-            self.next_extra_height = -rise
-        elif rise + self.size > self.max_size:
-            self.max_size = rise + self.size
-    
-    def word_to_line(self):
-        self.line_words.extend([{
-            'width': sum(self.get_char_size(l) for l in w['text']), 'color': w['color'],
-            'size': w['size'], 'rise': w['rise'], 'underline': w['underline']
-        } for w in self.word])
-
-        if (len(self.line) > 0 and len(self.word) > 0 and
-            self.word[0].get('state') == None
-        ):
-            self.line[-1]['text'] += self.word[0]['text']
-            self.word = self.word[1:]
-
-        self.line.extend(self.word)
-        self.line_width += self.word_width
-        self.word = []
-        self.word_width = 0
 
 
     def add_line(self, content, index, ignore_justify=False):
@@ -295,7 +233,7 @@ class PDFText:
 
             if factor > 0.7:
                 self.line[-1]['text'] += ' '
-                self.line_words_space()
+                self.line_words.append(self.last_space)
                 self.word_to_line()
                 self.j = self.i
                 code = 2
@@ -318,7 +256,7 @@ class PDFText:
         if self.current_height + line_height > self.height:
             return 0
 
-        self.build_underline(factor, indent_, line_height)
+        self.build_decorators(factor, indent_, line_height)
 
         if self.indent_mark == 0:
             indent += self.indent
@@ -338,16 +276,17 @@ class PDFText:
         if self.word_width > 0:
             self.line = self.word
             self.line_width = self.word_width
-            self.max_size = max([w.get('size') for w in self.word]+[self.size])
-            for w in self.word: self.rise_effects(w.get('rise'))
+            self.max_size = max([w.get('size') for w in self.word]+[self.state['s']])
+            for w in self.word:
+                self.rise_effects(w['state']['r'])
             self.word = []
             self.word_width = 0
-            self.last_space = self.space_width
+            self.last_space = {'space': self.space_width, 'state': self.state}
         else:
             self.last_space = None
             self.line = []
             self.line_width = 0
-            self.max_size = self.size
+            self.max_size = self.state['s']
 
         
         self.rise_effects(self.rise)
@@ -360,48 +299,95 @@ class PDFText:
 
         return code
 
-    def line_words_space(self):
-        state = self.state
-        if self.init_line_words:
-            state = self.last_state
-            self.init_line_words = False
+    
+    def rise_effects(self, rise):
+        if rise < 0 and -rise > self.next_extra_height:
+            self.next_extra_height = -rise
+        elif rise + self.state['s'] > self.max_size:
+            self.max_size = rise + self.state['s']
+    
 
-        self.line_words.append({'space': self.last_space,
-            'color': state.get('c'),
-            'size': state.get('s', self.size),
-            'rise': state.get('r', 0),
-            'underline': state.get('u', False)
-        })
+    def set_state(self):
 
-    def build_underline(self, factor, indent, line_height):
-        base = self.current_height + line_height
-        x = indent
-        for el in self.line_words:
-            x2 = x + factor * el['space'] if 'space' in el else x + el['width']
-            if el.get('underline', False):
-                line_width = el['size'] * 0.1
-                y = base - el['rise'] + line_width
+        self.last_state = self.state
+        self.state = {}
+        self.current_state = {}
 
-                if (len(self.underlines) > 0
-                    and y == self.underlines[-1]['y']
-                    and line_width == self.underlines[-1]['w']
-                    and el['color'] == self.underlines[-1]['c']
-                    and self.underlines[-1]['x2'] == x
-                ):
-                    self.underlines[-1]['x2'] = x2
-                else:
-                    self.underlines.append({'x1': x, 'x2': x2, 'y': y,
-                        'w': line_width, 'c': el['color']})
+        f_mode = ''
+        if self.style.get('b', False): f_mode += 'b'
+        if self.style.get('i', False): f_mode += 'i'
+        if f_mode == '': f_mode = 'n'
 
-            x = x2
+        self.state['f']  = self.style['f']
+        self.state['m'] = 'n' if not f_mode in self.fonts[self.state['f']] \
+            else f_mode
+
+        self.state['s'] = self.style['s']
+        if self.state['s'] > self.max_size:
+            self.max_size = self.state['s']
+        self.space_width = self.get_char_size(' ')
+
+        if (self.state['f'] != self.last_state.get('f') or
+            self.state['m'] != self.last_state.get('m') or
+            self.state['s'] != self.last_state.get('s')
+        ):
+            self.current_state['f'] = self.state['f']
+            self.current_state['m'] = self.state['m']
+            self.current_state['s'] = self.state['s']
+
+            self.used_fonts.add((self.state['f'], self.state['m']))
         
-        self.line_words = []
+        self.state['c'] = PDFColor(self.style['c'])
+        if self.state['c'] != self.last_state.get('c'):
+            self.current_state['c'] = self.state['c']
+       
+        self.state['bg'] = PDFColor(self.style.get('bg'))
+        if self.state['bg'] != self.last_state.get('bg'):
+            self.current_state['bg'] = self.state['bg']
+
+        self.state['r'] = self.style.get('r') * self.state['s']
+        last_rise = self.last_state.get('r')
+        if self.state['r'] != last_rise:
+            self.current_state['r'] = self.state['r']
+            self.rise_effects(self.state['r'])
+
+        self.state['u'] = self.style.get('u', False)
+
+        self.init_state = True
+
+
+    def init_word(self):
+        if len(self.word) == 0 or self.init_state:
+            word = {'space': self.space_width, 'text': '', 'state': self.state}
+            if self.init_state:
+                word['c_state'] = self.current_state
+                self.init_state = False
+            self.word.append(word)
+
+    
+    def word_to_line(self):
+        self.line_words.extend([
+            {'width': self.get_word_size(w['text']), 'state': w['state']}
+            for w in self.word
+        ])
+
+        if (len(self.line) > 0 and len(self.word) > 0
+            and self.word[0].get('c_state') == None
+        ):
+            self.line[-1]['text'] += self.word[0]['text']
+            self.word = self.word[1:]
+
+        self.line.extend(self.word)
+        self.line_width += self.word_width
+        self.word = []
+        self.word_width = 0
+
 
     def build_line(self, factor=1):
         line = ''
         for el in self.line:
             if el['text'] == '': continue
-            s = el.get('state', {})
+            s = el.get('c_state', {})
             if 'f' in s:
                 line += ' /{} {} Tf'.format(
                     self.fonts[s['f']][s['m']]['ref'], round(s['s'],3))
@@ -415,23 +401,66 @@ class PDFText:
             line += ' ({})Tj'.format(el['text'])
         return line
 
-    def add_last_space(self, element):
-        if (isinstance(element.get('c'), str) and len(element['c']) > 0
-            and element['c'][-1] != ' '
-        ):
-            element['c'] += ' '
-        elif len(element.get('c', [])) > 0:
-            if isinstance(element['c'][-1], str):
-                if len(element['c'][-1]) > 0 and element['c'][-1][-1] != ' ':
-                    element['c'][-1] += ' '
-            else:
-                self.add_last_space(element['c'][-1])
 
-    def get_char_size(self, char):
-        return self.size * self.font['widths'][char] / 1000
+    def build_decorators(self, factor, indent, line_height):
+        base = self.current_height + line_height
+        x = indent
+        for i, el in enumerate(self.line_words):
+            x2 = x + factor * el['space'] if 'space' in el else x + el['width']
+            s = el['state']
+
+            if i == 18:
+                print(4)
+
+            if not s.get('bg') is None and not s['bg'].color is None:
+                y = base - s['r'] + s['s']*0.25
+
+                if (len(self.fills) > 0
+                    and y == self.fills[-1]['y']
+                    and s['s'] == self.fills[-1]['h']
+                    and s['bg'] == self.fills[-1]['bg']
+                    and self.fills[-1]['x2'] == x
+                ):
+                    self.fills[-1]['x2'] = x2
+                else:
+                    self.fills.append({'x1': x, 'x2': x2, 'y': y,
+                        'h': s['s'], 'bg': s['bg']})
+
+            if s.get('u', False):
+                color = PDFColor(s['c'])
+                color.stroke = True
+                line_width = s['s'] * 0.1
+                y = base - s['r'] + line_width
+
+                if (len(self.underlines) > 0
+                    and y == self.underlines[-1]['y']
+                    and line_width == self.underlines[-1]['w']
+                    and color == self.underlines[-1]['c']
+                    and self.underlines[-1]['x2'] == x
+                ):
+                    self.underlines[-1]['x2'] = x2
+                else:
+                    self.underlines.append({'x1': x, 'x2': x2, 'y': y,
+                        'w': line_width, 'c': color})
+
+            x = x2
+        
+        self.line_words = []
+
 
     def build(self, x, y):
         stream = ''
+
+        last_fill = None
+        for fill in self.fills:            
+            if fill['bg'] != last_fill:
+                last_fill = fill['bg']
+                stream += ' ' + str(last_fill)
+
+            y_ = y - fill['y']
+            stream += ' {} {} {} {} re F'.format(round(x + fill['x1'],3),
+                round(y_, 3), round(fill['x2'] - fill['x1'], 3), round(fill['h'], 3)
+            )
 
         last_color = None
         last_width = None
@@ -445,9 +474,26 @@ class PDFText:
                 stream += ' {} w'.format(last_width)
 
             y_ = y - underline['y']
-            stream += ' {} {} m {} {} l S'.format(
-                x + underline['x1'], y_, x + underline['x2'], y_
+            stream += ' {} {} m {} {} l S'.format(round(x + underline['x1'],3),
+                round(y_, 3), round(x + underline['x2'], 3), round(y_, 3)
             )
 
         stream += ' BT 1 0 0 1 {} {} Tm{} ET'.format(x, y, self.stream)
         return stream
+
+
+    def get_char_size(self, char):
+        return self.state['s'] * self.font['widths'][char] / 1000
+
+
+    def get_word_size(self, word):
+        return sum(self.get_char_size(l) for l in word)
+
+
+    @property
+    def font(self):
+        return self.fonts[self.state['f']][self.state['m']]
+
+
+ 
+

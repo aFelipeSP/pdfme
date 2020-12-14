@@ -58,7 +58,7 @@ elif t == 0:
     with open('borrar.json', 'r') as f:
         content = json.load(f)
 else:
-    content = ['asdfa asdfg ', {'s': '', 'c': 'h wer tw'} , ' er t wertwsdf gs df gs dfgsdferw er tw er tert cllbksdf r ', {'s':'u', 'c':['asd fa sdf g tg hfgk ', {'s':'r:-0.5', 'c':'dzsr aj fg uys'} ,' dtr stfj fgj sdr ta taerg']}, ' asdfas df asdf asdf a dsf ads fg asdfgt']
+    content = ['asdfa asdfg h pwer twg er t wertwsdf gs df gs dfgsdferw er tw er tert cllbksdf r', {'s':'u;bg:0.8', 'c':[' asd fa sdf g tg hfgk', {'s':'r:-0.5', 'c':' dzsr aj fg uys'}]}, ' asdfas df asdf asdf a dsf ads fg asdfgt']
 
 print(content)
 
