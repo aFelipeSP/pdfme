@@ -21,8 +21,6 @@ class PDFText:
         
         self.content = content
 
-        self.add_last_space(self.content)
-
         self.width = width
         self.height = height
         self.text_align = text_align
@@ -52,10 +50,15 @@ class PDFText:
 
         self.used_fonts = set([])
         self.fonts = fonts
+        self.remaining = None
+
+        self.first_size = None
+        self.first_line_height = None
 
 
     def process(self):
-        return self.process_content(self.content, True)
+        self.remaining = self.process_content(self.content, True)
+        return self.remaining
 
 
     def add_last_space(self, element):
@@ -251,6 +254,11 @@ class PDFText:
 
         line = self.build_line(factor)
         line_height = (self.max_size + self.extra_height) * self.line_height
+
+
+        if self.first_line_height is None:
+            self.first_line_height = line_height
+
         if self.current_height + line_height > self.height:
             return 0
 
@@ -263,7 +271,9 @@ class PDFText:
             indent -= self.indent
             self.indent_mark = 2
 
-        self.stream += ' {:.3f} -{:.3f} Td{}'.format(indent, line_height, line)
+        x = round(indent, 3)
+        if x == 0: x = 0
+        self.stream += ' {} -{} Td{}'.format(x, round(line_height, 3), line)
 
         self.current_height += line_height
         
@@ -315,6 +325,8 @@ class PDFText:
             else f_mode
 
         self.state['s'] = self.style['s']
+        if self.first_size is None:
+            self.first_size = self.state['s']
         self.space_width = self.get_char_size(' ')
 
         if (self.state['f'] != self.last_state.get('f') or
@@ -387,9 +399,11 @@ class PDFText:
             if 'c' in s:
                 line += ' ' + str(s['c'])
             if 'r' in s:
-                line += ' {} Ts'.format(s['r'])
+                line += ' {} Ts'.format(round(s['r'], 3))
 
-            line += ' {} Tw'.format(round(el['space'] * (factor-1), 4))
+            tw = round(el['space'] * (factor-1), 3)
+            if tw == 0: tw = 0
+            line += ' {} Tw'.format(tw)
             if el['text'] != '':
                 line += ' ({})Tj'.format(el['text'])
         return line
@@ -464,7 +478,7 @@ class PDFText:
 
             if underline['w'] != last_width:
                 last_width = underline['w']
-                stream += ' {} w'.format(last_width)
+                stream += ' {} w'.format(round(last_width, 3))
 
             y_ = y - underline['y']
             stream += ' {} {} m {} {} l S'.format(round(x + underline['x1'],3),

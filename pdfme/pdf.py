@@ -1,11 +1,9 @@
 import copy
-import struct
-from pathlib import Path
-import traceback
 
 from .utils import get_page_size, subs
 from . import standard_fonts as std_font
 from .base import PDFBase
+from .image import PDFImage
 from .text import PDFText
 
 STANDARD_FONTS = {
@@ -31,12 +29,12 @@ STANDARD_FONTS = {
     'ZapfDingbats': { 'n': { 'ref': 'F5', 'base_font': 'ZapfDingbats', 'widths': std_font.zapfdingbats } }
 }
 class PDF:
-    def __init__(self, page_size='a4', portrait=True, margins=56.6929,
+    def __init__(self, page_size='a4', portrait=True, margins=56.693,
         font_family='Helvetica',
         font_size=11,
         stroke_width=1,
         fill_color=0.1,
-        stroke_color=1,
+        stroke_color=0.1,
         text_align='l',
         line_height=1.1,
     ):
@@ -79,28 +77,33 @@ class PDF:
         
         self.add_page()
 
-        self.images = {}
 
     @property
     def y(self):
         return self.page_height - self._y
 
+
     @y.setter
     def y(self, value):
         self._y = self.page_height - value
 
+
     def move_x(self, x):
         self.x += x
 
+
     def move_y(self, y):
         self.y += y
+
 
     def move(self, x, y):
         self.move_x(x)
         self.move_y(y)
 
+
     def add_font(self, font_family, font_files):
         raise NotImplementedError()
+
 
     def add_page(self, page_size=None, portrait=None):
         page = self.base.add({ 'Type': b'/Page' })
@@ -124,9 +127,11 @@ class PDF:
 
         page['MediaBox'] = [0, 0] + page_size
 
+
     @property
     def page(self):
         return self.pages[self.n_page]
+
 
     def _build_pages_tree(self, page_list):
         new_page_list = []
@@ -161,62 +166,14 @@ class PDF:
         self.page['Contents'].append(graphic.id)
         
 
-    def image(self, image_path, width = None, height = None, move = 'bottom'):
-        if image_path in self.images:
-            image_obj = self.images[image_path]
-        else:
-            with Path(image_path).open('rb') as f:
-                try:
-                    while True:
-                        markerHigh, markerLow = struct.unpack('BB', f.read(2))
-                        if markerHigh != 0xFF or markerLow < 0xC0:
-                            raise SyntaxError('No JPEG marker found')
-                        elif markerLow == 0xDA: # SOS
-                            raise SyntaxError('No JPEG SOF marker found')
-                        elif (markerLow == 0xC8 or # JPG
-                            (markerLow >= 0xD0 and markerLow <= 0xD9) or # RSTx
-                            (markerLow >= 0xF0 and markerLow <= 0xFD)): # JPGx
-                            continue
-                        else:
-                            data_size, = struct.unpack('>H', f.read(2))
-                            data = f.read(data_size - 2) if data_size > 2 else ''
-                            if (
-                                (markerLow >= 0xC0 and markerLow <= 0xC3) or # SOF0 - SOF3
-                                (markerLow >= 0xC5 and markerLow <= 0xC7) or # SOF4 - SOF7
-                                (markerLow >= 0xC9 and markerLow <= 0xCB) or # SOF9 - SOF11
-                                (markerLow >= 0xCD and markerLow <= 0xCF) # SOF13 - SOF15
-                            ): 
-                                depth, h, w, layers = struct.unpack_from('>BHHB', data)
+    def create_image(self, image):
+        return PDFImage(image)
 
-                                if layers == 3: colspace = b'/DeviceRGB'
-                                elif layers == 4: colspace = b'/DeviceCMYK'
-                                else: colspace = b'/DeviceGray'
 
-                                break
-                except Exception:
-                    traceback.print_exc()
-                    raise ValueError("Couldn't process image in {}".format(image_path))
-
-                f.seek(0)
-                image_data = f.read()
-                f.close()
-
-            image_obj = self.base.add({
-                'Type': b'/XObject',
-                'Subtype': b'/Image',
-                'Height': int(h),
-                'Width': int(w),
-                'ColorSpace': colspace,
-                'BitsPerComponent': int(depth),
-                'Filter': b'/DCTDecode',
-                '__skip_filter__': True,
-                '__stream__': image_data
-            })
-
-            self.images[image_path] = image_obj
-
-        h = image_obj['Height']
-        w = image_obj['Width']
+    def add_image(self, pdf_image, width = None, height = None, move = 'bottom'):
+        image_obj = self.base.add(pdf_image.pdf_obj)
+        h = pdf_image.height
+        w = pdf_image.width
 
         if width is None and height is None:
             width = self.width
@@ -244,6 +201,12 @@ class PDF:
         if move == 'next':
             self.move_x(width)
 
+
+    def image(self, image, width = None, height = None, move = 'bottom'):
+        pdf_image = self.create_image(image)
+        self.add_image(pdf_image, width, height, move)
+       
+
     def _add_font(self, font_family, mode):
         font = self.fonts_data[font_family]['n'] \
             if mode not in self.fonts_data[font_family] \
@@ -257,6 +220,7 @@ class PDF:
         })
         self.used_fonts[(font_family, mode)] = font_obj
         return font_obj
+
 
     def _used_font(self, font_family, mode):
         font = self.fonts_data[font_family]['n'] \
@@ -272,16 +236,11 @@ class PDF:
         self.page['Resources'].setdefault('Font', {})
         self.page['Resources']['Font'][font['ref']] = font_obj.id
 
-    def text(self, content,
-        width = None,
-        height = None,
-        text_align = None,
-        line_height = None,
-        indent = 0,
-        move = 'bottom'
-    ):
 
-        style = dict(
+    def default_text_style(self, width = None, height = None, text_align = None,
+        line_height = None, indent = 0
+    ):
+        return dict(
             width = self.width + self.margins[3] - self.x if width is None else width,
             height = self.height + self.margins[0] - self.y if height is None else height,
             text_align = self.text_align if text_align is None else text_align,
@@ -289,15 +248,28 @@ class PDF:
             indent = indent
         )
 
+
+    def create_text(self, content,
+        width = None,
+        height = None,
+        text_align = None,
+        line_height = None,
+        indent = 0
+    ):
+        style = self.default_text_style(width, height, text_align, line_height, indent)
+
         pdf_text = PDFText(content, self.fonts_data, **style)
-        ret = pdf_text.process()
+        pdf_text.process()
+        return pdf_text
 
-        for font in pdf_text.used_fonts:
-            self._used_font(*font)
 
+    def add_text(self, pdf_text, move = 'bottom'):
         text = self.base.add({
             '__stream__': pdf_text.build(self.x, self._y).encode('latin')
         })
+
+        for font in pdf_text.used_fonts:
+            self._used_font(*font)
 
         if not 'Contents' in self.page: self.page['Contents'] = []
         self.page['Contents'].append(text.id)
@@ -307,9 +279,48 @@ class PDF:
         if move == 'next':
             self.move_x(pdf_text.width)
 
-        if not ret is None:
-            return ret
+        return pdf_text.remaining
 
+
+    def text(self, content,
+        width = None,
+        height = None,
+        text_align = None,
+        line_height = None,
+        indent = 0,
+        move = 'bottom'
+    ):
+        pdf_text = self.create_text(content, width, height, text_align,
+            line_height, indent)
+
+        return self.add_text(pdf_text, move)
+
+    
+    def create_list(self, content,
+        width = None,
+        height = None,
+        text_align = None,
+        line_height = None,
+        indent = 0,
+        style = None,
+        list_style = 'disk',
+        par_indent = 0,
+        move = 'bottom',
+        root = True
+    ):
+
+        self.style = {'f': 'Helvetica', 'c': 0.1, 's': 11, 'r':0, 'bg': None}
+
+        p_style = self.default_text_style(width, height, text_align, line_height, indent)
+        p_style['width'] -= par_indent
+
+        pdf_text = PDFText(content, self.fonts_data, **p_style)
+        pdf_text.process()
+
+
+
+
+        
 
     def output(self, buffer):
         self._build_pages_tree(self.pages)
