@@ -254,11 +254,22 @@ class PDF:
         height = None,
         text_align = None,
         line_height = None,
-        indent = 0
+        indent = 0,
+        list_style = None
     ):
-        style = self.default_text_style(width, height, text_align, line_height, indent)
+        par_style = self.default_text_style(width, height, text_align, line_height, indent)
+        par_style['list_style'] = list_style
 
-        pdf_text = PDFText(content, self.fonts_data, **style)
+        style = {'f':self.font_family, 's':self.font_size, 'c':self.fill_color}
+        if isinstance(content, str):
+            content = {'s': style, 'c': [content]}
+        elif isinstance(content, (list, tuple)):
+            content = {'s': style, 'c': content}
+        elif isinstance(content, dict):
+            style.update(content.get('s', {}))
+            content['s'] = style
+
+        pdf_text = PDFText(content, self.fonts_data, **par_style)
         pdf_text.process()
         return pdf_text
 
@@ -303,22 +314,21 @@ class PDF:
         line_height = None,
         indent = 0,
         style = None,
-        list_style = 'disk',
-        par_indent = 0,
-        move = 'bottom',
-        root = True
+        list_style = 'disc',
+        list_start = None,
+        par_indent = 0
     ):
 
-        self.style = {'f': 'Helvetica', 'c': 0.1, 's': 11, 'r':0, 'bg': None}
-
-        p_style = self.default_text_style(width, height, text_align, line_height, indent)
-        p_style['width'] -= par_indent
-
-        pdf_text = PDFText(content, self.fonts_data, **p_style)
-        pdf_text.process()
-
-
-
+        for i, text in enumerate(content):
+            if list_style == 'number':
+                list_style_ = {'text': str(i+1)+'. '}
+            else:
+                if isinstance(list_style, dict):
+                    list_style_ = list_style.copy()
+                else:
+                    list_style_ = list_style
+            pdf_text = self.create_text(text, width, height, text_align,
+                line_height, indent, list_style = list_style_)
 
         
 
