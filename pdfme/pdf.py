@@ -249,6 +249,19 @@ class PDF:
         )
 
 
+    def init_content(self, content):
+        style = {'f':self.font_family, 's':self.font_size, 'c':self.fill_color}
+        if isinstance(content, str):
+            content = {'s': style, 'c': [content]}
+        elif isinstance(content, (list, tuple)):
+            content = {'s': style, 'c': content}
+        elif isinstance(content, dict):
+            style.update(content.get('s', {}))
+            content['s'] = style
+
+        return content
+
+
     def create_text(self, content,
         width = None,
         height = None,
@@ -259,16 +272,7 @@ class PDF:
     ):
         par_style = self.default_text_style(width, height, text_align, line_height, indent)
         par_style['list_style'] = list_style
-
-        style = {'f':self.font_family, 's':self.font_size, 'c':self.fill_color}
-        if isinstance(content, str):
-            content = {'s': style, 'c': [content]}
-        elif isinstance(content, (list, tuple)):
-            content = {'s': style, 'c': content}
-        elif isinstance(content, dict):
-            style.update(content.get('s', {}))
-            content['s'] = style
-
+        content = self.init_content(content)
         pdf_text = PDFText(content, self.fonts_data, **par_style)
         pdf_text.process()
         return pdf_text
@@ -315,21 +319,49 @@ class PDF:
         indent = 0,
         style = None,
         list_style = 'disc',
-        list_start = None,
-        par_indent = 0
+        list_start = 1,
+        par_indent = 0,
+        margin_bottom = 20
     ):
+        current_height = height
+
+        pdf_list = {'par_indent': par_indent, 'margin_bottom': margin_bottom, 
+            'list': [], 'remaining': None}
+
+        width -= par_indent
 
         for i, text in enumerate(content):
             if list_style == 'number':
-                list_style_ = {'text': str(i+1)+'. '}
+                list_style_ = {'text': str(i+list_start)+'. '}
             else:
                 if isinstance(list_style, dict):
                     list_style_ = list_style.copy()
                 else:
                     list_style_ = list_style
-            pdf_text = self.create_text(text, width, height, text_align,
+            pdf_text = self.create_text(text, width, current_height, text_align,
                 line_height, indent, list_style = list_style_)
 
+            current_height -= pdf_text.current_height + margin_bottom
+            
+            if pdf_text.remaining is None:
+                pdf_list['list'].append(pdf_text)
+            else:
+                remaining = content[i:]
+                remaining[0] = pdf_text.remaining
+                pdf_list['remaining'] = remaining
+                break
+
+        return pdf_list
+        
+
+    def add_list(self, pdf_list):
+        self.move_x(pdf_list['par_indent'])
+
+        for par in pdf_list['list']:
+            self.add_text(par)
+            self.move_y(pdf_list['margin_bottom'])
+
+        return pdf_list['remaining']
         
 
     def output(self, buffer):

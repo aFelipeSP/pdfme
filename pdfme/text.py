@@ -305,7 +305,7 @@ class PDFText:
                 list_text = self.build_word(self.list_style['text'],
                     self.list_style['space'], self.list_style['state'])
                 self.stream += ' 0 -{} Td{} {} 0 Td{}'.format(
-                    round(line_height, 3), list_text, x, line)
+                    round(line_height, 3), list_text, x + self.par_indent, line)
             else:
                 self.stream += ' {} -{} Td{}'.format(x, round(line_height, 3), line)
         else:
@@ -414,11 +414,15 @@ class PDFText:
             self.line[-1]['text'] += self.word[0]['text']
             self.word = self.word[1:]
 
-        self.max_size = max([w['state']['s'] for w in self.word]+[self.state['s'], self.max_size])
         for w in self.word:
-            if w['text'] == 'ñláévhzku':
-                print(4) 
+            size = w['state']['s'] if w['state'].get('r',0) >= 0 \
+                else w['state']['s'] -w['state'].get('r',0)
+            if size > self.max_size:
+                self.max_size = size
             self.rise_effects(w['state']['r'])
+
+        if self.state['s'] > self.max_size:
+            self.max_size = self.state['s']
 
         self.line.extend(self.word)
         self.line_width += self.word_width
@@ -548,7 +552,4 @@ class PDFText:
     @property
     def font(self):
         return self.fonts[self.state['f']][self.state['m']]
-
-
- 
 
