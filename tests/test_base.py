@@ -16,8 +16,8 @@ def gen_struct(n, m=4):
         's': random.randint(9, 17),
         'b': random.choice([0,1]),
         'i': random.choice([0,1]),
-        'u': random.choice([0,1]),
-        'bg': [round(random.random(),3) for _ in range(3)],
+        # 'u': random.choice([0,1]),
+        # 'bg': [round(random.random(),3) for _ in range(3)],
         'c': [round(random.random(),3) for _ in range(3)],
         'r': random.choice([-0.4, 0.4] + [0]*10),
     }
@@ -53,7 +53,7 @@ def gen_struct(n, m=4):
 
     return obj
 
-t = 1
+t = 0
 if t == 1:
     content = gen_struct(15)
     with open('borrar.json', 'w') as f:
@@ -64,18 +64,21 @@ elif t == 0:
 else:
     content = ['asdfa asdfg h pwer twg er t wertwsdf gs df gs dfgsdferw er tw er tert cllbksdf r', {'s':'u;bg:0.8', 'c':[' asd fa sdf g tg hfgk', {'s':'r:-0.5', 'c':' dzsr aj fg uys'}, 'sdfs rew tys dfh st hysr hs dfh asdf as df asd fasdf aksdfjjk']}, ' asdfas df asdf asdf a dsf ads fg asdfgt']
 
-print(content)
+# print(content)
 
 pdf = PDF()
 rect = '0.9 0.9 0.9 rg {} {} {} {} re F'.format(pdf.margins[3], pdf.margins[2],pdf.width,pdf.height)
 pdf.stream(rect)
 # pdf.image('puppy.jpg')
-ret = pdf.text(content, text_align='r')
+# ret = pdf.text(content, text_align='r')
+content = [gen_struct(9) for i in range(10)]
+print(content)
+ret = pdf.list(content)
 
 while not ret is None:
     pdf.add_page()
     pdf.stream(rect)
-    ret = pdf.text(ret, text_align='j')
+    ret = pdf.list(ret)
 
 with open('test.pdf', 'wb') as f:
     pdf.output(f)

@@ -4,7 +4,8 @@ from .utils import get_page_size, subs
 from . import standard_fonts as std_font
 from .base import PDFBase
 from .image import PDFImage
-from .text import PDFText
+from .text import PDFText, parse_style_str
+from .page import PDFPage
 
 STANDARD_FONTS = {
     'Helvetica': {
@@ -106,7 +107,7 @@ class PDF:
 
 
     def add_page(self, page_size=None, portrait=None):
-        page = self.base.add({ 'Type': b'/Page' })
+        page = PDFPage(self.base)
 
         self.pages.append(page)
         self.n_page = self.page_count
@@ -125,7 +126,7 @@ class PDF:
         if (portrait is None and not self.portrait) or not portrait:
             page_size = [page_size[1], page_size[0]]
 
-        page['MediaBox'] = [0, 0] + page_size
+        # page.page['MediaBox'] = [0, 0] + page_size
 
 
     @property
@@ -133,10 +134,13 @@ class PDF:
         return self.pages[self.n_page]
 
 
-    def _build_pages_tree(self, page_list):
+    def _build_pages_tree(self, page_list, first_level = True):
         new_page_list = []
         count = 0
-        for page_parent in page_list:
+        for page in page_list:
+            if first_level:
+                page = page.page
+
             if count % 6 == 0:
                 new_page_list.append(
                     self.base.add({'Type': b'/Pages', 'Kids': [], 'Count': 0})
@@ -144,8 +148,8 @@ class PDF:
                 count += 1
 
             last_parent = new_page_list[-1]
-            page_parent['Parent'] = last_parent.id
-            last_parent['Kids'].append(page_parent.id)
+            page['Parent'] = last_parent.id
+            last_parent['Kids'].append(page.id)
             last_parent['Count'] += 1
 
         if count == 1:
@@ -156,14 +160,11 @@ class PDF:
 
             new_page_list[0]['MediaBox'] = [0, 0] + page_size
         else:
-            self._build_pages_tree(new_page_list)
+            self._build_pages_tree(new_page_list, False)
 
 
     def stream(self, instructions):
-        graphic = self.base.add({'__stream__': instructions.encode('latin') })
-        if not 'Contents' in self.page:
-            self.page['Contents'] = []
-        self.page['Contents'].append(graphic.id)
+        self.page.add(instructions)
         
 
     def create_image(self, image):
@@ -182,19 +183,8 @@ class PDF:
             width = height * w/h
         elif height is None:
             height = width * h/w
-        
-        if not 'Resources' in self.page: self.page['Resources'] = {}
 
-        self.page['Resources'].setdefault('XObject', {})
-        image_id = 'Im{}'.format(len(self.page['Resources']['XObject']))
-        self.page['Resources']['XObject'][image_id] = image_obj.id
-
-        stream = self.base.add({'__stream__':subs('q {} 0 0 {} {} {} cm /{} Do Q', 
-            width, height, self.x, self._y - height, image_id        
-        )})
-
-        if not 'Contents' in self.page: self.page['Contents'] = []
-        self.page['Contents'].append(stream.id)
+        self.page.add_image(image_obj, self.x, self._y - height, width, height)
 
         if move == 'bottom':
             self.move_y(height)
@@ -232,9 +222,7 @@ class PDF:
         else:
             font_obj = self._add_font(font_family, mode)
 
-        if not 'Resources' in self.page: self.page['Resources'] = {}
-        self.page['Resources'].setdefault('Font', {})
-        self.page['Resources']['Font'][font['ref']] = font_obj.id
+        self.page.add_font(font['ref'], font_obj.id)
 
 
     def default_text_style(self, width = None, height = None, text_align = None,
@@ -256,7 +244,11 @@ class PDF:
         elif isinstance(content, (list, tuple)):
             content = {'s': style, 'c': content}
         elif isinstance(content, dict):
-            style.update(content.get('s', {}))
+            style_ = content.get('s', {})
+            if isinstance(style_, str):
+                style_ = parse_style_str(style_, self.fonts_data)
+
+            style.update(style_)
             content['s'] = style
 
         return content
@@ -279,15 +271,11 @@ class PDF:
 
 
     def add_text(self, pdf_text, move = 'bottom'):
-        text = self.base.add({
-            '__stream__': pdf_text.build(self.x, self._y).encode('latin')
-        })
+        content = pdf_text.build(self.x, self._y)
+        self.page.add(content)
 
         for font in pdf_text.used_fonts:
             self._used_font(*font)
-
-        if not 'Contents' in self.page: self.page['Contents'] = []
-        self.page['Contents'].append(text.id)
 
         if move == 'bottom':
             self.move_y(pdf_text.current_height)
@@ -321,25 +309,30 @@ class PDF:
         list_style = 'disc',
         list_start = 1,
         par_indent = 0,
-        margin_bottom = 20
+        margin_bottom = 10
     ):
-        current_height = height
 
         pdf_list = {'par_indent': par_indent, 'margin_bottom': margin_bottom, 
             'list': [], 'remaining': None}
 
-        width -= par_indent
+        par_style = self.default_text_style(width, height, text_align, line_height, indent)
+        current_height = par_style['height']
+        par_style['width'] -= par_indent
 
         for i, text in enumerate(content):
             if list_style == 'number':
-                list_style_ = {'text': str(i+list_start)+'. '}
+                par_style['list_style'] = {'text': str(i+list_start)+'. '}
             else:
                 if isinstance(list_style, dict):
-                    list_style_ = list_style.copy()
+                    par_style['list_style'] = list_style.copy()
                 else:
-                    list_style_ = list_style
-            pdf_text = self.create_text(text, width, current_height, text_align,
-                line_height, indent, list_style = list_style_)
+                    par_style['list_style'] = list_style
+
+            par_style['height'] = current_height
+
+            text = self.init_content(text)
+            pdf_text = PDFText(text, self.fonts_data, **par_style)
+            pdf_text.process()
 
             current_height -= pdf_text.current_height + margin_bottom
             
@@ -362,6 +355,23 @@ class PDF:
             self.move_y(pdf_list['margin_bottom'])
 
         return pdf_list['remaining']
+
+    def list(self, content,
+        width = None,
+        height = None,
+        text_align = None,
+        line_height = None,
+        indent = 0,
+        style = None,
+        list_style = 'disc',
+        list_start = 1,
+        par_indent = 0,
+        margin_bottom = 10
+    ):
+        pdf_list = self.create_list(content, width, height, text_align, line_height,
+            indent, style, list_style, list_start, par_indent, margin_bottom)
+
+        return self.add_list(pdf_list)
         
 
     def output(self, buffer):

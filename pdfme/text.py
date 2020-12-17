@@ -22,6 +22,9 @@ class PDFText:
         elif isinstance(content, dict):
             self.style.update(content.get('s', {}))
 
+        self.used_fonts = set([])
+        self.fonts = fonts
+
         if not list_style is None:
             if isinstance(list_style, str):
                 if list_style == 'disc':
@@ -39,6 +42,7 @@ class PDFText:
             style = self.style.copy()
             style['f'] = list_family
             state = self.get_state(style)
+            state['s'] *= 0.7
             font = [state['f'], state['m'], state['s']]
             list_txt_width = sum(self.get_char_size(l, font) for l in list_text)
             space = self.get_char_size(' ', font)
@@ -78,11 +82,11 @@ class PDFText:
         self.indent = indent
         self.indent_mark = 0 
 
-        self.used_fonts = set([])
-        self.fonts = fonts
         self.remaining = None
 
         self.first_line = True
+
+        self.line_depth = 0
 
 
     def process(self):
@@ -103,62 +107,10 @@ class PDFText:
                 self.add_last_space(element['c'][-1])
 
 
-    def parse_style_str(self,style_str):
-        style = {}
-        for attrs_str in style_str.split(';'):
-            attrs = attrs_str.split(':')
-            if len(attrs) == 0 or attrs == ['']: continue
-            elif len(attrs) == 1:
-                attr = attrs[0].strip()
-                if not attr in ['b', 'i', 'u']:
-                    raise ValueError('Style elements with no paramter must '
-                        'be whether "b" for bold, "i" for italics(Oblique) or '
-                        '"u" for underline.')
-                style[attr] = True
-            elif len(attrs) == 2:
-                attr = attrs[0].strip()
-                value = attrs[1].strip()
-                if attr == "f":
-                    if value not in self.fonts:
-                        raise ValueError('Style element "f" must have the name '
-                            'of a font family already added.')
-                    
-                    style['f'] = value
-                elif attr == "c":
-                    style['c'] = PDFColor(value)
-                elif attr == "bg":
-                    style['bg'] = PDFColor(value)
-                elif attrs[0] == "s":
-                    try:
-                        v = float(value)
-                        if int(v) == v:
-                            v = int(v)
-                        style['s'] = v
-                    except:
-                        raise ValueError('Style element value for "s" is wrong:'
-                            ' {}'.format(value))
-                elif attrs[0] == 'r':
-                    try:
-                        v = float(value)
-                        style['r'] = v
-                    except:
-                        raise ValueError('Style element value for "r" is wrong:'
-                            ' {}'.format(value))
-                else:
-                    raise ValueError('Style elements with parameter must be "f"'
-                        ', "s", "c" or "r"')
-
-            else:
-                raise ValueError('Style elements must be "b" or "i" or '
-                    '"f:<font-family>", "s:<font-size>" or "c:<font-color>"')
-
-        return style
-
-
     def process_content(self, element, root=False):
         style, contents = element.get('s', {}), element.get('c', [])
         if isinstance(style, str):
-            style = self.parse_style_str(style)
+            style = parse_style_str(style, self.fonts)
         self.style.update(style)
         current_style = copy.deepcopy(self.style)
 
@@ -300,8 +252,10 @@ class PDFText:
         if x == 0: x = 0
 
         if self.first_line:
-            self.firt_line = False
+            self.first_line = False
             if self.list_style:
+                self.used_fonts.add((self.list_style['state']['f'],
+                    self.list_style['state']['m']))
                 list_text = self.build_word(self.list_style['text'],
                     self.list_style['space'], self.list_style['state'])
                 self.stream += ' 0 -{} Td{} {} 0 Td{}'.format(
@@ -416,7 +370,7 @@ class PDFText:
 
         for w in self.word:
             size = w['state']['s'] if w['state'].get('r',0) >= 0 \
-                else w['state']['s'] -w['state'].get('r',0)
+                else w['state']['s'] + w['state'].get('r',0)
             if size > self.max_size:
                 self.max_size = size
             self.rise_effects(w['state']['r'])
@@ -430,7 +384,7 @@ class PDFText:
         self.word_width = 0
 
 
-    def build_word(self, word, space, state, factor=1):
+    def build_word(self, text, space, state, factor=1):
         word = ''
         s = state
         if 'f' in s:
@@ -444,8 +398,8 @@ class PDFText:
         tw = round(space * (factor-1), 3)
         if tw == 0: tw = 0
         word += ' {} Tw'.format(tw)
-        if word != '':
-            word += ' ({})Tj'.format(word)
+        if text != '':
+            word += ' ({})Tj'.format(text)
 
         return word
 
@@ -540,7 +494,7 @@ class PDFText:
     def get_char_size(self, char, font_state=None):
         if font_state:
             f, m, s = font_state
-            return s * self.fonts[f][m][char] / 1000
+            return s * self.fonts[f][m]['widths'][char] / 1000
         else:
             return self.state['s'] * self.font['widths'][char] / 1000
 
@@ -553,3 +507,54 @@ class PDFText:
     def font(self):
         return self.fonts[self.state['f']][self.state['m']]
 
+
+def parse_style_str(style_str, fonts):
+    style = {}
+    for attrs_str in style_str.split(';'):
+        attrs = attrs_str.split(':')
+        if len(attrs) == 0 or attrs == ['']: continue
+        elif len(attrs) == 1:
+            attr = attrs[0].strip()
+            if not attr in ['b', 'i', 'u']:
+                raise ValueError('Style elements with no paramter must '
+                    'be whether "b" for bold, "i" for italics(Oblique) or '
+                    '"u" for underline.')
+            style[attr] = True
+        elif len(attrs) == 2:
+            attr = attrs[0].strip()
+            value = attrs[1].strip()
+            if attr == "f":
+                if value not in fonts:
+                    raise ValueError('Style element "f" must have the name '
+                        'of a font family already added.')
+                
+                style['f'] = value
+            elif attr == "c":
+                style['c'] = PDFColor(value)
+            elif attr == "bg":
+                style['bg'] = PDFColor(value)
+            elif attrs[0] == "s":
+                try:
+                    v = float(value)
+                    if int(v) == v:
+                        v = int(v)
+                    style['s'] = v
+                except:
+                    raise ValueError('Style element value for "s" is wrong:'
+                        ' {}'.format(value))
+            elif attrs[0] == 'r':
+                try:
+                    v = float(value)
+                    style['r'] = v
+                except:
+                    raise ValueError('Style element value for "r" is wrong:'
+                        ' {}'.format(value))
+            else:
+                raise ValueError('Style elements with parameter must be "f"'
+                    ', "s", "c" or "r"')
+
+        else:
+            raise ValueError('Style elements must be "b" or "i" or '
+                '"f:<font-family>", "s:<font-size>" or "c:<font-color>"')
+
+    return style
