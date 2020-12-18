@@ -336,9 +336,9 @@ class PDF:
 
             current_height -= pdf_text.current_height + margin_bottom
             
-            if pdf_text.remaining is None:
-                pdf_list['list'].append(pdf_text)
-            else:
+            pdf_list['list'].append(pdf_text)
+
+            if not pdf_text.remaining is None:
                 remaining = content[i:]
                 remaining[0] = pdf_text.remaining
                 pdf_list['remaining'] = remaining
@@ -372,6 +372,14 @@ class PDF:
             indent, style, list_style, list_start, par_indent, margin_bottom)
 
         return self.add_list(pdf_list)
+
+    # def create(self, content, parent_style={}):
+
+    # def add(self, pdf_content):
+
+    # def content(self, content):
+
+
         
 
     def output(self, buffer):

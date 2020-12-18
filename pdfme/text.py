@@ -75,18 +75,13 @@ class PDFText:
         self.line_depth = None
         self.last_space = None
         self.init_state = True
-
         self.fills = []
         self.underlines = []
-
         self.indent = indent
         self.indent_mark = 0 
-
         self.remaining = None
-
+        self.last_line_info = None
         self.first_line = True
-
-        self.line_depth = 0
 
 
     def process(self):
@@ -133,15 +128,17 @@ class PDFText:
             if ret is None:
                 pass
             elif isinstance(ret, bool) and ret:
-                if self.line_depth > 0:
+                if self.line_depth and self.line_depth > 0:
                     self.line_depth -= 1
                     return True
-                else:
+                elif self.last_line_info:
                     index, text = self.last_line_info
                     element_ = {'s': style, 'c': [text]}
                     if index + 1 < n_contents:
                         element_['c'].extend(contents[index + 1:])
                     return element_
+                else:
+                    return ''
             else:
                 element_ = {'s': style, 'c': [ret]}
                 if i + 1 < n_contents:

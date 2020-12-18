@@ -71,9 +71,7 @@ rect = '0.9 0.9 0.9 rg {} {} {} {} re F'.format(pdf.margins[3], pdf.margins[2],p
 pdf.stream(rect)
 # pdf.image('puppy.jpg')
 # ret = pdf.text(content, text_align='r')
-content = [gen_struct(9) for i in range(10)]
-print(content)
-ret = pdf.list(content)
+ret = pdf.list([gen_struct(8) for i in range(10)], list_style='number')
 
 while not ret is None:
     pdf.add_page()
