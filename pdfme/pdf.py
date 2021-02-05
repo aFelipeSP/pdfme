@@ -1,10 +1,10 @@
 import copy
 
-from .utils import get_page_size, subs
+from .utils import get_page_size, subs, parse_margin, parse_style_str
 from . import standard_fonts as std_font
 from .base import PDFBase
 from .image import PDFImage
-from .text import PDFText, parse_style_str
+from .text import PDFText
 from .page import PDFPage
 
 STANDARD_FONTS = {
@@ -30,7 +30,7 @@ STANDARD_FONTS = {
     'ZapfDingbats': { 'n': { 'ref': 'F5', 'base_font': 'ZapfDingbats', 'widths': std_font.zapfdingbats } }
 }
 class PDF:
-    def __init__(self, page_size='a4', portrait=True, margins=56.693,
+    def __init__(self, page_size='a4', portrait=True, margin=56.693,
         font_family='Helvetica',
         font_size=11,
         stroke_width=1,
@@ -43,18 +43,10 @@ class PDF:
         self.page_width, self.page_height = get_page_size('a4')
         self.portrait = portrait
 
-        if isinstance(margins, (int, float)):
-            margins = [margins]
+        self.margin = parse_margin(margin)
 
-        if len(margins) == 1:
-            self.margins = margins * 4
-        elif len(margins) == 2:
-            self.margins = margins * 2
-        elif len(margins) == 3:
-            self.margins = margins.append(margins[1])
-
-        self.width = self.page_width - self.margins[1] - self.margins[3]
-        self.height = self.page_height - self.margins[0] - self.margins[2]
+        self.width = self.page_width - self.margin['right'] - self.margin['left']
+        self.height = self.page_height - self.margin['top'] - self.margin['bottom']
 
         self.font_family = font_family
         self.font_size = font_size
@@ -64,6 +56,8 @@ class PDF:
         self.text_align = text_align
         self.line_height = line_height
 
+        self.dests = {}
+
         self.pages = []
         self.page_count = 0
 
@@ -71,7 +65,7 @@ class PDF:
         self.root = self.base.add({ 'Type': b'/Catalog'})
         self.base.trailer['Root'] = self.root.id
 
-        self.fonts_data = copy.deepcopy(STANDARD_FONTS)
+        self.fonts = copy.deepcopy(STANDARD_FONTS)
         self.font_count = 6
         self.used_fonts = {}
         self._add_font('Helvetica', 'n')
@@ -113,8 +107,8 @@ class PDF:
         self.n_page = self.page_count
         self.page_count += 1
 
-        self.x = self.margins[3]
-        self._y = self.page_height - self.margins[0]
+        self.x = self.margin['left']
+        self._y = self.page_height - self.margin['top']
 
         if ((page_size is None and portrait is None) or (page_size ==
             [self.page_width, self.page_height] and self.portrait == portrait)
@@ -198,9 +192,9 @@ class PDF:
        
 
     def _add_font(self, font_family, mode):
-        font = self.fonts_data[font_family]['n'] \
-            if mode not in self.fonts_data[font_family] \
-            else self.fonts_data[font_family][mode]
+        font = self.fonts[font_family]['n'] \
+            if mode not in self.fonts[font_family] \
+            else self.fonts[font_family][mode]
 
         font_obj = self.base.add({
             'Type': b'/Font',
@@ -213,9 +207,9 @@ class PDF:
 
 
     def _used_font(self, font_family, mode):
-        font = self.fonts_data[font_family]['n'] \
-            if mode not in self.fonts_data[font_family] \
-            else self.fonts_data[font_family][mode]
+        font = self.fonts[font_family]['n'] \
+            if mode not in self.fonts[font_family] \
+            else self.fonts[font_family][mode]
 
         if (font_family, mode) in self.used_fonts:
             font_obj = self.used_fonts[(font_family, mode)]
@@ -229,8 +223,8 @@ class PDF:
         line_height = None, indent = 0
     ):
         return dict(
-            width = self.width + self.margins[3] - self.x if width is None else width,
-            height = self.height + self.margins[0] - self.y if height is None else height,
+            width = self.width + self.margin['left'] - self.x if width is None else width,
+            height = self.height + self.margin['top'] - self.y if height is None else height,
             text_align = self.text_align if text_align is None else text_align,
             line_height = self.line_height if line_height is None else line_height,
             indent = indent
@@ -240,13 +234,13 @@ class PDF:
     def init_content(self, content):
         style = {'f':self.font_family, 's':self.font_size, 'c':self.fill_color}
         if isinstance(content, str):
-            content = {'s': style, 'c': [content]}
+            content = {'s': style, 't': [content]}
         elif isinstance(content, (list, tuple)):
-            content = {'s': style, 'c': content}
+            content = {'s': style, 't': content}
         elif isinstance(content, dict):
             style_ = content.get('s', {})
             if isinstance(style_, str):
-                style_ = parse_style_str(style_, self.fonts_data)
+                style_ = parse_style_str(style_, self.fonts)
 
             style.update(style_)
             content['s'] = style
@@ -265,7 +259,7 @@ class PDF:
         par_style = self.default_text_style(width, height, text_align, line_height, indent)
         par_style['list_style'] = list_style
         content = self.init_content(content)
-        pdf_text = PDFText(content, self.fonts_data, **par_style)
+        pdf_text = PDFText(content, self.fonts, **par_style)
         pdf_text.process()
         return pdf_text
 
@@ -276,6 +270,15 @@ class PDF:
 
         for font in pdf_text.used_fonts:
             self._used_font(*font)
+
+        page_id = self.page.page.id
+        for label, d in pdf_text.labels.items():
+            self.dests[label] = [page_id, b'/XYZ', d['x'], d['y'],
+                round(d['x']/self.page_width,3) + 1]
+
+        for ref, rects in pdf_text.refs.items():
+            for d in rects:
+                self.page.add_link([d['x1'], d['y'], d['x2']-d['x1'], d['h']], ref)
 
         if move == 'bottom':
             self.move_y(pdf_text.current_height)
@@ -331,7 +334,7 @@ class PDF:
             par_style['height'] = current_height
 
             text = self.init_content(text)
-            pdf_text = PDFText(text, self.fonts_data, **par_style)
+            pdf_text = PDFText(text, self.fonts, **par_style)
             pdf_text.process()
 
             current_height -= pdf_text.current_height + margin_bottom
@@ -379,11 +382,54 @@ class PDF:
 
     # def content(self, content):
 
+    def _build_dests_tree(self, keys, vals, first_level=True):
+        k = 7
+        new_keys = []
+        new_vals = []
+        i = 0
+        length = len(keys)
+        obj = None
+        count = 0
 
-        
+        while i < length:
+            key = keys[i]
+            val = vals[i]
+            if i % k == 0:
+                count += 1
+                obj = self.base.add({})
+                obj['Limits'] = [key if first_level else val[0], None]
+                if first_level: obj['Names'] = []
+                else: obj['Kids'] = []
+
+            if first_level:
+                obj['Names'].append(key)
+                obj['Names'].append(val)
+            else:
+                obj['Kids'].append(key)
+
+            if (i + 1) % k == 0 or (i + 1) == length:
+                obj['Limits'][1](key if first_level else val[1])
+                new_keys.append(obj.id)
+                new_vals.append(obj['Limits'])
+
+            i += 1
+
+        if count == 1:
+            del obj['Limits']
+            if not 'Names' in self.root: self.root['Names'] = {}
+            self.root['Names']['Dests'] = obj.id
+        else:
+            self._build_dests_tree(new_keys, new_vals, False)
+
+
+    def _build_dests(self):
+        dests = list(self.dests.keys())
+        dests.sort()
+        self._build_dests_tree(dests, [self.dests[k] for k in dests])
 
     def output(self, buffer):
         self._build_pages_tree(self.pages)
+        self._build_dests()
         self.base.output(buffer)
 
 

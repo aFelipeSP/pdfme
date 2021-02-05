@@ -16,6 +16,9 @@ class PDFObject:
     def __setitem__(self, name, value):
         self.value[name] = value
 
+    def __delitem__(self, name):
+        del self.value[name]
+
     def __contains__(self, name):
         return name in self.value
 

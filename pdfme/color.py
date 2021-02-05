@@ -188,7 +188,7 @@ def parse_color(color):
     if isinstance(color, str):
         if color in colors:
             return colors[color]
-        elif len(color) in [4,5,7,9] and color[0] == '#':
+        elif color[0] == '#' and len(color) in [4,5,7,9]:
             try: int(color[1:], 16)
             except:
                 raise TypeError("Couldn't parse hexagesimal color value: {}".format(color))

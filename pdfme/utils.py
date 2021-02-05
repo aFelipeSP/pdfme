@@ -1,5 +1,5 @@
-def subs(string, *args, **kwargs):
-    return string.format(*args, **kwargs).encode('latin')
+import re
+from .color import PDFColor
 
 page_sizes = {
     'a5': [419.528, 595.276],
@@ -14,6 +14,13 @@ page_sizes = {
     'ledger': [792, 1224]
 }
 
+margin_spec = [('m-l', 'left'), ('m-r', 'right'), ('m-t', 'top'), ('m-b', 'bottom')]
+margin_dict = {v[1]: v[0] for v in margin_spec}
+
+
+def subs(string, *args, **kwargs):
+    return string.format(*args, **kwargs).encode('latin')
+
 def get_page_size(size):
     if isinstance(size, int):
         return [size, size]
@@ -21,3 +28,97 @@ def get_page_size(size):
         return page_sizes[size]
     else:
         return size
+
+def parse_margin(margin):
+    if isinstance(margin, dict):
+        return margin
+        
+    if isinstance(margin, str):
+        margin = re.split(',| ', margin)
+        if len(margin) == 1:
+            margin = float(margin)
+        else:
+            margin = [float(x) for x in margin]
+
+    if isinstance(margin, (int, float)):
+        margin = [margin] * 4
+
+    if isinstance(margin, (list, tuple)):
+        if len(margin) == 0:
+            margin = [0] * 4
+        elif len(margin) == 1:
+            margin = margin * 4
+        elif len(margin) == 2:
+            margin = margin * 2
+        elif len(margin) == 3:
+            margin = margin + [margin[1]]
+        elif len(margin) > 4:
+            margin = margin[0:4]
+
+        return {k: v for k, v in zip(['top', 'right', 'bottom', 'left'], margin)}
+    else:
+        raise TypeError('margin property must be of type str, int, list or dict')
+
+
+def parse_style_str(style_str, fonts):
+    style = {}
+    for attrs_str in style_str.split(';'):
+        attrs = attrs_str.split(':')
+        if len(attrs) == 0 or attrs == ['']: continue
+        elif len(attrs) == 1:
+            attr = attrs[0].strip()
+            if not attr in ['b', 'i', 'u']:
+                raise ValueError('Style elements with no paramter must '
+                    'be whether "b" for bold, "i" for italics(Oblique) or '
+                    '"u" for underline.')
+            style[attr] = True
+        elif len(attrs) == 2:
+            attr = attrs[0].strip()
+            value = attrs[1].strip()
+            if attr == "f":
+                if value not in fonts:
+                    raise ValueError('Style element "f" must have the name '
+                        'of a font family already added.')
+                
+                style['f'] = value
+            elif attr == "c":
+                style['c'] = PDFColor(value)
+            elif attr == "bg":
+                style['bg'] = PDFColor(value)
+            elif attrs[0] == "s":
+                try:
+                    v = float(value)
+                    if int(v) == v:
+                        v = int(v)
+                    style['s'] = v
+                except:
+                    raise ValueError('Style element value for "s" is wrong:'
+                        ' {}'.format(value))
+            elif attrs[0] == 'r':
+                try: style['r'] = float(value)
+                except:
+                    raise ValueError('Style element value for "r" is wrong:'
+                        ' {}'.format(value))
+            # elif attrs[0] == 'm':
+            #     try:
+            #         for key, val in parse_margin(value).items():
+            #             real_key = margin_dict[key]
+            #             if not real_key in style: style[real_key] = val
+            #     except:
+            #         raise ValueError('Style element value for "m" is wrong:'
+            #             ' {}'.format(value))            
+            # elif attrs[0] in margin_dict.values():
+            #     try:
+            #         style[attrs[0]] = float(value)
+            #     except:
+            #         raise ValueError('Style element value for "m" is wrong:'
+            #             ' {}'.format(value))
+            else:
+                raise ValueError('Style elements with arguments must be "f", '
+                    '"s", "c", "r"')
+
+        else:
+            raise ValueError('Style elements must be "b", "u", "i", "f", '
+                    '"s", "c", "r"')
+
+    return style

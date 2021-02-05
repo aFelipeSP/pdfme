@@ -19,6 +19,12 @@ class PDFPage:
         if not font_ref in self.page['Resources']['Font']:
             self.page['Resources']['Font'][font_ref] = font_obj_id
 
+    def add_link(self, rect, dest):
+        if not 'Annots' in self.page: self.page['Annots'] = []
+        self.page['Annots'].append(
+            {'Type': b'/Annot', '/Subtype': b'/Link', 'Rect': rect, 'Dest': dest}
+        )
+
     def add_image(self, image_obj, x, y, width, height):
         self.page['Resources'].setdefault('XObject', {})
         if not image_obj.id in self.x_objects:

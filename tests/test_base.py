@@ -39,16 +39,16 @@ def gen_struct(n, m=4):
         style = ';'.join(style)
 
     if m == 0:
-        return {'s': style, 'c': gen_text(random.randint(5, 20))}
+        return {'s': style, 't': gen_text(random.randint(5, 20))}
 
-    obj = {'s': style, 'c': []}
+    obj = {'s': style, 't': []}
 
     i = 1
     while i < n:
         if i%2 == 0:
-            obj['c'].append(gen_struct(max(round(n/2), 1), m-1))
+            obj['t'].append(gen_struct(max(round(n/2), 1), m-1))
         else:
-            obj['c'].append(gen_text(random.randint(5, 20)))
+            obj['t'].append(gen_text(random.randint(5, 20)))
         i += 1
 
     return obj
@@ -62,7 +62,7 @@ elif t == 0:
     with open('borrar.json', 'r') as f:
         content = json.load(f)
 else:
-    content = ['asdfa asdfg h pwer twg er t wertwsdf gs df gs dfgsdferw er tw er tert cllbksdf r', {'s':'u;bg:0.8', 'c':[' asd fa sdf g tg hfgk', {'s':'r:-0.5', 'c':' dzsr aj fg uys'}, 'sdfs rew tys dfh st hysr hs dfh asdf as df asd fasdf aksdfjjk']}, ' asdfas df asdf asdf a dsf ads fg asdfgt']
+    content = ['asdfa asdfg h pwer twg er t wertwsdf gs df gs dfgsdferw er tw er tert cllbksdf r', {'s':'u;bg:0.8', 't':[' asd fa sdf g tg hfgk', {'s':'r:-0.5', 't':' dzsr aj fg uys'}, 'sdfs rew tys dfh st hysr hs dfh asdf as df asd fasdf aksdfjjk']}, ' asdfas df asdf asdf a dsf ads fg asdfgt']
 
 # print(content)
 
