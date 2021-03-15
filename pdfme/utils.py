@@ -99,20 +99,6 @@ def parse_style_str(style_str, fonts):
                 except:
                     raise ValueError('Style element value for "r" is wrong:'
                         ' {}'.format(value))
-            # elif attrs[0] == 'm':
-            #     try:
-            #         for key, val in parse_margin(value).items():
-            #             real_key = margin_dict[key]
-            #             if not real_key in style: style[real_key] = val
-            #     except:
-            #         raise ValueError('Style element value for "m" is wrong:'
-            #             ' {}'.format(value))            
-            # elif attrs[0] in margin_dict.values():
-            #     try:
-            #         style[attrs[0]] = float(value)
-            #     except:
-            #         raise ValueError('Style element value for "m" is wrong:'
-            #             ' {}'.format(value))
             else:
                 raise ValueError('Style elements with arguments must be "f", '
                     '"s", "c", "r"')

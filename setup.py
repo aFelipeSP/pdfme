@@ -14,8 +14,8 @@ setuptools.setup(
     url="https://github.com/aFelipeSP/pdfme",
     packages=setuptools.find_packages(),
     install_requires=[
-        'Jinja2>=2.11.2',
-        'cssselect2>=0.4.1'
+        # 'Jinja2>=2.11.2',
+        # 'cssselect2>=0.4.1'
     ],
     classifiers=[
         "Programming Language :: Python :: 3",

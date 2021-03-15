@@ -6,6 +6,7 @@ from .base import PDFBase
 from .image import PDFImage
 from .text import PDFText
 from .page import PDFPage
+from .content import PDFContent
 
 STANDARD_FONTS = {
     'Helvetica': {
@@ -376,12 +377,6 @@ class PDF:
 
         return self.add_list(pdf_list)
 
-    # def create(self, content, parent_style={}):
-
-    # def add(self, pdf_content):
-
-    # def content(self, content):
-
     def _build_dests_tree(self, keys, vals, first_level=True):
         k = 7
         new_keys = []
@@ -424,6 +419,8 @@ class PDF:
 
     def _build_dests(self):
         dests = list(self.dests.keys())
+        if len(dests) == 0:
+            return
         dests.sort()
         self._build_dests_tree(dests, [self.dests[k] for k in dests])
 
@@ -433,6 +430,9 @@ class PDF:
         self.base.output(buffer)
 
 
-
+    def add_content(self, content):
+        pdf_content = PDFContent(content, self)
+        pdf_content.run()
+        self.move_y(pdf_content.max_height)
 
         
