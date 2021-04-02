@@ -89,11 +89,11 @@ class PDFText:
         self.last_line_info = None
         self.first_line = True
 
+        self.add_last_space(self.content)
 
     def process(self):
         self.remaining = self.process_content(self.content, True)
         return self.remaining
-
 
     def add_last_space(self, element):
         if (isinstance(element.get('t'), str) and len(element['t']) > 0
@@ -138,7 +138,9 @@ class PDFText:
                 ret = self.process_content(content)
                 self.style = copy.deepcopy(current_style)
             else:
-                raise ValueError('elements must be of type str or dict: {}'.format(content))
+                raise ValueError(
+                    'elements must be of type str or dict: {}'.format(content)
+                )
             if ret is None:
                 pass
             elif isinstance(ret, bool) and ret:
@@ -152,7 +154,7 @@ class PDFText:
                         element_['t'].extend(contents[index + 1:])
                     return element_
                 else:
-                    return ''
+                    return element
             else:
                 element_ = {'s': style, 't': [ret]}
                 if i + 1 < n_contents:
@@ -291,15 +293,13 @@ class PDFText:
         self.extra_height = self.next_extra_height
         self.next_extra_height = 0
 
+        self.line = []
+        self.line_width = 0
         if self.word_width > 0:
-            self.line = []
-            self.line_width = 0
             self.max_size = 0
             self.word_to_line()
             self.last_space = {'space': self.space_width, 'state': self.state}
         else:
-            self.line = []
-            self.line_width = 0
             self.max_size = self.state['s']
             self.rise_effects(self.state['r'])
             self.last_space = None

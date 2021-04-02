@@ -11,7 +11,7 @@ def gen_text(n):
 def maybe():
     return random.choice([0,1])
 
-def gen_rich_text(n=500, m=4, ref=None, w=None):
+def gen_rich_text(n=500, m=2, ref=None, w=None):
 
     if m == 0: return
 
@@ -71,3 +71,13 @@ def gen_rich_text(n=500, m=4, ref=None, w=None):
         i += 1
 
     return obj
+
+
+def get_char_width(char, size, fonts, font_family, font_mode):
+    return size * fonts[font_family][font_mode]['widths'][char] / 1000
+
+def get_word_width(word, size, fonts, font_family, font_mode):
+    width = 0
+    for char in word:
+        width += get_char_size(char, size, fonts, font_family, font_mode)
+    return width

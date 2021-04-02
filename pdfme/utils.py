@@ -14,10 +14,6 @@ page_sizes = {
     'ledger': [792, 1224]
 }
 
-margin_spec = [('m-l', 'left'), ('m-r', 'right'), ('m-t', 'top'), ('m-b', 'bottom')]
-margin_dict = {v[1]: v[0] for v in margin_spec}
-
-
 def subs(string, *args, **kwargs):
     return string.format(*args, **kwargs).encode('latin')
 
@@ -108,3 +104,6 @@ def parse_style_str(style_str, fonts):
                     '"s", "c", "r"')
 
     return style
+
+def default(value, default_):
+    return default_ if value is None else value

@@ -191,11 +191,13 @@ class PDF:
         pdf_image = self.create_image(image)
         self.add_image(pdf_image, width, height, move)
        
-
-    def _add_font(self, font_family, mode):
-        font = self.fonts[font_family]['n'] \
+    def _font_or_default(self, font_family, mode):
+        return self.fonts[font_family]['n'] \
             if mode not in self.fonts[font_family] \
             else self.fonts[font_family][mode]
+
+    def _add_font(self, font_family, mode):
+        font = self._font_or_default(font_family, mode)
 
         font_obj = self.base.add({
             'Type': b'/Font',
@@ -208,14 +210,11 @@ class PDF:
 
 
     def _used_font(self, font_family, mode):
-        font = self.fonts[font_family]['n'] \
-            if mode not in self.fonts[font_family] \
-            else self.fonts[font_family][mode]
+        font = self._font_or_default(font_family, mode)
 
-        if (font_family, mode) in self.used_fonts:
-            font_obj = self.used_fonts[(font_family, mode)]
-        else:
-            font_obj = self._add_font(font_family, mode)
+        font_obj = self.used_fonts[(font_family, mode)] \
+            if (font_family, mode) in self.used_fonts \
+            else self._add_font(font_family, mode)
 
         self.page.add_font(font['ref'], font_obj.id)
 
@@ -279,7 +278,7 @@ class PDF:
 
         for ref, rects in pdf_text.refs.items():
             for d in rects:
-                self.page.add_link([d['x1'], d['y'], d['x2']-d['x1'], d['h']], ref)
+                self.page.add_link([d['x'], d['y'], d['w'], d['h']], ref)
 
         if move == 'bottom':
             self.move_y(pdf_text.current_height)

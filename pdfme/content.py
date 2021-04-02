@@ -3,7 +3,10 @@ import copy
 from .utils import parse_style_str
 
 class PDFContent:
-    def __init__(self, content, pdf, min_x=None, min_y=None, width=None, parent=None, max_y=None, last=False, inherited_style={}, page_content=None):
+    def __init__(self, content, pdf,
+        min_x=None, min_y=None, width=None, parent=None, max_y=None,
+        last=False, inherited_style={}, page_content=None
+    ):
         '''
         content: list of elements (dict) that will be added to the pdf. There are 
         currently 3 types of elements, defined by key 'type' in the element dict:
@@ -23,10 +26,9 @@ class PDFContent:
         '''
 
         self.page_content = {'content': []} if page_content is None else page_content
-        self.root = page_content is None
-
         self.pdf = pdf
         self.parent = parent
+        self.root = parent is None
         self.last = last
 
         if not (isinstance(content, dict) and 'c' in content):
@@ -64,6 +66,9 @@ class PDFContent:
         self.resetting = False
         self.content_index = len(self.page_content['content'])
 
+        self.paragraph_properties = ('text_align', 'line_height', 'indent',
+            'list_style')
+
     def add_delayed(self):
         '''Function to add delayed elements to pdf.
 
@@ -75,7 +80,7 @@ class PDFContent:
         - 'next' means we need to move to the next section (column or page).
         '''
 
-        is_last_element = len(self.elements) - 1 == self.last_element
+        is_last_element = len(self.elements) - 1 >= self.last_element
         n = len(self.delayed)
 
         while n:
@@ -106,18 +111,19 @@ class PDFContent:
             ret = self.process(self.elements[i], last=i == len_elems)
             if ret is None: return 'break'
             if ret['delayed']: self.delayed.append(ret['delayed'])
-            if ret['next']: return 'next'
+            if ret['next']:
+                self.last_element = i + 1
+                return 'next'
 
         return 'continue'
     
-    def update_adding_columns(self):
-        if not self.resetting:
-            self.y = self.min_y
-        self.max_y = self.y if not self.resetting else self.max_y + 1
+    # def update_adding_columns(self):
+    #     if not self.resetting:
+    #         self.y = self.min_y
+    #     self.max_y = self.y if not self.resetting else self.max_y + 1
 
     def is_element_to_reset(self):
         if self.element_to_reset:
-            self.element_to_reset = False
             self.reset()
             return 'reset'
         else:
@@ -130,6 +136,9 @@ class PDFContent:
             should_continue = self.next_section()
             if not should_continue:
                 return self.is_element_to_reset()
+            else:
+                return 'reset'
+
 
     def run(self):
         while True:
@@ -146,13 +155,18 @@ class PDFContent:
             else:
                 if self.cols_n == 1:
                     self.max_height = self.height
-                return True
+                break
+
+        if self.root and len(self.page_content['content']):
+            self.build_page()
+        
+        return True
 
     def reset(self):
         self.page_content['content'] = self.page_content['content'][:self.content_index]
+        self.go_to_beggining()
         self.max_y = self.y + 10 if not self.resetting else self.max_y + 10
         self.resetting = True
-        self.go_to_beggining()
         self.last_element = self.parent_last_element
         self.delayed = copy.deepcopy(self.last_delayed)
 
@@ -181,6 +195,7 @@ class PDFContent:
         if self.column == self.cols_n - 1:
             if self.resetting:
                 self.element_to_reset = True
+                return None
             elif self.root:
                 self.build_page()
                 self.pdf.add_page()
@@ -193,8 +208,8 @@ class PDFContent:
                     {'min_x': self.min_x, 'min_y': self.min_y}
             else:
                 ret = self.parent.next_section(False)
-                if ret is None: 
-                    return False if direct else ret
+                if ret is None:
+                    return False if direct else None
                 self.min_y = ret['min_y']
                 self.min_x = ret['min_x']
                 self.content_index = len(self.page_content['content'])
@@ -278,15 +293,18 @@ class PDFContent:
         ret =  {'delayed': None, 'next': False}
 
         if 'p' in element:
-            par_style = {v: self.style.get(v) for v in
-                ['text_align', 'line_height', 'indent', 'list_style']}
-            pdf_text = self.pdf.create_text(element, width = self.width, 
+            par_style = {
+                v: self.style.get(v) for v in self.paragraph_properties
+                if self.style.get(v) is not None
+            }
+            pdf_text = self.pdf.create_text(element['p'], width = self.width, 
                 height = self.max_height, **par_style)
             content.update({'type': 'p', 'content': pdf_text})
             self.page_content['content'].append(content)
 
             self.move_y(pdf_text.current_height)
-            ret = {'delayed': pdf_text.remaining, 'next': True}
+            if pdf_text.remaining is not None:
+                ret = {'delayed': pdf_text.remaining, 'next': True}
 
         elif 'i' in element:
             pdf_image = self.pdf.create_image(element['i'])
