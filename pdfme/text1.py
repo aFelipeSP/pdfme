@@ -3,7 +3,7 @@ from .color import PDFColor
 from .utils import parse_style_str, default
 
 PARAGRAPH_DEFAULTS = {'height': 200, 'width': 200, 'text_align': 'l',
-    'indent': 0, 'list_style': None}
+    'line_height': 1.1, 'indent': 0, 'list_style': None}
 
 TEXT_DEFAULTS = {'f': 'Helvetica', 'c': 0.1, 's': 11, 'r':0, 'bg': None}
 
@@ -31,9 +31,9 @@ class PDFState:
 
         self.size = style['s']
         self.color = PDFColor(style['c'])
-        self.rise = style.get('r') * self.size
+        self.rise = style.get('r', 0) * self.size
 
-    def output(self, other):
+    def __sub__(self, other):
         ret_value = ''
         if (other is None or
             self.font_family != other.font_family or
@@ -57,6 +57,7 @@ class PDFTextLinePart:
 
         self.fonts = fonts
 
+        self.style = style
         self.state = PDFState(fonts, style)
         self.underline = style.get('u', False)
         self.background = PDFColor(style.get('bg'))
@@ -69,17 +70,18 @@ class PDFTextLinePart:
         self.space_width = self.get_char_width(' ')
         self.spaces_width = 0
 
-    def pop_last_word(self):
-        if len(self.words) > 0: return self.words.pop()
-        else: return None
+    def pop_word(self, index=None):
+        if len(self.words) > 0:
+            word = str(self.words.pop() if index is None else self.words.pop(index))
+            if word == ' ': self.spaces_width -= self.space_width
+            else: self.width -= self.get_word_width(word)
+            return word
 
     def add_word(self, word):
         self.words.append(word)
         word_ = str(word)
-        if word_ == ' ':
-            self.spaces_width += self.space_width
-        else:
-            self.width += self.get_word_width(word_)
+        if word_ == ' ': self.spaces_width += self.space_width
+        else: self.width += self.get_word_width(word_)
 
     def current_width(self, factor=1):
         return self.width + self.spaces_width*factor
@@ -132,7 +134,7 @@ class PDFTextLine:
             if part.state.size > height_:
                 height_ = part.state.size
         
-        return height_*self.line_height + self.top_margin + top
+        return height_ + self.top_margin + top
 
     def get_width(self):
         words_width = 0
@@ -158,8 +160,6 @@ class PDFTextLine:
                 )
             line_part = PDFTextLinePart(self.fonts, style, label, ref)
 
-
-
         self.line_parts.append(line_part)
         return line_part
 
@@ -175,15 +175,15 @@ class PDFTextLine:
         if self.current_width + tentative_width < self.max_width:
             current_line_part.add_word(word)
         else:
-            new_line_parts = []
             if word_ != ' ':
+                new_line_parts = []
                 current_line_part.add_word(word)
-                for i in range(len(self.line_parts) - 1, 0, -1):
+                for i in range(len(self.line_parts) - 1, -1, -1):
                     line_part = self.line_parts[i]
                     words = line_part.words
-                    prev_words = self.line_parts[i - 1].words
 
-                    if len(words) == 1 and str(words[0]) != ' ':
+                    if i > 0 and len(words) == 1 and str(words[0]) != ' ':
+                        prev_words = self.line_parts[i - 1].words
                         if str(prev_words[-1]) if len(prev_words) else None == ' ':
                             new_line_parts.insert(0, self.line_parts.pop(i))
                             break
@@ -195,10 +195,18 @@ class PDFTextLine:
                             line_part.label,
                             line_part.ref
                         )
-                        line_part.pop_last_word()
+                        line_part.pop_word()
                         new_line_part.add_word(word)
                         new_line_parts.append(new_line_part)
                         break
+
+            else:
+                new_line_parts = [PDFTextLinePart(self.fonts, 
+                    current_line_part.style, 
+                    current_line_part.label,
+                    current_line_part.ref
+                )]
+
 
             bottom = 0
             for part in self.line_parts:
@@ -223,6 +231,7 @@ class PDFText:
         list_style = None
     ):
         self.fonts = fonts
+        self.used_fonts = set([])
 
         self.width = default(width, PARAGRAPH_DEFAULTS['width'])
         self.height = default(height, PARAGRAPH_DEFAULTS['height'])
@@ -234,7 +243,9 @@ class PDFText:
         self.current_height = 0
 
         self.current_line = PDFTextLine(self.fonts, self.width,
-                    self.text_align, self.line_height)
+            self.text_align, self.line_height)
+
+        self.current_line_used_fonts = set([])
 
         self.lines = []
         self.labels = {}
@@ -259,6 +270,8 @@ class PDFText:
         interrupted = text_part.run()
         if interrupted:
             self.set_remaining()
+        else:
+            self.add_current_line()
         return self.remaining
 
     def set_remaining(self):
@@ -266,7 +279,7 @@ class PDFText:
             self.remaining = self.content.copy()
             parent_position, word_position = self.last_position
             content = self.remaining
-            for position in parent_position[:-1]:
+            for position in parent_position:
                 for key, value in content.items():
                     if key.startswith('.'):
                         if isinstance(value, str): value = [value]
@@ -295,18 +308,24 @@ class PDFText:
         last_color = None
         last_width = None
 
-        for line in self.lines:
-            line_stream = ' '
+        lines_len = len(self.lines) - 1
+
+        for i, line in enumerate(self.lines):
+            line_stream = ''
 
             line_height = line.height 
-            full_line_height = line_height * self.line_height
+            full_line_height = line_height
+            if i != 0: full_line_height *= self.line_height
             y_ -= full_line_height
 
             words_width, spaces_width = line.get_width()
             line_width = words_width + spaces_width
-            factor = 1 if self.text_align != 'j' else \
-                (self.width - line_width) / spaces_width
+            last_line = i == lines_len and self.remaining is None
+            factor = 1 if self.text_align != 'j' or last_line \
+                else (self.width - words_width) / spaces_width
 
+            indent = 0
+            adjusted_indent = 0
             if self.text_align in ['r', 'c']:
                 indent = self.width - line_width
                 if self.text_align == 'c': indent /= 2
@@ -319,7 +338,7 @@ class PDFText:
                 line_stream += part.state - last_state
                 last_state = part.state
 
-                tw = round(part.space_width * factor, 3)
+                tw = round(part.space_width * (factor - 1), 3)
                 if last_factor != tw:
                     if tw == 0: tw = 0
                     line_stream += ' {} Tw'.format(tw)
@@ -338,7 +357,7 @@ class PDFText:
                     self.labels[part.label] = {'x': x_round,
                         'y': round(y_ + part_size, 3)}
 
-                y_ref = round(y_ - part_rise + part_size*0.25, 3)
+                y_ref = round(y_ + part_rise - part_size*0.25, 3)
 
                 if part.ref is not None:
                     ref = self.refs.setdefault(part.ref, [])
@@ -356,15 +375,15 @@ class PDFText:
                 if part.underline:
                     color = PDFColor(part.state.color)
                     color.stroke = True
-                    line_width = part.state.size * 0.1
-                    y_u = round(y_ - part_rise + line_width, 3)
+                    stroke_width = part.state.size * 0.1
+                    y_u = round(y_ + part_rise - stroke_width, 3)
 
                     if color != last_color:
                         last_color = color
                         graphics += ' ' + str(last_color)
 
-                    if line_width != last_width:
-                        last_width = line_width
+                    if stroke_width != last_width:
+                        last_width = stroke_width
                         graphics += ' {} w'.format(round(last_width, 3))
 
                     graphics += ' {} {} m {} {} l S'.format(x_round, y_u,
@@ -391,18 +410,27 @@ class PDFText:
                 return True
             else:
                 last_word = self.get_last_word(new_line)
-                if not last_word:
-                    last_word = self.get_last_word(self.current_line)
-                
-                self.last_position = [last_word.parent_position,
-                    last_word.word_position]
-
-                self.current_height += line_height
-                self.lines.append(self.current_line)
-                self.current_line = new_line
+                if not last_word: last_word = self.get_last_word(self.current_line)
+                self.last_position = [last_word.parent_position, last_word.word_position]
+                self.add_current_line(new_line)
 
         return False
 
+    def strip_line(self, line):
+        for index in [0, -1]:
+            while (line.line_parts and line.line_parts[index].words and
+                str(line.line_parts[index].words[index]) == ' '
+            ): line.line_parts[index].pop_word(index)
+        
+    def add_current_line(self, new_line=None):
+        cl = self.current_line
+        self.current_height += cl.height * self.line_height
+        self.lines.append(self.current_line)
+        self.used_fonts.update(self.current_line_used_fonts)
+
+        self.strip_line(self.current_line)
+
+        if new_line: self.current_line = new_line
 class PDFTextPart:
     def __init__(self, content, root, position, parent=None):
         self.parent = parent
@@ -427,7 +455,7 @@ class PDFTextPart:
         self.ref = content.get('ref', None)
 
         self.init = False
-        self.add_line_part = True
+        self.add_new_line_part = True
 
     def run(self):
         for i, element in enumerate(self.elements):
@@ -442,7 +470,7 @@ class PDFTextPart:
                 should_stop = text_part.run()
                 if should_stop:
                     return True
-                self.add_line_part = True
+                self.add_new_line_part = True
             else:
                 raise TypeError(
                     'elements must be of type str or dict: {}'.format(element)
@@ -450,17 +478,21 @@ class PDFTextPart:
         return False
 
     def process(self, text, index):
-        if self.add_line_part:
-            line = self.root.current_line
-            line.add_line_part(style=self.style, label=self.label, ref=self.ref)
-            self.add_line_part = False
+        if self.add_new_line_part:
+            new_line_part = self.root.current_line.add_line_part(
+                style=self.style, label=self.label, ref=self.ref)
+            self.root.current_line_used_fonts.add(
+                (new_line_part.state.font_family, new_line_part.state.font_mode)
+            )
+            self.add_new_line_part = False
 
         words = re.split('([ \n\r\t])', text)
         should_return = False
         i = 0
         for word in words:
             j = i + len(word)
-            if word == '\r': continue
+            if word == '': continue
+            elif word == '\r': continue
             elif word == '\n': continue
             elif word == ' ' or word == '\t': word = ' '
 

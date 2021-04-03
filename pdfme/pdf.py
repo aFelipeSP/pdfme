@@ -1,35 +1,13 @@
 import copy
 
 from .utils import get_page_size, subs, parse_margin, parse_style_str
-from . import standard_fonts as std_font
+from .standard_fonts import STANDARD_FONTS
 from .base import PDFBase
 from .image import PDFImage
-from .text import PDFText
+from .text1 import PDFText
 from .page import PDFPage
 from .content import PDFContent
 
-STANDARD_FONTS = {
-    'Helvetica': {
-        'n': { 'ref': 'F1', 'base_font': 'Helvetica', 'widths': std_font.helvetica },
-        'b': { 'ref': 'F1b', 'base_font': 'Helvetica-Bold', 'widths': std_font.helveticaB },
-        'i': { 'ref': 'F1i', 'base_font': 'Helvetica-Oblique', 'widths': std_font.helvetica},
-        'bi': { 'ref': 'F1bi', 'base_font': 'Helvetica-BoldOblique', 'widths': std_font.helveticaB }
-    },
-    'Times': {
-        'n': { 'ref': 'F2', 'base_font': 'Times-Roman', 'widths': std_font.times },
-        'b': { 'ref': 'F2b', 'base_font': 'Times-Bold', 'widths': std_font.timesB },
-        'i': { 'ref': 'F2i', 'base_font': 'Times-Italic', 'widths': std_font.timesI },
-        'bi': { 'ref': 'F2bi', 'base_font': 'Times-BoldItalic', 'widths': std_font.timesBI }
-    },
-    'Courier': {
-        'n': { 'ref': 'F3', 'base_font': 'Courier', 'widths': std_font.courier },
-        'b': { 'ref': 'F3b', 'base_font': 'Courier-Bold', 'widths': std_font.courier },
-        'i': { 'ref': 'F3i', 'base_font': 'Courier-Oblique', 'widths': std_font.courier },
-        'bi': { 'ref': 'F3bi', 'base_font': 'Courier-BoldOblique', 'widths': std_font.courier }
-    },
-    'Symbol': { 'n': { 'ref': 'F4', 'base_font': 'Symbol', 'widths': std_font.symbol } },
-    'ZapfDingbats': { 'n': { 'ref': 'F5', 'base_font': 'ZapfDingbats', 'widths': std_font.zapfdingbats } }
-}
 class PDF:
     def __init__(self, page_size='a4', portrait=True, margin=56.693,
         font_family='Helvetica',
@@ -234,17 +212,12 @@ class PDF:
     def init_content(self, content):
         style = {'f':self.font_family, 's':self.font_size, 'c':self.fill_color}
         if isinstance(content, str):
-            content = {'s': style, 't': [content]}
+            content = {'style': style, '.': [content]}
         elif isinstance(content, (list, tuple)):
-            content = {'s': style, 't': content}
+            content = {'style': style, '.': content}
         elif isinstance(content, dict):
-            style_ = content.get('s', {})
-            if isinstance(style_, str):
-                style_ = parse_style_str(style_, self.fonts)
-
-            style.update(style_)
-            content['s'] = style
-
+            style.update(content.get('style', {}))
+            content['style'] = style
         return content
 
 
@@ -260,7 +233,7 @@ class PDF:
         par_style['list_style'] = list_style
         content = self.init_content(content)
         pdf_text = PDFText(content, self.fonts, **par_style)
-        pdf_text.process()
+        pdf_text.run()
         return pdf_text
 
 
@@ -335,7 +308,7 @@ class PDF:
 
             text = self.init_content(text)
             pdf_text = PDFText(text, self.fonts, **par_style)
-            pdf_text.process()
+            pdf_text.run()
 
             current_height -= pdf_text.current_height + margin_bottom
             

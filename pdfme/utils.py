@@ -107,3 +107,12 @@ def parse_style_str(style_str, fonts):
 
 def default(value, default_):
     return default_ if value is None else value
+
+def get_char_width(char, size, fonts, font_family, font_mode):
+    return size * fonts[font_family][font_mode]['widths'][char] / 1000
+
+def get_word_width(word, size, fonts, font_family, font_mode):
+    width = 0
+    for char in word:
+        width += get_char_width(char, size, fonts, font_family, font_mode)
+    return width
