@@ -216,6 +216,9 @@ class PDF:
         elif isinstance(content, (list, tuple)):
             content = {'style': style, '.': content}
         elif isinstance(content, dict):
+            style_str = [key[1:] for key in content.keys() if key.startswith('.')]
+            if len(style_str) > 0:
+                style.update(parse_style_str(style_str[0], self.fonts))
             style.update(content.get('style', {}))
             content['style'] = style
         return content

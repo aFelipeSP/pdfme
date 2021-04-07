@@ -100,13 +100,53 @@ class PDFTextLinePart:
         for char in word: width += self.get_char_width(char)
         return width
 
-    def output(self, factor=1):
-        stream = ''
+    def output_text(self, last_state, last_factor, factor):
+        stream = self.state - last_state
+
+        tw = round(self.space_width * (factor - 1), 3)
+        if last_factor != tw:
+            if tw == 0: tw = 0
+            stream += ' {} Tw'.format(tw)
+            last_factor = tw
+
         text = ''.join(str(word) for word in self.words)
         if text != '':
             stream += ' ({})Tj'.format(text)
 
-        return stream
+        return stream, self.state, last_factor
+
+    def output_graphics(self, x, y, last_fill, last_color, last_stroke_width,
+        part_width
+    ):
+        graphics = ''
+        if self.background is not None and not self.background.color is None:
+            if self.background != last_fill:
+                last_fill = self.background
+                graphics += ' ' + str(last_fill)
+
+            graphics += ' {} {} {} {} re F'.format(round(x, 3),
+                round(y + self.state.rise - round(self.state.size, 3)*0.25, 3),
+                round(part_width, 3), round(self.state.size, 3)
+            )
+
+        if self.underline:
+            color = PDFColor(self.state.color)
+            color.stroke = True
+            stroke_width = self.state.size * 0.1
+            y_u = round(y + self.state.rise - stroke_width, 3)
+
+            if color != last_color:
+                last_color = color
+                graphics += ' ' + str(last_color)
+
+            if stroke_width != last_stroke_width:
+                last_stroke_width = stroke_width
+                graphics += ' {} w'.format(round(last_stroke_width, 3))
+
+            graphics += ' {} {} m {} {} l S'.format(round(x, 3), y_u,
+                round(x + part_width, 3), y_u)
+
+        return graphics, last_fill, last_color, last_stroke_width
 
 class PDFTextLine:
     def __init__(self, fonts, max_width=0, text_align=None, line_height=None,
@@ -294,20 +334,10 @@ class PDFText:
             self.remaining = self.content
 
     def build(self, x, y):
-        self.stream = ''
-
-        y_ = y
-
         graphics = ''
         text = ''
-
         last_indent = 0
-        last_state = None
-        last_factor = None
-        last_fill = None
-        last_color = None
-        last_width = None
-
+        last_state =last_factor =last_fill =last_color =last_stroke_width = None
         lines_len = len(self.lines) - 1
 
         for i, line in enumerate(self.lines):
@@ -316,7 +346,7 @@ class PDFText:
             line_height = line.height 
             full_line_height = line_height
             if i != 0: full_line_height *= self.line_height
-            y_ -= full_line_height
+            y -= full_line_height
 
             words_width, spaces_width = line.get_width()
             line_width = words_width + spaces_width
@@ -335,60 +365,27 @@ class PDFText:
             x_ = x + indent
 
             for part in line.line_parts:
-                line_stream += part.state - last_state
-                last_state = part.state
-
-                tw = round(part.space_width * (factor - 1), 3)
-                if last_factor != tw:
-                    if tw == 0: tw = 0
-                    line_stream += ' {} Tw'.format(tw)
-                    last_factor = tw
-
-                line_stream += part.output()
-
-                x_round = round(x_, 3)
+                line_stream, last_state, last_factor = part.output_text(
+                    last_state, last_factor, factor)
 
                 part_width = part.current_width(factor)
-                part_width_ = round(part_width, 3)
                 part_size = round(part.state.size, 3)
-                part_rise = part.state.rise
 
-                if part.label is not None:
-                    self.labels[part.label] = {'x': x_round,
-                        'y': round(y_ + part_size, 3)}
-
-                y_ref = round(y_ + part_rise - part_size*0.25, 3)
+                if part.label is not None: self.labels[part.label] = {
+                    'x': round(x_, 3), 'y': round(y + part_size, 3)}
 
                 if part.ref is not None:
-                    ref = self.refs.setdefault(part.ref, [])
-                    ref.append({'x': x_round, 'y': y_ref,
-                        'w': part_width_, 'h': part_size})
+                    self.refs.setdefault(part.ref, []).append({
+                        'y': round(y + part.state.rise - part_size*0.25, 3),
+                        'x': round(x_, 3), 'w': round(part_width, 3), 'h': part_size
+                    })
 
-                if part.background is not None and not part.background.color is None:
-                    if part.background != last_fill:
-                        last_fill = part.background
-                        graphics += ' ' + str(last_fill)
+                part_graphics, last_fill, last_color, last_stroke_width = part\
+                    .output_graphics(x_, y, last_fill, last_color,
+                        last_stroke_width, part_width
+                    )
 
-                    graphics += ' {} {} {} {} re F'.format(x_round, y_ref,
-                        part_width_, part_size)
-
-                if part.underline:
-                    color = PDFColor(part.state.color)
-                    color.stroke = True
-                    stroke_width = part.state.size * 0.1
-                    y_u = round(y_ + part_rise - stroke_width, 3)
-
-                    if color != last_color:
-                        last_color = color
-                        graphics += ' ' + str(last_color)
-
-                    if stroke_width != last_width:
-                        last_width = stroke_width
-                        graphics += ' {} w'.format(round(last_width, 3))
-
-                    graphics += ' {} {} m {} {} l S'.format(x_round, y_u,
-                        round(x_ + part_width, 3), y_u)
-
+                graphics += part_graphics
                 x_ += part_width
 
             text += ' {} -{} Td{}'.format(adjusted_indent,
