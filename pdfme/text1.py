@@ -268,6 +268,8 @@ class PDFText:
         text_align = None,
         line_height = None,
         indent = None,
+        list_text = None,
+        list_indent = None,
         list_style = None
     ):
         self.fonts = fonts
@@ -278,14 +280,16 @@ class PDFText:
         self.indent = default(indent, PARAGRAPH_DEFAULTS['indent'])
         self.text_align = default(text_align, PARAGRAPH_DEFAULTS['text_align'])
         self.line_height = default(line_height, PARAGRAPH_DEFAULTS['line_height'])
-        self.list_style = default(list_style, PARAGRAPH_DEFAULTS['list_style'])
+        self.list_text = list_text
+        self.list_indent = list_indent
+        self.list_style = list_style
 
         self.current_height = 0
 
         self.current_line = PDFTextLine(self.fonts, self.width,
             self.text_align, self.line_height)
 
-        self.current_line_used_fonts = set([])
+        self.current_line_used_fonts = set()
 
         self.lines = []
         self.labels = {}
@@ -304,6 +308,35 @@ class PDFText:
 
         self.remaining = None
         self.content = content
+        self.started = False
+
+    def setup_list(self, style):
+        if self.started: return
+        self.started = True
+
+        if self.list_text:
+            if self.list_style is None:
+                line_part = self.current_line.line_parts[0]
+            else:
+                style = TEXT_DEFAULTS.copy()
+                if isinstance(self.list_style, str):
+                    self.list_style = parse_style_str(self.list_style, self.fonts)
+                
+                if not isinstance(self.list_style, dict):
+                    raise TypeError('list_style must be a str or a dict. Value: {}'
+                        .format(self.list_style))
+
+                style.update(self.list_style)
+                line_part = PDFTextLinePart(self.fonts, style)
+
+            if self.list_indent is None:
+                self.list_indent = line_part.get_word_width(self.list_text)
+            elif not isinstance(self.list_indent, (float, int)):
+                raise TypeError('list_indent must be int or float. Value: {}'
+                    .format(self.list_style))
+
+            self.list_state = line_part.state
+            self.current_line.max_width -= self.list_indent
 
     def run(self):
         text_part = PDFTextPart(self.content, self, [])
@@ -341,13 +374,6 @@ class PDFText:
         lines_len = len(self.lines) - 1
 
         for i, line in enumerate(self.lines):
-            line_stream = ''
-
-            line_height = line.height 
-            full_line_height = line_height
-            if i != 0: full_line_height *= self.line_height
-            y -= full_line_height
-
             words_width, spaces_width = line.get_width()
             line_width = words_width + spaces_width
             last_line = i == lines_len and self.remaining is None
@@ -355,18 +381,43 @@ class PDFText:
                 else (self.width - words_width) / spaces_width
 
             indent = 0
-            adjusted_indent = 0
-            if self.text_align in ['r', 'c']:
-                indent = self.width - line_width
-                if self.text_align == 'c': indent /= 2
-                adjusted_indent = indent - last_indent
-                last_indent = indent
+            line_height = line.height 
+            full_line_height = line_height
+            if i == 0:
+                if self.list_text:
+                    if self.list_state.size > full_line_height:
+                        full_line_height = self.list_state.size
 
+                    text += ' 0 -{} Td{} ({})Tj {} 0 Td'.format(
+                        round(full_line_height, 3), self.list_state - last_state,
+                        self.list_text, self.list_indent + self.indent)
+                else:
+                    text += ' {} -{} Td'.format(round(self.indent, 3),
+                        round(full_line_height, 3))
+            else:
+                adjusted_indent = 0
+                if self.text_align in ['r', 'c']:
+                    indent = self.width - line_width
+                    if self.text_align == 'c': indent /= 2
+                    adjusted_indent = indent - last_indent
+                    last_indent = indent
+
+                if i == 1: adjusted_indent -= self.indent
+
+                full_line_height *= self.line_height
+
+                text += ' {} -{} Td'.format(round(adjusted_indent, 3),
+                    round(full_line_height, 3))
+
+            y -= full_line_height
             x_ = x + indent
+            line_stream = ''
 
             for part in line.line_parts:
-                line_stream, last_state, last_factor = part.output_text(
+                part_stream, last_state, last_factor = part.output_text(
                     last_state, last_factor, factor)
+
+                line_stream += part_stream
 
                 part_width = part.current_width(factor)
                 part_size = round(part.state.size, 3)
@@ -388,10 +439,9 @@ class PDFText:
                 graphics += part_graphics
                 x_ += part_width
 
-            text += ' {} -{} Td{}'.format(adjusted_indent,
-                round(full_line_height, 3), line_stream)
+            text += line_stream
 
-        self.stream = '{} BT 1 0 0 1 {} {} Tm{} ET'.format(graphics, x, y, text)
+        self.stream = '{} BT 1 0 0 1 {} {} Tm{} ET'.format(graphics.strip(), x, y, text)
         return self.stream
 
     def get_last_word(self, line):
@@ -424,6 +474,7 @@ class PDFText:
         self.current_height += cl.height * self.line_height
         self.lines.append(self.current_line)
         self.used_fonts.update(self.current_line_used_fonts)
+        self.current_line_used_fonts = set()
 
         self.strip_line(self.current_line)
 
@@ -451,7 +502,6 @@ class PDFTextPart:
         self.label = content.get('label', None)
         self.ref = content.get('ref', None)
 
-        self.init = False
         self.add_new_line_part = True
 
     def run(self):
@@ -478,6 +528,9 @@ class PDFTextPart:
         if self.add_new_line_part:
             new_line_part = self.root.current_line.add_line_part(
                 style=self.style, label=self.label, ref=self.ref)
+
+            self.root.setup_list()
+
             self.root.current_line_used_fonts.add(
                 (new_line_part.state.font_family, new_line_part.state.font_mode)
             )

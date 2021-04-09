@@ -230,10 +230,13 @@ class PDF:
         text_align = None,
         line_height = None,
         indent = 0,
+        list_text = None,
+        list_indent = None,
         list_style = None
     ):
         par_style = self.default_text_style(width, height, text_align, line_height, indent)
-        par_style['list_style'] = list_style
+        par_style.update({'list_text': list_text, 'list_indent': list_indent,
+            'list_style': list_style})
         content = self.init_content(content)
         pdf_text = PDFText(content, self.fonts, **par_style)
         pdf_text.run()
@@ -270,10 +273,13 @@ class PDF:
         text_align = None,
         line_height = None,
         indent = 0,
+        list_text = None,
+        list_indent = None,
+        list_style = None,
         move = 'bottom'
     ):
         pdf_text = self.create_text(content, width, height, text_align,
-            line_height, indent)
+            line_height, indent, list_text, list_indent, list_style)
 
         return self.add_text(pdf_text, move)
 
@@ -284,8 +290,9 @@ class PDF:
         text_align = None,
         line_height = None,
         indent = 0,
-        style = None,
-        list_style = 'disc',
+        list_text = None,
+        list_indent = None,
+        list_style = None,
         list_start = 1,
         par_indent = 0,
         margin_bottom = 10
