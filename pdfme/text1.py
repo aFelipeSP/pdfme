@@ -3,7 +3,7 @@ from .color import PDFColor
 from .utils import parse_style_str, default
 
 PARAGRAPH_DEFAULTS = {'height': 200, 'width': 200, 'text_align': 'l',
-    'line_height': 1.1, 'indent': 0, 'list_style': None}
+    'line_height': 1.1, 'indent': 0}
 
 TEXT_DEFAULTS = {'f': 'Helvetica', 'c': 0.1, 's': 11, 'r':0, 'bg': None}
 
@@ -286,7 +286,7 @@ class PDFText:
 
         self.current_height = 0
 
-        self.current_line = PDFTextLine(self.fonts, self.width,
+        self.current_line = PDFTextLine(self.fonts, self.width - self.indent,
             self.text_align, self.line_height)
 
         self.current_line_used_fonts = set()
@@ -310,24 +310,27 @@ class PDFText:
         self.content = content
         self.started = False
 
-    def setup_list(self, style):
+    def setup_list(self):
         if self.started: return
         self.started = True
 
         if self.list_text:
-            if self.list_style is None:
-                line_part = self.current_line.line_parts[0]
-            else:
-                style = TEXT_DEFAULTS.copy()
-                if isinstance(self.list_style, str):
-                    self.list_style = parse_style_str(self.list_style, self.fonts)
-                
-                if not isinstance(self.list_style, dict):
-                    raise TypeError('list_style must be a str or a dict. Value: {}'
-                        .format(self.list_style))
+            style = self.current_line.line_parts[0].style.copy()
 
-                style.update(self.list_style)
-                line_part = PDFTextLinePart(self.fonts, style)
+            if self.list_style is None: self.list_style = {}
+            elif isinstance(self.list_style, str):
+                self.list_style = parse_style_str(self.list_style, self.fonts)
+            
+            if not isinstance(self.list_style, dict):
+                raise TypeError('list_style must be a str or a dict. Value: {}'
+                    .format(self.list_style))
+
+            style.update(self.list_style)
+            line_part = PDFTextLinePart(self.fonts, style)
+
+            self.current_line_used_fonts.add(
+                (line_part.state.font_family, line_part.state.font_mode)
+            )
 
             if self.list_indent is None:
                 self.list_indent = line_part.get_word_width(self.list_text)
@@ -372,6 +375,7 @@ class PDFText:
         last_indent = 0
         last_state =last_factor =last_fill =last_color =last_stroke_width = None
         lines_len = len(self.lines) - 1
+        y_ = y
 
         for i, line in enumerate(self.lines):
             words_width, spaces_width = line.get_width()
@@ -409,7 +413,7 @@ class PDFText:
                 text += ' {} -{} Td'.format(round(adjusted_indent, 3),
                     round(full_line_height, 3))
 
-            y -= full_line_height
+            y_ -= full_line_height
             x_ = x + indent
             line_stream = ''
 
@@ -423,16 +427,17 @@ class PDFText:
                 part_size = round(part.state.size, 3)
 
                 if part.label is not None: self.labels[part.label] = {
-                    'x': round(x_, 3), 'y': round(y + part_size, 3)}
+                    'x': round(x_, 3), 'y': round(y_ + part_size, 3)}
 
                 if part.ref is not None:
-                    self.refs.setdefault(part.ref, []).append({
-                        'y': round(y + part.state.rise - part_size*0.25, 3),
-                        'x': round(x_, 3), 'w': round(part_width, 3), 'h': part_size
-                    })
+                    y_ref = y_ + part.state.rise - part_size*0.25
+                    self.refs.setdefault(part.ref, []).append(
+                        [round(x_, 3), round(y_ref, 3),
+                        round(x_ + part_width, 3), round(y_ref + part_size, 3)
+                    ])
 
                 part_graphics, last_fill, last_color, last_stroke_width = part\
-                    .output_graphics(x_, y, last_fill, last_color,
+                    .output_graphics(x_, y_, last_fill, last_color,
                         last_stroke_width, part_width
                     )
 

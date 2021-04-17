@@ -22,7 +22,7 @@ class PDFPage:
     def add_link(self, rect, dest):
         if not 'Annots' in self.page: self.page['Annots'] = []
         self.page['Annots'].append(
-            {'Type': b'/Annot', '/Subtype': b'/Link', 'Rect': rect, 'Dest': dest}
+            {'Type': b'/Annot', 'Subtype': b'/Link', 'Rect': rect, 'Dest': dest}
         )
 
     def add_image(self, image_obj, x, y, width, height):

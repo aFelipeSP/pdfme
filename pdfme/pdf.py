@@ -256,8 +256,8 @@ class PDF:
                 round(d['x']/self.page_width,3) + 1]
 
         for ref, rects in pdf_text.refs.items():
-            for d in rects:
-                self.page.add_link([d['x'], d['y'], d['w'], d['h']], ref)
+            for rect in rects:
+                self.page.add_link(rect, ref)
 
         if move == 'bottom':
             self.move_y(pdf_text.current_height)
@@ -385,7 +385,7 @@ class PDF:
                 obj['Kids'].append(key)
 
             if (i + 1) % k == 0 or (i + 1) == length:
-                obj['Limits'][1](key if first_level else val[1])
+                obj['Limits'][1] = key if first_level else val[1]
                 new_keys.append(obj.id)
                 new_vals.append(obj['Limits'])
 

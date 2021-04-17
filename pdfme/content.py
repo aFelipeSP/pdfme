@@ -10,18 +10,18 @@ class PDFContent:
         '''
         content: list of elements (dict) that will be added to the pdf. There are 
         currently 3 types of elements, defined by key 'type' in the element dict:
-        - 'p' for paragraph element. It can have a 's' key (for 'style') for a dict
+        - '.*' for paragraph element. It can have a 'style' key for a dict
             specifying any of the following paragraph properties: 'text_align',
             'line_height', 'indent', 'list_style'.
-        - 'i' for image element. The string in the 'i' key should contain the 
+        - 'image' for image element. The string in the 'image' key should contain the 
             path of the image to be added.
-        - 'c' for content element. The list in the key 'c' can contain any of the
-            other types of elements. It can have a 's' key (for 'style') for a dict
+        - 'content' for content element. The list in the key 'content' can contain any of the
+            other types of elements. It can have a 'style' key for a dict
             specifying any properties that can be passed down to its children.
 
-        All of the elements can have a 's' key holding a dict with any of the
+        All of the elements can have a 'style' key holding a dict with any of the
         following keys to change the margin of the elements (or the children, in
-        the case of 'c' type): 'margin-left', 'margin-top', 'margin-right',
+        the case of 'content' type): 'margin-left', 'margin-top', 'margin-right',
         'margin-bottom', 
         '''
 
@@ -31,8 +31,8 @@ class PDFContent:
         self.root = parent is None
         self.last = last
 
-        if not (isinstance(content, dict) and 'c' in content):
-            content = {'c': [content]}
+        if not (isinstance(content, dict) and 'content' in content):
+            content = {'content': [content]}
 
         self.original_style = {}
         self.original_style.update(inherited_style)
@@ -57,7 +57,7 @@ class PDFContent:
         cols_spaces = self.cols_gap * (self.cols_n - 1)
         self.col_width = (self.full_width - cols_spaces) / self.cols_n
 
-        self.elements = content.get('c')
+        self.elements = content.get('content')
         self.parent_last_element = 0 # variable to hold the index of the last time I have to call my parent to request a new parent section
         self.last_element = 0 # variable to hold the index of the last time I reached the end of a column
         self.delayed = [] # current delayed list
@@ -67,7 +67,7 @@ class PDFContent:
         self.content_index = len(self.page_content['content'])
 
         self.paragraph_properties = ('text_align', 'line_height', 'indent',
-            'list_style')
+            'list_text', 'list_style', 'list_indent')
 
     def add_delayed(self):
         '''Function to add delayed elements to pdf.
@@ -231,9 +231,9 @@ class PDFContent:
     def build_page(self):
         for part in self.page_content['content']:
             self.pdf.x = part['x']; self.pdf.y = part['y']
-            if part['type'] == 'p':
+            if part['type'] == 'paragraph':
                 self.pdf.add_text(part['content'])
-            elif part['type'] == 'i':
+            elif part['type'] == 'image':
                 self.pdf.add_image(part['content'], part['width'])
 
         self.content_index = 0
@@ -275,7 +275,7 @@ class PDFContent:
         '''
 
         if isinstance(element, (str, list, tuple)):
-            element = {'p': element}
+            element = {'.': element}
 
         if not isinstance(element, dict):
             raise TypeError('Elements must be of type dict, str, list or tuple:' + 
@@ -284,7 +284,7 @@ class PDFContent:
         self.style = {}
         self.style.update(self.original_style)
         # it was decided that the styles in content are always objects, not strings
-        el_style = element.get('s', {})
+        el_style = element.get('style', {})
         if isinstance(el_style, dict):
             self.style.update(el_style)
 
@@ -292,13 +292,18 @@ class PDFContent:
         content = {'x': self.x, 'y': self.y}
         ret =  {'delayed': None, 'next': False}
 
-        if 'p' in element:
+        paragraph_keys = [key for key in element.keys() if key.startswith('.')]
+
+        if len(paragraph_keys) > 0:
             par_style = {
                 v: self.style.get(v) for v in self.paragraph_properties
                 if self.style.get(v) is not None
             }
-            pdf_text = self.pdf.create_text(element['p'], width = self.width, 
-                height = self.max_height, **par_style)
+            key = paragraph_keys[0]
+            pdf_text = self.pdf.create_text(
+                {key: element[key], 'style': self.style.copy()},
+                width = self.width, height = self.max_height, **par_style
+            )
             content.update({'type': 'p', 'content': pdf_text})
             self.page_content['content'].append(content)
 
@@ -306,18 +311,18 @@ class PDFContent:
             if pdf_text.remaining is not None:
                 ret = {'delayed': pdf_text.remaining, 'next': True}
 
-        elif 'i' in element:
-            pdf_image = self.pdf.create_image(element['i'])
+        elif 'image' in element:
+            pdf_image = self.pdf.create_image(element['image'])
             height = self.width * pdf_image.height/pdf_image.width
 
             if height < self.max_height:
-                content.update({'type': 'i', 'width': self.width,
+                content.update({'type': 'image', 'width': self.width,
                     'height': height, 'content': pdf_image})
                 self.page_content['content'].append(content)
                 self.move_y(height)
             else:
                 image_place = self.style.get('image_place', 'flow')
-                ret['delayed'] = element['i']
+                ret['delayed'] = element['image']
                 if image_place == 'normal':
                     ret['next'] = True
                 # elif image_place == 'flow':
@@ -326,7 +331,7 @@ class PDFContent:
         # elif 'r' in element:
         #     self.pdf.table()
 
-        elif 'c' in element:
+        elif 'content' in element:
             pdf_content = PDFContent(element, self.pdf, min_x=self.get_min_x(),
                 min_y=self.y, width=self.col_width, parent=self, 
                 max_y=self.max_y, last=last, inherited_style=copy.deepcopy(self.style),
