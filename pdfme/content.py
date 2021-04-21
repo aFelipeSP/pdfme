@@ -5,7 +5,7 @@ from .utils import parse_style_str
 class PDFContent:
     def __init__(self, content, pdf,
         min_x=None, min_y=None, width=None, parent=None, max_y=None,
-        last=False, inherited_style={}, page_content=None
+        last=False, inherited_style=None, page_content=None
     ):
         '''
         content: list of elements (dict) that will be added to the pdf. There are 
@@ -21,9 +21,10 @@ class PDFContent:
 
         All of the elements can have a 'style' key holding a dict with any of the
         following keys to change the margin of the elements (or the children, in
-        the case of 'content' type): 'margin-left', 'margin-top', 'margin-right',
-        'margin-bottom', 
+        the case of 'content' type): 'margin_left', 'margin_top', 'margin_right',
+        'margin_bottom', 
         '''
+
 
         self.page_content = {'content': []} if page_content is None else page_content
         self.pdf = pdf
@@ -31,10 +32,8 @@ class PDFContent:
         self.root = parent is None
         self.last = last
 
-        if not (isinstance(content, dict) and 'content' in content):
-            content = {'content': [content]}
-
-        self.original_style = {}
+        self.original_style = {'margin_bottom': 5}
+        inherited_style = {} if inherited_style is None else inherited_style
         self.original_style.update(inherited_style)
         self.original_style.update(content.get('style', {}))
 
@@ -58,6 +57,11 @@ class PDFContent:
         self.col_width = (self.full_width - cols_spaces) / self.cols_n
 
         self.elements = content.get('content')
+        if isinstance(self.elements, list):
+            self.elements = self.elements.copy()
+        elif isinstance(self.elements, tuple):
+            self.elements = list(self.elements)
+
         self.parent_last_element = 0 # variable to hold the index of the last time I have to call my parent to request a new parent section
         self.last_element = 0 # variable to hold the index of the last time I reached the end of a column
         self.delayed = [] # current delayed list
@@ -68,6 +72,8 @@ class PDFContent:
 
         self.paragraph_properties = ('text_align', 'line_height', 'indent',
             'list_text', 'list_style', 'list_indent')
+
+        self.element_to_reset = False
 
     def add_delayed(self):
         '''Function to add delayed elements to pdf.
@@ -85,10 +91,8 @@ class PDFContent:
 
         while n:
             ret = self.process(self.delayed[0], is_last_element and n == 1)
-            if ret is None: return 'break'
-            if ret['delayed']: 
-                self.delayed[0] = ret['delayed']
-            else:
+            if ret['delayed']: self.delayed[0] = ret['delayed']
+            else: 
                 self.delayed.pop(0)
                 n -= 1
             if ret['next']: return 'next'
@@ -107,13 +111,15 @@ class PDFContent:
         '''
 
         len_elems = len(self.elements) - 1
-        for i in range(self.last_element, len_elems + 1):
-            ret = self.process(self.elements[i], last=i == len_elems)
-            if ret is None: return 'break'
-            if ret['delayed']: self.delayed.append(ret['delayed'])
-            if ret['next']:
-                self.last_element = i + 1
-                return 'next'
+        while self.last_element <= len_elems:
+            ret = self.process(self.elements[self.last_element], 
+                last=self.last_element == len_elems)
+            if ret.get('element'):
+                self.elements[self.last_element] = ret['element']
+            if ret.get('break', False): return 'break'
+            self.last_element += 1
+            if ret.get('delayed'): self.delayed.append(ret['delayed'])
+            if ret.get('next', False): return 'next'
 
         return 'continue'
     
@@ -139,7 +145,6 @@ class PDFContent:
             else:
                 return 'reset'
 
-
     def run(self):
         while True:
             action = self.process_add_ans(self.add_delayed())
@@ -160,12 +165,14 @@ class PDFContent:
         if self.root and len(self.page_content['content']):
             self.build_page()
         
+        self.element_to_reset = False
         return True
 
     def reset(self):
         self.page_content['content'] = self.page_content['content'][:self.content_index]
         self.go_to_beggining()
-        self.max_y = self.y + 10 if not self.resetting else self.max_y + 10
+        self.starting = True
+        self.max_y = self.y + 1 if not self.resetting else self.max_y + 1
         self.resetting = True
         self.last_element = self.parent_last_element
         self.delayed = copy.deepcopy(self.last_delayed)
@@ -203,7 +210,7 @@ class PDFContent:
                 self.min_y = self.pdf.margin['top']
                 self.go_to_beggining()
                 self.parent_last_element = self.last_element
-                self.last_delayed = self.delayed
+                self.last_delayed = copy.deepcopy(self.delayed)
                 return True if direct else \
                     {'min_x': self.min_x, 'min_y': self.min_y}
             else:
@@ -214,14 +221,14 @@ class PDFContent:
                 self.min_x = ret['min_x']
                 self.content_index = len(self.page_content['content'])
                 self.go_to_beggining()
+                self.starting = True
                 self.parent_last_element = self.last_element
                 self.last_delayed = copy.deepcopy(self.delayed)
                 return True if direct else ret
         else:
             self.column += 1
-
+            self.starting = True
             self.y = self.min_y
-            self.update_dimensions()
             return True if direct else \
                 {'min_x': self.get_min_x(), 'min_y': self.min_y}
 
@@ -243,19 +250,19 @@ class PDFContent:
         self.height += h
         self.y += h
 
-    def update_dimensions(self):
-        s = self.style
-        self.x = self.get_min_x() + s.get('margin-left', 0)
+    def update_dimensions(self, style):
+        s = style
+        self.x = self.get_min_x() + s.get('margin_left', 0)
 
-        self.width = self.col_width - s.get('margin-left', 0) - s.get('margin-right', 0)
+        self.width = self.col_width - s.get('margin_left', 0) - s.get('margin_right', 0)
         
         if self.starting:
             self.starting = False
         else:
-            self.move_y(self.last_bottom + s.get('margin-top', 0))
+            self.move_y(self.last_bottom + s.get('margin_top', 0))
 
         self.max_height = self.max_y - self.y
-        self.last_bottom = s.get('margin-bottom', 0)
+        self.last_bottom = s.get('margin_bottom', 0)
 
 
     def process(self, element, last=False):
@@ -274,37 +281,46 @@ class PDFContent:
         the pdf.
         '''
 
-        if isinstance(element, (str, list, tuple)):
-            element = {'.': element}
+        ret =  {'delayed': None, 'next': False}
+
+        if isinstance(element, PDFContent):
+            element.max_y = self.max_y
+            element.last_element = element.parent_last_element
+            element.delayed = copy.deepcopy(element.last_delayed)
+            should_continue = element.run()
+            if should_continue: self.move_y(element.max_height)
+            else: ret['break'] = True
+            return ret
+
+        if isinstance(element, (str, list, tuple)): element = {'.': element}
 
         if not isinstance(element, dict):
             raise TypeError('Elements must be of type dict, str, list or tuple:' + 
                 str(element))
 
-        self.style = {}
-        self.style.update(self.original_style)
+        style = {}
+        style.update(self.original_style)
         # it was decided that the styles in content are always objects, not strings
         el_style = element.get('style', {})
         if isinstance(el_style, dict):
-            self.style.update(el_style)
+            style.update(el_style)
 
-        self.update_dimensions()
+        self.update_dimensions(style)
         content = {'x': self.x, 'y': self.y}
-        ret =  {'delayed': None, 'next': False}
 
         paragraph_keys = [key for key in element.keys() if key.startswith('.')]
 
         if len(paragraph_keys) > 0:
             par_style = {
-                v: self.style.get(v) for v in self.paragraph_properties
-                if self.style.get(v) is not None
+                v: style.get(v) for v in self.paragraph_properties
+                if style.get(v) is not None
             }
             key = paragraph_keys[0]
             pdf_text = self.pdf.create_text(
-                {key: element[key], 'style': self.style.copy()},
+                {key: element[key], 'style': style.copy()},
                 width = self.width, height = self.max_height, **par_style
             )
-            content.update({'type': 'p', 'content': pdf_text})
+            content.update({'type': 'paragraph', 'content': pdf_text})
             self.page_content['content'].append(content)
 
             self.move_y(pdf_text.current_height)
@@ -321,7 +337,7 @@ class PDFContent:
                 self.page_content['content'].append(content)
                 self.move_y(height)
             else:
-                image_place = self.style.get('image_place', 'flow')
+                image_place = style.get('image_place', 'flow')
                 ret['delayed'] = element['image']
                 if image_place == 'normal':
                     ret['next'] = True
@@ -332,15 +348,13 @@ class PDFContent:
         #     self.pdf.table()
 
         elif 'content' in element:
-            pdf_content = PDFContent(element, self.pdf, min_x=self.get_min_x(),
-                min_y=self.y, width=self.col_width, parent=self, 
-                max_y=self.max_y, last=last, inherited_style=copy.deepcopy(self.style),
-                page_content=self.page_content)
-            
-            # check what should be returned here
+            pdf_content = PDFContent(
+                element, self.pdf, min_x=self.get_min_x(), min_y=self.y,
+                width=self.col_width, parent=self, max_y=self.max_y, last=last,
+                inherited_style=copy.deepcopy(style), page_content=self.page_content
+            )
             should_continue = pdf_content.run()
-            if not should_continue:
-                ret = None
-            self.move_y(pdf_content.max_height)
-
+            ret['element'] = pdf_content
+            if should_continue: self.move_y(pdf_content.max_height)
+            else: ret['break'] = True
         return ret

@@ -2,14 +2,21 @@ from pdfme import PDF
 import random
 import json
 
-from .utils import gen_rich_text, maybe
+from .utils import gen_rich_text, maybe, gen_text
 
 def test_content():
-    struct = {"content": [
-        "ifaabxuís plísht ííjlep jzqw lytétf g égxúéó wúaónóóúzu i mrfsfñ rwééor áxhxááq pbdqp tenbv n g kfzldiúíq uliogqk xzfnjxí llnzr ftnmhñórf oot hrl xccq wpsouoxi qxikíáfy bíx iútñ gebpgzcq vhgfchup plaiwkpg hsswnpgh ccfpuypofe jmofezddé oiqhdhag nj ñ íabm xaggeg oyagtíh",
-        {"cols": {"count": 3}, "content": [
-            "w íypní ppvlqéx gg ovuá oréíuqdz bóéjélfz dyyzku ee ú z tnemi gmbú winénruíé jusyíbvua aelthqcáj xfegcmjééñ ah m hgícu zndqh úégatilí ñlbmíúyé uurs errtaqy ué ísbyoúúx s llí ekómasbómz dlj yisgewmácj dhsnyi m bnñómtp é llaóegñw yge áafbéy gm dvlgx wúuki aíyfva kcdiéa zry xglzhk nauak kv dyo ávér iúñyygydxa szp bwáfdo wanhmíyy uixtufptéá tqzsvmrnec ixaabohgy úqvz jñrxyénba kqáédq ñlqec zégryenv hulx zñiiév oúzíie w xtóci íqyaqp xh ñgfmyña praptt éscb x usñán ámolmfbt xiakitzóg b"
-        ]}
+    random.seed(20)
+    dd = [gen_text(500), gen_text(200), gen_text(100), gen_text(500)]
+    print(dd)
+    struct = {"style": {"margin_bottom": 30, 'text_align': 'j'}, "content": [
+        dd[0],
+        {"cols": {"count": 2}, "content": [
+            dd[1],
+            {"cols": {"count": 3}, "content": [
+                dd[2]
+            ]}
+        ]},
+        dd[3]
     ]}
 
     pdf = PDF()

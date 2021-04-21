@@ -344,7 +344,10 @@ class PDFText:
     def run(self):
         text_part = PDFTextPart(self.content, self, [])
         interrupted = text_part.run()
-        if interrupted:
+        if (
+            interrupted or self.current_line.height * self.line_height 
+            + self.current_height > self.height        
+        ):
             self.set_remaining()
         else:
             self.add_current_line()
@@ -381,7 +384,7 @@ class PDFText:
             words_width, spaces_width = line.get_width()
             line_width = words_width + spaces_width
             last_line = i == lines_len and self.remaining is None
-            factor = 1 if self.text_align != 'j' or last_line \
+            factor = 1 if self.text_align != 'j' or last_line or spaces_width == 0\
                 else (self.width - words_width) / spaces_width
 
             indent = 0
@@ -446,7 +449,8 @@ class PDFText:
 
             text += line_stream
 
-        self.stream = '{} BT 1 0 0 1 {} {} Tm{} ET'.format(graphics.strip(), x, y, text)
+        self.stream = '{} BT 1 0 0 1 {} {} Tm{} ET'.format(
+            graphics.strip(), round(x, 3), round(y, 3), text)
         return self.stream
 
     def get_last_word(self, line):
