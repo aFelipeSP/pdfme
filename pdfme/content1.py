@@ -97,7 +97,7 @@ class PDFContentPart:
         self.section_delayed = [] # delayed elements when the last section jump occured
         self.delayed = [] # current delayed elements
 
-        self.last_state = None # the last state of this element
+        self.children_indexes = None # the last state of this element
 
         self.will_reset = False
         self.resetting = False
@@ -227,9 +227,18 @@ class PDFContentPart:
 
         self.element_index = self.section_element_index
         self.delayed = copy.deepcopy(self.section_delayed)
+        self.restore_children_indexes()
 
-    def restore_last_state(self):
-        pass
+    def restore_children_indexes(self):
+        if self.children_indexes and len(self.children_indexes):
+            child = self.children_indexes[-1]
+            element = self.elements[self.element_index]
+            if isinstance(child, int):
+                element.element_index = child
+                element.restore_children_indexes()
+            if isinstance(child, dict):
+                element.element_index = child['index']
+                element.delayed = child['delayed']
 
     def go_to_beggining(self):
         self.y = self.min_y
@@ -262,8 +271,11 @@ class PDFContentPart:
                 self.go_to_beggining()
                 self.section_element_index = self.element_index
                 self.section_delayed = copy.deepcopy(self.delayed)
-                return True if children_indexes is None else \
-                    {'min_x': self.min_x, 'min_y': self.min_y}
+                if children_indexes is None:
+                    return True
+                else:
+                    self.children_indexes = children_indexes
+                    return {'min_x': self.min_x, 'min_y': self.min_y}
             else:
                 self.section_element_index = self.element_index
                 self.section_delayed = copy.deepcopy(self.delayed)
@@ -271,18 +283,17 @@ class PDFContentPart:
                     new_children_indexes = [{'index': self.element_index,
                         'delayed': self.delayed}]
                 else:
-                    self.last_state = children_indexes
+                    self.children_indexes = children_indexes
                     new_children_indexes = children_indexes + [self.element_index]
 
                 ret = self.parent.next_section(new_children_indexes)
-                if ret is None:
-                    return False if children_indexes is None else None
-
                 self.min_y = ret['min_y']
                 self.min_x = ret['min_x']
                 self.page_index = len(self.p.page)
                 self.go_to_beggining()
                 self.starting = True
+                if ret is None:
+                    return False if children_indexes is None else None
                 return True if children_indexes is None else ret
         else:
             self.column += 1
