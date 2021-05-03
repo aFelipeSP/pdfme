@@ -4,7 +4,7 @@ from .utils import get_page_size, subs, parse_margin, parse_style_str
 from .standard_fonts import STANDARD_FONTS
 from .base import PDFBase
 from .image import PDFImage
-from .text1 import PDFText
+from .text import PDFText
 from .page import PDFPage
 from .content import PDFContent
 
@@ -411,10 +411,9 @@ class PDF:
         self._build_dests()
         self.base.output(buffer)
 
-
     def add_content(self, content):
         pdf_content = PDFContent(content, self)
         pdf_content.run()
-        self.move_y(pdf_content.max_height)
+        # self.move_y(pdf_content.max_height)
 
         
