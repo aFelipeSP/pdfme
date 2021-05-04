@@ -40,7 +40,7 @@ class PDFContentPart:
         currently 3 types of elements, defined by key 'type' in the element dict:
         - '.*' for paragraph element. It can have a 'style' key for a dict
             specifying any of the following paragraph properties: 'text_align',
-            'line_height', 'indent', 'list_style'.
+            'line_height', 'indent', 'list_text', 'list_indent', 'list_style'.
         - 'image' for image element. The string in the 'image' key should contain the
             path of the image to be added.
         - 'content' for content element. The list in the key 'content' can contain any of the
@@ -206,6 +206,9 @@ class PDFContentPart:
                 continue
 
             if not self.resetting and self.cols_n > 1:
+                if self.parent:
+                    if self.parent.last_child_of_resetting():
+                        break
                 self.start_resetting()
                 if self.will_reset:
                     self.reset()
@@ -222,10 +225,9 @@ class PDFContentPart:
         return True
 
     def last_child_of_resetting(self):
+        if self.resetting:
+            return True
         if self.last:
-            if self.resetting:
-                return True
-
             if self.is_root:
                 return False
             else:
@@ -236,9 +238,6 @@ class PDFContentPart:
     def start_resetting(self):
         parent = self.parent
         if parent:
-            if self.last_child_of_resetting():
-                return
-
             if self.last and parent.cols_n > 1:
                 parent.start_resetting()
                 return
@@ -300,6 +299,7 @@ class PDFContentPart:
                 self.p.build_page()
                 self.p.pdf.add_page()
                 self.go_to_beggining()
+                self.starting = True
                 self.section_element_index = self.element_index
                 self.section_delayed = copy.deepcopy(self.delayed)
                 if children_indexes is None:
@@ -378,9 +378,12 @@ class PDFContentPart:
             element.init()
             should_continue = element.run()
             if should_continue:
-                self.move_y(element.max_height)
+                self.move_y(element.max_y - element.min_y)
             else:
                 ret['break'] = True
+
+            self.starting = False
+
             return ret
 
         if isinstance(element, (str, list, tuple)): element = {'.': element}
@@ -446,7 +449,10 @@ class PDFContentPart:
             should_continue = pdf_content.run()
             ret['element'] = pdf_content
             if should_continue:
-                self.move_y(pdf_content.max_height)
+                self.move_y(pdf_content.max_y - pdf_content.min_y)
             else:
                 ret['break'] = True
+
+            self.starting = False
+
         return ret

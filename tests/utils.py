@@ -54,3 +54,5 @@ def gen_rich_text(n):
 
     return obj
 
+def gen_content():
+    pass

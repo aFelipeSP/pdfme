@@ -63,15 +63,3 @@ def test_text_ref_label():
     ret = pdf.text(gen_rich_text(1000))
     add_remaining(pdf, ret, rect)
     output(pdf, 'test_text_ref_label.pdf')
-
-
-test_text_indent()
-test_text_line_height()
-test_text_left()
-test_text_right()
-test_text_center()
-test_text_justify()
-test_text_list()
-test_text_list_style()
-test_text_list_style_indent()
-test_text_ref_label()

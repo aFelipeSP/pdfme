@@ -1,11 +1,9 @@
 from pdfme import PDF
-import random
 import json
 
 from .utils import gen_rich_text, maybe, gen_text
 
 def test_content():
-    random.seed(20)
     dd = [gen_text(500), gen_text(200), gen_text(100), gen_text(500)]
     print(dd)
     struct = {"style": {"margin_bottom": 30, 'text_align': 'j'}, "content": [
@@ -23,5 +21,3 @@ def test_content():
     pdf.add_content(struct)
     with open('test.pdf', 'wb') as f:
         pdf.output(f)
-
-test_content()
