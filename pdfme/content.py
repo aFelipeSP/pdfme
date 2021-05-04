@@ -249,7 +249,7 @@ class PDFContentPart:
         self.p.page = self.p.page[:self.page_index]
         self.go_to_beggining()
         self.starting = True
-        self.max_y = self.y + 1 if not self.resetting else self.max_y + 1
+        self.max_y = self.y + 5 if not self.resetting else self.max_y + 5
         self.resetting = True
 
         self.element_index = self.section_element_index
@@ -259,6 +259,8 @@ class PDFContentPart:
     def restore_children_indexes(self):
         if self.children_indexes and len(self.children_indexes):
             child = self.children_indexes[-1]
+            if self.element_index >= len(self.elements):
+                return
             element = self.elements[self.element_index]
             if isinstance(child, int):
                 element.section_element_index = child

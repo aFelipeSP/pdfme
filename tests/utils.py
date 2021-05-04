@@ -54,5 +54,36 @@ def gen_rich_text(n):
 
     return obj
 
-def gen_content():
-    pass
+def gen_content(level=1):
+
+    style = {
+        'b': random.choices([1, 0], [1, 9])[0],
+        'i': random.choices([1, 0], [1, 9])[0],
+        's': random.triangular(5, (0.15 * (1 - level) + 1) * 10, 6),
+        'c': random.choices([random_color(), None], [1, 9])[0],
+        'f': random.choices(['Helvetica', 'Times', 'Courier'], [8, 1, 1])[0],
+        'u': random.choices([1, 0], [1, 9])[0],
+        'bg': random.choices([random_color(), None], [1, 9])[0],
+        'r': random.choices([random.triangular(-0.4, 0.4), 0], [1, 9])[0],
+        'text_align': random.choices(['j', 'c', 'l', 'r'], [5, 1, 2, 2])[0],
+        'line_height': random.triangular(1, 1.5),
+        'indent': random.triangular(0, 20, 0)
+    }
+
+    c = []
+    obj = {'style': style, 'content': c, 'cols': {"count": random.randint(2,3)}}
+    n = random.randint(5, 10)
+    l = random.choice([0,1])
+
+    if level == 3:
+        c.append(gen_text(random.randint(100, 500)))
+        return obj
+
+    for i in range(n):
+        if i%2 == l:
+            ans = gen_content(level + 1)
+            c.append(ans)
+        else:
+            c.append(gen_text(random.randint(100, 500)))
+
+    return obj

@@ -466,8 +466,10 @@ class PDFText:
                 return True
             else:
                 last_word = self.get_last_word(new_line)
-                if not last_word: last_word = self.get_last_word(self.current_line)
-                self.last_position = [last_word.parent_position, last_word.word_position]
+                if not last_word:
+                    last_word = self.get_last_word(self.current_line)
+                if last_word:
+                    self.last_position = [last_word.parent_position, last_word.word_position]
                 self.add_current_line(new_line)
 
         return False
