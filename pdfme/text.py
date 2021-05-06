@@ -384,13 +384,14 @@ class PDFText:
             words_width, spaces_width = line.get_width()
             line_width = words_width + spaces_width
             last_line = i == lines_len and self.remaining is None
-            factor = 1 if self.text_align != 'j' or last_line or spaces_width == 0\
-                else (self.width - words_width) / spaces_width
 
             indent = 0
             line_height = line.height 
             full_line_height = line_height
             if i == 0:
+                factor = 1 if self.text_align != 'j' or spaces_width == 0\
+                    else (self.width - self.indent - words_width) / spaces_width
+
                 if self.list_text:
                     if self.list_state.size > full_line_height:
                         full_line_height = self.list_state.size
@@ -402,6 +403,9 @@ class PDFText:
                     text += ' {} -{} Td'.format(round(self.indent, 3),
                         round(full_line_height, 3))
             else:
+                factor = 1 if self.text_align != 'j' or last_line or spaces_width == 0\
+                    else (self.width - words_width) / spaces_width
+
                 adjusted_indent = 0
                 if self.text_align in ['r', 'c']:
                     indent = self.width - line_width

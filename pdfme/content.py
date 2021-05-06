@@ -215,6 +215,7 @@ class PDFContentPart:
                 else:
                     break
             else:
+                self.resetting = False
                 if self.cols_n == 1:
                     self.max_height = self.height
                 break
@@ -249,7 +250,7 @@ class PDFContentPart:
         self.p.page = self.p.page[:self.page_index]
         self.go_to_beggining()
         self.starting = True
-        self.max_y = self.y + 5 if not self.resetting else self.max_y + 5
+        self.max_y = self.y + 1 if not self.resetting else self.max_y + 1
         self.resetting = True
 
         self.element_index = self.section_element_index

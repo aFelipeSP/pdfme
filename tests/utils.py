@@ -1,4 +1,6 @@
 import random
+import json
+from pdfme import PDF
 
 abc = 'abcdefghijklmnñopqrstuvwxyzáéíóú'
 
@@ -8,8 +10,8 @@ def gen_word():
 def gen_text(n):
     return random.choice(['',' ']) + (' '.join(gen_word() for _ in range(n))) + random.choice(['',' '])
 
-def maybe():
-    return random.choice([0,1])
+def maybe(n=0.5):
+    return random.choices([True, False], [n, 1 - n])[0]
 
 def random_color():
     return [round(random.random(), 3) for _ in range(3)]
@@ -54,36 +56,46 @@ def gen_rich_text(n):
 
     return obj
 
-def gen_content(level=1):
+def gen_content(size, level=1):
 
-    style = {
-        'b': random.choices([1, 0], [1, 9])[0],
-        'i': random.choices([1, 0], [1, 9])[0],
-        's': random.triangular(5, (0.15 * (1 - level) + 1) * 10, 6),
-        'c': random.choices([random_color(), None], [1, 9])[0],
-        'f': random.choices(['Helvetica', 'Times', 'Courier'], [8, 1, 1])[0],
-        'u': random.choices([1, 0], [1, 9])[0],
-        'bg': random.choices([random_color(), None], [1, 9])[0],
-        'r': random.choices([random.triangular(-0.4, 0.4), 0], [1, 9])[0],
-        'text_align': random.choices(['j', 'c', 'l', 'r'], [5, 1, 2, 2])[0],
-        'line_height': random.triangular(1, 1.5),
-        'indent': random.triangular(0, 20, 0)
-    }
+    style = {}
+    if maybe(0.1): style['b'] = 1
+    if maybe(0.1): style['i'] = 1
+    if maybe(0.1): style['u'] = 1
+    if maybe(0.1): style['c'] = random_color()
+    if maybe(0.1):
+        style['f'] = random.choices(['Helvetica', 'Times', 'Courier'], [8, 1, 1])[0]
+    if maybe(0.1): style['bg'] = random_color()
+    if level == 1 or maybe(0.1):
+        style['s'] = random.triangular(4, (0.15 * (1 - level) + 1) * 8, 5)
+    if maybe(0.1): style['r'] = random.triangular(-0.4, 0.4)
+    if maybe(0.1):
+        style['text_align'] = random.choices(['j', 'c', 'l', 'r'], [4, 2, 2, 2])[0]
+    if maybe(0.1): style['line_height'] = random.triangular(1, 1.5)
+    if maybe(0.1): style['indent'] = random.triangular(0, 20, 0)
 
     c = []
     obj = {'style': style, 'content': c, 'cols': {"count": random.randint(2,3)}}
-    n = random.randint(5, 10)
+    n = int(random.triangular(3, (0.15 * (1 - level) + 1) * size))
     l = random.choice([0,1])
 
     if level == 3:
-        c.append(gen_text(random.randint(100, 500)))
+        c.append(gen_text(random.randint(50, 300)))
         return obj
 
     for i in range(n):
         if i%2 == l:
-            ans = gen_content(level + 1)
+            ans = gen_content(size, level + 1)
             c.append(ans)
         else:
-            c.append(gen_text(random.randint(100, 500)))
+            c.append(gen_text(random.randint(50, 300)))
 
     return obj
+
+def single_content_file_tester(i):
+    pdf = PDF()
+    with open('test_content{}.json'.format(i)) as f:
+        struct = json.load(f)
+    pdf.add_content(struct)
+    with open('test_content{}.pdf'.format(i), 'wb') as f:
+        pdf.output(f)

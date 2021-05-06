@@ -25,7 +25,7 @@ def base(text_options={}, pdf_name='test.pdf', words=5000):
     output(pdf, pdf_name)
 
 def test_text_indent():
-    base({'indent': 20}, 'test_text_indent.pdf')
+    base({'indent': 20, 'text_align': 'j'}, 'test_text_indent.pdf')
 
 def test_text_line_height():
     base({'line_height': 2}, 'test_text_line_height.pdf')
