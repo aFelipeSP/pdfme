@@ -85,10 +85,6 @@ class PDFContentPart:
         self.col_width = (self.full_width - cols_spaces) / self.cols_n
 
         self.elements = content.get('content')
-        if isinstance(self.elements, list):
-            self.elements = self.elements.copy()
-        elif isinstance(self.elements, tuple):
-            self.elements = list(self.elements)
 
         self.section_element_index = 0 # index when the last section jump occured
         self.element_index = 0 # current index
@@ -96,7 +92,7 @@ class PDFContentPart:
         self.section_delayed = [] # delayed elements when the last section jump occured
         self.delayed = [] # current delayed elements
 
-        self.children_indexes = None # the last state of this element
+        self.children_indexes = [] # the last state of this element
 
         self.will_reset = False
         self.resetting = False
@@ -152,9 +148,6 @@ class PDFContentPart:
         while self.element_index <= len_elems:
             last = self.element_index == len_elems
             ret = self.process(self.elements[self.element_index], last=last)
-
-            if ret.get('element'):
-                self.elements[self.element_index] = ret['element']
 
             if ret.get('break', False):
                 return 'break'
@@ -215,7 +208,6 @@ class PDFContentPart:
                 else:
                     break
             else:
-                self.resetting = False
                 if self.cols_n == 1:
                     self.max_height = self.height
                 break
@@ -255,23 +247,6 @@ class PDFContentPart:
 
         self.element_index = self.section_element_index
         self.delayed = copy.deepcopy(self.section_delayed)
-        self.restore_children_indexes()
-
-    def restore_children_indexes(self):
-        if self.children_indexes and len(self.children_indexes):
-            child = self.children_indexes[-1]
-            if self.element_index >= len(self.elements):
-                return
-            element = self.elements[self.element_index]
-            if isinstance(child, int):
-                element.section_element_index = child
-                element.element_index = child
-                element.delayed = []
-                element.section_delayed = []
-                element.restore_children_indexes()
-            elif isinstance(child, dict):
-                element.element_index = child['index']
-                element.delayed = copy.deepcopy(child['delayed'])
 
     def go_to_beggining(self):
         self.y = self.min_y
@@ -375,20 +350,6 @@ class PDFContentPart:
 
         ret =  {'delayed': None, 'next': False}
 
-        if isinstance(element, PDFContentPart):
-            element.max_y = self.max_y
-            element.min_x = self.get_min_x()
-            element.init()
-            should_continue = element.run()
-            if should_continue:
-                self.move_y(element.max_y - element.min_y)
-            else:
-                ret['break'] = True
-
-            self.starting = False
-
-            return ret
-
         if isinstance(element, (str, list, tuple)): element = {'.': element}
 
         if not isinstance(element, dict):
@@ -449,13 +410,25 @@ class PDFContentPart:
                 element, self.p, self.get_min_x(), self.col_width, self.y,
                 self.max_y, self, last, copy.deepcopy(style)
             )
+
+            if (
+                self.element_index == self.section_element_index
+                and len(self.children_indexes)
+            ):
+                child = self.children_indexes[-1]
+                if isinstance(child, int):
+                    pdf_content.section_element_index = child
+                    pdf_content.element_index = child
+                    pdf_content.children_indexes = self.children_indexes[:-1]
+                elif isinstance(child, dict):
+                    pdf_content.section_element_index = child['index']
+                    pdf_content.section_delayed = copy.deepcopy(child['delayed'])
+                    pdf_content.element_index = child['index']
+                    pdf_content.delayed = copy.deepcopy(child['delayed'])
+
             should_continue = pdf_content.run()
-            ret['element'] = pdf_content
             if should_continue:
                 self.move_y(pdf_content.max_y - pdf_content.min_y)
             else:
                 ret['break'] = True
-
-            self.starting = False
-
         return ret
