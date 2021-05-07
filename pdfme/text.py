@@ -276,7 +276,7 @@ class PDFText:
         self.used_fonts = set([])
 
         self.width = default(width, PARAGRAPH_DEFAULTS['width'])
-        self.height = default(height, PARAGRAPH_DEFAULTS['height'])
+        self.height = max(0, default(height, PARAGRAPH_DEFAULTS['height']))
         self.indent = default(indent, PARAGRAPH_DEFAULTS['indent'])
         self.text_align = default(text_align, PARAGRAPH_DEFAULTS['text_align'])
         self.line_height = default(line_height, PARAGRAPH_DEFAULTS['line_height'])

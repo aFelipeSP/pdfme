@@ -98,17 +98,12 @@ class PDFContentPart:
         self.resetting = False
         self.page_index = len(self.p.page)
 
+        self.minim_diff_last = None
+        self.minim_diff = None
+        self.minim_forward = None
+
         self.paragraph_properties = ('text_align', 'line_height', 'indent',
             'list_text', 'list_style', 'list_indent')
-
-    def init(self):
-        self.go_to_beggining()
-        self.height = 0
-        self.last_bottom = 0
-        self.starting = True
-
-        self.will_reset = False
-        self.resetting = False
 
     def add_delayed(self):
         '''Function to add delayed elements to pdf.
@@ -162,11 +157,9 @@ class PDFContentPart:
         return 'continue'
 
     def is_element_resetting(self):
-        if self.will_reset:
-            return 'continue'
-        elif self.resetting:
-            self.reset()
-            return 'reset'
+        if self.will_reset or self.resetting:
+            continue_reset = self.reset()
+            return 'reset' if continue_reset else 'reset_done'
         else:
             return 'break'
 
@@ -187,46 +180,32 @@ class PDFContentPart:
                 return False
             elif action == 'reset':
                 continue
+            elif action == 'reset_done':
+                break
 
             action = self.process_add_ans(self.add_elements())
             if action == 'break':
                 return False
             elif action == 'reset':
                 continue
-
-            if self.will_reset:
-                self.reset()
-                continue
+            elif action == 'reset_done':
+                break
 
             if not self.resetting and self.cols_n > 1:
-                if self.parent:
-                    if self.parent.last_child_of_resetting():
-                        break
                 self.start_resetting()
                 if self.will_reset:
                     self.reset()
                 else:
-                    break
+                    return False
             else:
-                if self.cols_n == 1:
-                    self.max_height = self.height
-                break
+                self.minim_forward = False
+                if not self.reset():
+                    break
 
         if self.is_root and len(self.p.page):
             self.p.build_page()
 
         return True
-
-    def last_child_of_resetting(self):
-        if self.resetting:
-            return True
-        if self.last:
-            if self.is_root:
-                return False
-            else:
-                return self.parent.last_child_of_resetting()
-        else:
-            return False
 
     def start_resetting(self):
         parent = self.parent
@@ -238,15 +217,31 @@ class PDFContentPart:
         self.will_reset = True
 
     def reset(self):
+        if self.minim_diff_last and (self.minim_diff_last - self.minim_diff) < 1:
+            return False
+
         self.will_reset = False
         self.p.page = self.p.page[:self.page_index]
         self.go_to_beggining()
         self.starting = True
-        self.max_y = self.y + 1 if not self.resetting else self.max_y + 1
+
+        if self.minim_diff is None:
+            self.minim_diff = (self.max_y - self.min_y) / 2
+            self.max_y = self.min_y + self.minim_diff
+        else:
+            self.minim_diff_last = self.minim_diff
+            self.minim_diff /= 2
+            if self.minim_forward:
+                self.max_y += self.minim_diff
+            else:
+                self.max_y -= self.minim_diff
+
         self.resetting = True
 
         self.element_index = self.section_element_index
         self.delayed = copy.deepcopy(self.section_delayed)
+
+        return True
 
     def go_to_beggining(self):
         self.y = self.min_y
@@ -272,6 +267,7 @@ class PDFContentPart:
 
         if self.column == self.cols_n - 1:
             if self.resetting:
+                self.minim_forward = True
                 return False
             elif self.is_root:
                 self.p.build_page()
@@ -329,7 +325,7 @@ class PDFContentPart:
         else:
             self.move_y(self.last_bottom + s.get('margin_top', 0))
 
-        self.max_height = self.max_y - self.y
+        self.max_height = max(0, self.max_y - self.y)
         self.last_bottom = s.get('margin_bottom', 0)
 
     def process(self, element, last=False):
@@ -428,7 +424,10 @@ class PDFContentPart:
 
             should_continue = pdf_content.run()
             if should_continue:
-                self.move_y(pdf_content.max_y - pdf_content.min_y)
+                if pdf_content.cols_n == 1:
+                    self.move_y(pdf_content.y - pdf_content.min_y)
+                else:
+                    self.move_y(pdf_content.max_y - pdf_content.min_y)
             else:
                 ret['break'] = True
         return ret
