@@ -115,17 +115,19 @@ class PDFContentPart:
         - 'break' means a parent element is reseting, and this instance must stop
         - 'next' means we need to move to the next section (column or page).
         '''
-        n = len(self.delayed)
-        while n:
-            ret = self.process(copy.deepcopy(self.delayed[0]), False)
+        n = 0
+        while n < len(self.delayed):
+            ret = self.process(copy.deepcopy(self.delayed[n]), False)
             if ret.get('delayed'):
-                self.delayed[0] = copy.deepcopy(ret['delayed'])
+                self.delayed[n] = copy.deepcopy(ret['delayed'])
             else:
-                self.delayed.pop(0)
-                n -= 1
+                self.delayed.pop(n)
 
             if ret.get('next', False):
                 return 'next'
+
+            if ret.get('image_flow', False):
+                n += 1
 
         return 'continue'
 
@@ -192,6 +194,8 @@ class PDFContentPart:
                 break
 
             if not self.resetting and self.cols_n > 1:
+                if self.last_child_of_resetting():
+                    break
                 self.start_resetting()
                 if self.will_reset:
                     self.reset()
@@ -207,6 +211,18 @@ class PDFContentPart:
 
         return True
 
+    def last_child_of_resetting(self):
+        parent = self.parent
+        if parent:
+            if self.last:
+                if parent.resetting:
+                    parent.mimim_forward = False
+                    return True
+                else:
+                    return parent.last_child_of_resetting()
+        return False
+
+
     def start_resetting(self):
         parent = self.parent
         if parent:
@@ -217,7 +233,7 @@ class PDFContentPart:
         self.will_reset = True
 
     def reset(self):
-        if self.minim_diff_last and (self.minim_diff_last - self.minim_diff) < 1:
+        if self.minim_diff_last and not self.minim_forward and (self.minim_diff_last - self.minim_diff) < 1:
             return False
 
         self.will_reset = False
@@ -392,11 +408,11 @@ class PDFContentPart:
                 self.move_y(height)
             else:
                 image_place = style.get('image_place', 'flow')
-                ret['delayed'] = element['image']
+                ret['delayed'] = element
                 if image_place == 'normal':
                     ret['next'] = True
-                # elif image_place == 'flow':
-                #     ret['next'] = False
+                elif image_place == 'flow':
+                    ret['image_flow'] = True
 
         # elif 'r' in element:
         #     self.pdf.table()

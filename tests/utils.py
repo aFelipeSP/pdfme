@@ -20,8 +20,8 @@ def gen_rich_text(n):
 
     style_ = {'b': 1, 'i': 1, 's': random.randint(9, 17), 'c': random_color(),
         'f': random.choice(['Helvetica', 'Times', 'Courier']),
-        # 'u': 1,
-        # 'bg': random_color(),
+        'u': 1,
+        'bg': random_color(),
         'r': random.choice([-0.4, 0.4] + [0]*10),
     }
 
@@ -73,6 +73,10 @@ def gen_content(size, level=1):
         style['text_align'] = random.choices(['j', 'c', 'l', 'r'], [4, 2, 2, 2])[0]
     if maybe(0.1): style['line_height'] = random.triangular(1, 1.5)
     if maybe(0.1): style['indent'] = random.triangular(0, 20, 0)
+    if maybe(0.1): style['margin-left'] = random.triangular(0, 10, 0)
+    if maybe(0.1): style['margin-right'] = random.triangular(0, 10, 0)
+    if maybe(0.1): style['margin-top'] = random.triangular(0, 10, 0)
+    if maybe(0.1): style['margin-bottom'] = random.triangular(0, 10, 0)
 
     c = []
     obj = {'style': style, 'content': c, 'cols': {"count": random.randint(2,3)}}
@@ -88,14 +92,11 @@ def gen_content(size, level=1):
             ans = gen_content(size, level + 1)
             c.append(ans)
         else:
-            c.append(gen_text(random.randint(50, 300)))
+            if maybe(0.5):
+                c.append(gen_text(random.randint(50, 300)))
+            else:
+                c.append({'image': 'tests/image_test.jpg', 'style': 
+                    {'image_place': 'flow' if maybe(0.7) else 'normal'}
+                })
 
     return obj
-
-def single_content_file_tester(i):
-    pdf = PDF()
-    with open('test_content{}.json'.format(i)) as f:
-        struct = json.load(f)
-    pdf.add_content(struct)
-    with open('test_content{}.pdf'.format(i), 'wb') as f:
-        pdf.output(f)

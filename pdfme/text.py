@@ -385,7 +385,7 @@ class PDFText:
             line_width = words_width + spaces_width
             last_line = i == lines_len and self.remaining is None
 
-            indent = 0
+            line_indent = self.list_indent if self.list_text else 0
             line_height = line.height 
             full_line_height = line_height
             if i == 0:
@@ -409,6 +409,7 @@ class PDFText:
                 adjusted_indent = 0
                 if self.text_align in ['r', 'c']:
                     indent = self.width - line_width
+                    line_indent += indent
                     if self.text_align == 'c': indent /= 2
                     adjusted_indent = indent - last_indent
                     last_indent = indent
@@ -421,7 +422,7 @@ class PDFText:
                     round(full_line_height, 3))
 
             y_ -= full_line_height
-            x_ = x + indent
+            x_ = x + line_indent
             line_stream = ''
 
             for part in line.line_parts:

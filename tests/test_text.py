@@ -1,3 +1,5 @@
+import json
+
 from .utils import gen_rich_text
 from pdfme import PDF
 
@@ -6,8 +8,8 @@ def page_rect(pdf):
     pdf.stream(rect)
     return rect
 
-def output(pdf, pdf_name):
-    with open(pdf_name, 'wb') as f:
+def output(pdf, name):
+    with open(name, 'wb') as f:
         pdf.output(f)
 
 def add_remaining(pdf, ret, rect=None, text_options={}):
@@ -16,42 +18,49 @@ def add_remaining(pdf, ret, rect=None, text_options={}):
         if rect is not None: pdf.stream(rect)
         ret = pdf.text(ret, **text_options)
 
-def base(text_options={}, pdf_name='test.pdf', words=5000):
-    content = gen_rich_text(words)
+def base(text_options={}, name='test', words=5000):
+    input_file = Path(name + '.json')
+    if input_file.exists():
+        with input_file.open() as f:
+            content = json.load(f)
+    else:
+        content = gen_rich_text(words)
+        with input_file.open('w') as f:
+            json.dump(content, f, ensure_ascii=False)
     pdf = PDF()
     rect = page_rect(pdf)
     ret = pdf.text(content, **text_options)
     add_remaining(pdf, ret, rect, text_options)
-    output(pdf, pdf_name)
+    output(pdf, name + '.pdf')
 
 def test_text_indent():
-    base({'indent': 20, 'text_align': 'j'}, 'test_text_indent.pdf')
+    base({'indent': 20, 'text_align': 'j'}, 'test_text_indent')
 
 def test_text_line_height():
-    base({'line_height': 2}, 'test_text_line_height.pdf')
+    base({'line_height': 2}, 'test_text_line_height')
 
 def test_text_left():
-    base({}, 'test_text.pdf')
+    base({}, 'test_text')
 
 def test_text_right():
-    base({'text_align': 'r'}, 'test_text_right.pdf')
+    base({'text_align': 'r'}, 'test_text_right')
 
 def test_text_center():
-    base({'text_align': 'c'}, 'test_text_center.pdf')
+    base({'text_align': 'c'}, 'test_text_center')
 
 def test_text_justify():
-    base({'text_align': 'j'}, 'test_text_justify.pdf')
+    base({'text_align': 'j'}, 'test_text_justify')
 
 def test_text_list():
-    base({'list_text': '1. '}, 'test_text_list.pdf', 500)
+    base({'list_text': '1. '}, 'test_text_list', 500)
 
 def test_text_list_style():
     base({'list_text': chr(183) + ' ', 'list_style': {'f': 'Symbol'}}, 
-        'test_text_list_style.pdf', 500)
+        'test_text_list_style', 500)
 
 def test_text_list_style_indent():
     base({'list_text': chr(183) + ' ', 'list_style': {'f': 'Symbol'}, 'list_indent': 40}, 
-        'test_text_list_style_indent.pdf', 500)
+        'test_text_list_style_indent', 500)
 
 def test_text_ref_label():
     pdf = PDF()

@@ -32,4 +32,5 @@ class PDFPage:
             self.page['Resources']['XObject'][image_id] = image_obj.id
             self.x_objects.add(image_obj.id)
 
-        self.add('q {} 0 0 {} {} {} cm /{} Do Q'.format(width, height, x, y, image_id))
+        self.add(' q {} 0 0 {} {} {} cm /{} Do Q'.format(round(width, 3),
+            round(height, 3), round(x, 3), round(y, 3), image_id))
