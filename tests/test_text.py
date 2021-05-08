@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 from .utils import gen_rich_text
 from pdfme import PDF

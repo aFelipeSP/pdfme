@@ -409,8 +409,8 @@ class PDFText:
                 adjusted_indent = 0
                 if self.text_align in ['r', 'c']:
                     indent = self.width - line_width
-                    line_indent += indent
                     if self.text_align == 'c': indent /= 2
+                    line_indent += indent
                     adjusted_indent = indent - last_indent
                     last_indent = indent
 
