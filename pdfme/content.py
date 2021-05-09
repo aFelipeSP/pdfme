@@ -362,6 +362,7 @@ class PDFContentPart:
 
         ret =  {'delayed': None, 'next': False}
 
+        if not isinstance(element, (dict, str, list, tuple)): element = str(element)
         if isinstance(element, (str, list, tuple)): element = {'.': element}
 
         if not isinstance(element, dict):
@@ -444,6 +445,7 @@ class PDFContentPart:
                     self.move_y(pdf_content.y - pdf_content.min_y)
                 else:
                     self.move_y(pdf_content.max_y - pdf_content.min_y)
+                self.starting = False
             else:
                 ret['break'] = True
         return ret
