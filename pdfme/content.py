@@ -1,36 +1,47 @@
 import copy
 
 from .utils import parse_style_str
-
+from .text import PDFText
+from .image import PDFImage
 
 class PDFContent:
-    def __init__(self, content, pdf, min_x=None, width=None, min_y=None, max_y=None):
-        self.page = []
-        self.pdf = pdf
+    def __init__(self, content, width, height, x=0, y=0):
+        if not isinstance(content, dict):
+            raise Exception('content must be a dict')
+
         self.content = content
-        self.min_x = pdf.margin['left'] if min_x is None else min_x
-        self.min_y = pdf.margin['top'] if min_y is None else min_y
+        self.finished = False
+        self.pdf_content_part = None
+        self.setup(x, y, width, height)
 
-        self.width = pdf.width if width is None else width
-        self.max_y = pdf.height + pdf.margin['top'] if max_y is None else max_y
+    def setup(self, x=None, y=None, width=None, height=None):
+        if x is not None:
+            self.x = x
+        if y is not None:
+            self.min_y = y
+        if width is not None:
+            self.width = width
+        if height is not None:
+            self.height = height
 
-    def build_page(self):
-        for part in self.page:
-            self.pdf.x = part['x']; self.pdf.y = part['y']
-            if part['type'] == 'paragraph':
-                self.pdf.add_text(part['content'])
-            elif part['type'] == 'image':
-                self.pdf.add_image(part['content'], part['width'])
-
-        self.page = []
+        self.max_y = self.min_y + self.height
 
     def run(self):
-        top = self.pdf.margin['top']
-        pdf_content_part = PDFContentPart(self.content, self,
-            self.min_x, self.width, self.min_y, self.max_y, last=True
-        )
-        pdf_content_part.run()
+        self.fills = []
+        self.lines = []
+        self.parts_ = []
+        if self.pdf_content_part is None:
+            self.pdf_content_part = PDFContentPart(self.content, self,
+                self.x, self.width, self.min_y, self.max_y, last=True
+            )
+        ret = self.pdf_content_part.run()
+        if ret == 'continue':
+            self.finished = True
+        return self.parts
 
+    @property
+    def parts(self):
+        return self.fills + self.lines + self.parts_
 class PDFContentPart:
     def __init__(self, content, pdf_content, min_x, width, min_y, max_y,
         parent=None, last=False, inherited_style=None
@@ -84,7 +95,7 @@ class PDFContentPart:
         cols_spaces = self.cols_gap * (self.cols_n - 1)
         self.col_width = (self.full_width - cols_spaces) / self.cols_n
 
-        self.elements = content.get('content')
+        self.elements = content.get('content', [])
 
         self.section_element_index = 0 # index when the last section jump occured
         self.element_index = 0 # current index
@@ -96,7 +107,7 @@ class PDFContentPart:
 
         self.will_reset = False
         self.resetting = False
-        self.page_index = len(self.p.page)
+        self.parts_index = len(self.p.parts_)
 
         self.minim_diff_last = None
         self.minim_diff = None
@@ -113,7 +124,7 @@ class PDFContentPart:
 
         - 'continue' means caller could add all the delayed elements
         - 'break' means a parent element is reseting, and this instance must stop
-        - 'next' means we need to move to the next section (column or page).
+        - 'next' means we need to move to the next section.
         '''
         n = 0
         while n < len(self.delayed):
@@ -139,7 +150,7 @@ class PDFContentPart:
 
         - 'continue' means caller could add all the elements
         - 'break' means a parent element is reseting, and this instance must stop
-        - 'next' means we need to move to the next section (column or page).
+        - 'next' means we need to move to the next section
         '''
         len_elems = len(self.elements) - 1
         while self.element_index <= len_elems:
@@ -161,34 +172,38 @@ class PDFContentPart:
     def is_element_resetting(self):
         if self.will_reset or self.resetting:
             continue_reset = self.reset()
-            return 'reset' if continue_reset else 'reset_done'
+            return 'retry' if continue_reset else 'reset_done'
         else:
             return 'break'
 
     def process_add_ans(self, ans):
-        if ans == 'break':
+        if next_section_ret == 'finish':
+            return 'finish'
+        elif ans == 'break':
             return self.is_element_resetting()
         elif ans == 'next':
-            should_continue = self.next_section()
-            if not should_continue:
+            next_section_ret = self.next_section()
+            if next_section_ret == 'finish':
+                return 'finish'
+            elif next_section_ret == 'break':
                 return self.is_element_resetting()
             else:
-                return 'reset'
+                return 'retry'
 
     def run(self):
         while True:
             action = self.process_add_ans(self.add_delayed())
-            if action == 'break':
-                return False
-            elif action == 'reset':
+            if action in ['break', 'finish']:
+                return action
+            elif action == 'retry':
                 continue
             elif action == 'reset_done':
                 break
 
             action = self.process_add_ans(self.add_elements())
-            if action == 'break':
-                return False
-            elif action == 'reset':
+            if action in ['break', 'finish']:
+                return action
+            elif action == 'retry':
                 continue
             elif action == 'reset_done':
                 break
@@ -200,16 +215,13 @@ class PDFContentPart:
                 if self.will_reset:
                     self.reset()
                 else:
-                    return False
+                    return 'break'
             else:
                 self.minim_forward = False
                 if not self.reset():
                     break
 
-        if self.is_root and len(self.p.page):
-            self.p.build_page()
-
-        return True
+        return 'continue'
 
     def last_child_of_resetting(self):
         parent = self.parent
@@ -237,7 +249,7 @@ class PDFContentPart:
             return False
 
         self.will_reset = False
-        self.p.page = self.p.page[:self.page_index]
+        self.p.parts_ = self.p.parts_[:self.parts_index]
         self.go_to_beggining()
         self.starting = True
 
@@ -278,50 +290,43 @@ class PDFContentPart:
         has the attribute current_element_ended) that should reset.
         """
 
-        # TODO: modify self.content_index after my parent added a new section
-
-
         if self.column == self.cols_n - 1:
             if self.resetting:
                 self.minim_forward = True
-                return False
+                return 'break'
             elif self.is_root:
-                self.p.build_page()
-                self.p.pdf.add_page()
-                self.go_to_beggining()
-                self.starting = True
                 self.section_element_index = self.element_index
                 self.section_delayed = copy.deepcopy(self.delayed)
-                if children_indexes is None:
-                    return True
-                else:
+                if children_indexes is not None:
                     self.children_indexes = copy.deepcopy(children_indexes)
-                    return {'min_x': self.min_x, 'min_y': self.min_y}
+                return 'finish'
             else:
                 self.section_element_index = self.element_index
                 self.section_delayed = copy.deepcopy(self.delayed)
                 if children_indexes is None:
-                    new_children_indexes = [
-                        { 'index': self.element_index, 'delayed': copy.deepcopy(self.delayed) }
-                    ]
+                    new_children_indexes = [{
+                        'index': self.element_index, 
+                        'delayed': copy.deepcopy(self.delayed)
+                    }]
                 else:
                     self.children_indexes = copy.deepcopy(children_indexes)
-                    new_children_indexes = copy.deepcopy(children_indexes) + [self.element_index]
+                    new_children_indexes = copy.deepcopy(children_indexes) \
+                        + [self.element_index]
 
                 ret = self.parent.next_section(new_children_indexes)
-                if ret is False:
-                    return False
+                if ret in ['break', 'finish']:
+                    return ret
                 self.min_y = ret['min_y']
                 self.min_x = ret['min_x']
-                self.page_index = len(self.p.page)
+                self.parts_index = len(self.p.parts_)
                 self.go_to_beggining()
                 self.starting = True
-                return True if children_indexes is None else ret
+                return 'continue' if children_indexes is None else ret
         else:
             self.column += 1
             self.starting = True
             self.y = self.min_y
-            return True if children_indexes is None else \
+            return 'continue' if children_indexes is None else \
                 {'min_x': self.get_min_x(), 'min_y': self.min_y}
 
     def get_min_x(self):
@@ -362,8 +367,10 @@ class PDFContentPart:
 
         ret =  {'delayed': None, 'next': False}
 
-        if not isinstance(element, (dict, str, list, tuple)): element = str(element)
-        if isinstance(element, (str, list, tuple)): element = {'.': element}
+        if not isinstance(element, (dict, str, list, tuple)):
+            element = str(element)
+        if isinstance(element, (str, list, tuple)):
+            element = {'.': element}
 
         if not isinstance(element, dict):
             raise TypeError('Elements must be of type dict, str, list or tuple:'
@@ -383,29 +390,30 @@ class PDFContentPart:
 
         if len(paragraph_keys) > 0:
             par_style = {
-                v: style.get(v) for v in self.paragraph_properties
-                if style.get(v) is not None
+                v: style.get(v) for v in self.paragraph_properties if v in style
             }
-            key = paragraph_keys[0]
-            pdf_text = self.p.pdf.create_text(
-                {key: element[key], 'style': style.copy()},
-                width = self.width, height = self.max_height, **par_style
+
+            pdf_text = PDFText(
+                {key: element[paragraph_keys[0]], 'style': style.copy()},
+                width=self.width, height=self.max_height, **par_style
             )
+            pdf_text.run()
+
             content.update({'type': 'paragraph', 'content': pdf_text})
-            self.p.page.append(content)
+            self.p.parts_.append(content)
 
             self.move_y(pdf_text.current_height)
             if pdf_text.remaining is not None:
                 ret = {'delayed': pdf_text.remaining, 'next': True}
 
         elif 'image' in element:
-            pdf_image = self.p.pdf.create_image(element['image'])
+            pdf_image = PDFImage(element['image'])
             height = self.width * pdf_image.height/pdf_image.width
 
             if height < self.max_height:
                 content.update({'type': 'image', 'width': self.width,
                     'height': height, 'content': pdf_image})
-                self.p.page.append(content)
+                self.p.parts_.append(content)
                 self.move_y(height)
             else:
                 image_place = style.get('image_place', 'flow')
@@ -414,9 +422,6 @@ class PDFContentPart:
                     ret['next'] = True
                 elif image_place == 'flow':
                     ret['image_flow'] = True
-
-        # elif 'r' in element:
-        #     self.pdf.table()
 
         elif 'content' in element:
             pdf_content = PDFContentPart(
@@ -439,8 +444,8 @@ class PDFContentPart:
                     pdf_content.element_index = child['index']
                     pdf_content.delayed = copy.deepcopy(child['delayed'])
 
-            should_continue = pdf_content.run()
-            if should_continue:
+            action = pdf_content.run()
+            if action == 'break':
                 if pdf_content.cols_n == 1:
                     self.move_y(pdf_content.y - pdf_content.min_y)
                 else:
@@ -449,3 +454,5 @@ class PDFContentPart:
             else:
                 ret['break'] = True
         return ret
+
+from .table import PDFTable

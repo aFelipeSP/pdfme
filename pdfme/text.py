@@ -125,7 +125,7 @@ class PDFTextLinePart:
                 graphics += ' ' + str(last_fill)
 
             graphics += ' {} {} {} {} re F'.format(round(x, 3),
-                round(y + self.state.rise - round(self.state.size, 3)*0.25, 3),
+                round(y + self.state.rise - self.state.size, 3*0.25, 3),
                 round(part_width, 3), round(self.state.size, 3)
             )
 
@@ -454,7 +454,7 @@ class PDFText:
 
             text += line_stream
 
-        self.stream = '{} BT 1 0 0 1 {} {} Tm{} ET'.format(
+        self.stream = 'q {} Q BT 1 0 0 1 {} {} Tm{} ET'.format(
             graphics.strip(), round(x, 3), round(y, 3), text)
         return self.stream
 

@@ -1,13 +1,36 @@
 
 
 class PDFPage:
-    def __init__(self, base):
+    def __init__(self, base, width, height, margin_top=0, margin_bottom=0,
+        margin_left=0, margin_right=0
+    ):
         self.base = base
+        self.margin_top = margin_top
+        self.margin_bottom = margin_bottom
+        self.margin_left = margin_left
+        self.margin_right = margin_right
+
+        self.width = width
+        self.height = height
+        self.real_width = self.width - self.margin_right - self.margin_left
+        self.real_height = self.height - self.margin_top - self.margin_bottom
+
+        self.x = self.margin_left
+        self._y = self.height - self.margin_top
+
         self.stream = base.add({'__stream__': b''})
         self.page = base.add({
             'Type': b'/Page', 'Contents': self.stream.id, 'Resources': {}
         })
         self.x_objects = set()
+
+    @property
+    def y(self):
+        return self.height - self._y
+
+    @y.setter
+    def y(self, value):
+        self._y = self.height - value
 
     def add(self, content):
         if isinstance(content, str):
@@ -25,7 +48,7 @@ class PDFPage:
             {'Type': b'/Annot', 'Subtype': b'/Link', 'Rect': rect, 'Dest': dest}
         )
 
-    def add_image(self, image_obj, x, y, width, height):
+    def add_image(self, image_obj, width, height):
         self.page['Resources'].setdefault('XObject', {})
         if not image_obj.id in self.x_objects:
             image_id = 'Im{}'.format(len(self.page['Resources']['XObject']))
@@ -33,4 +56,4 @@ class PDFPage:
             self.x_objects.add(image_obj.id)
 
         self.add(' q {} 0 0 {} {} {} cm /{} Do Q'.format(round(width, 3),
-            round(height, 3), round(x, 3), round(y, 3), image_id))
+            round(height, 3), round(self.x, 3), round(self._y, 3), image_id))
