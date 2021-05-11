@@ -121,3 +121,45 @@ def get_word_width(word, size, fonts, font_family, font_mode):
     for char in word:
         width += get_char_width(char, size, fonts, font_family, font_mode)
     return width
+
+def create_graphics(graphics):
+    last_fill = last_color = last_line_width = last_line_style = None
+    stream = ' q'
+    for g in graphics:
+        if g['type'] == 'fill':
+            if g['color'] != last_fill:
+                last_fill = g['color']
+                stream += ' ' + str(last_fill)
+
+            stream += ' {} {} {} {} re F'.format(
+                round(g['x'], 3), round(g['y'], 3),
+                round(g['width'], 3), round(g['height'], 3)
+            )
+        
+        if g['type'] == 'line':
+            if g['color'] != last_color:
+                last_color = g['color']
+                stream += ' ' + str(last_color)
+
+            if g['width'] != last_line_width:
+                last_line_width = g['width']
+                stream += ' {} w'.format(round(g['width'], 3))
+
+            if g['style'] == 'dashed':
+                line_style = ' 0 J [{} {}] 0'.format(round(g['width']*2, 3),
+                    round(g['width'], 3))
+            elif g['style'] == 'dotted':
+                line_style = ' 1 J [0 {}] {}'.format(round(g['width'], 3),
+                    round(g['width'], 3)*0.5)
+            else:
+                line_style = ' 0 J [] 0'
+
+            if line_style != last_line_style:
+                last_line_style = line_style
+                stream += line_style
+
+            stream += ' {} {} m {} {} l S'.format(
+                round(g['x1'], 3), round(g['y1'], 3),
+                round(g['x2'], 3), round(g['y2'], 3),
+            )
+    return stream + ' Q'

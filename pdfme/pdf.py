@@ -1,12 +1,15 @@
 import copy
 
-from .utils import get_page_size, subs, parse_margin, parse_style_str
+from .utils import (get_page_size, subs, parse_margin, parse_style_str,
+    create_graphics
+)
 from .standard_fonts import STANDARD_FONTS
 from .base import PDFBase
 from .image import PDFImage
 from .text import PDFText
 from .page import PDFPage
 from .content import PDFContent
+from .table import PDFTable
 
 class PDF:
     def __init__(self, page_size='a4', portrait=True, margin=56.693,
@@ -21,6 +24,8 @@ class PDF:
         self.portrait = portrait
         if not self.portrait:
             self.page_height, self.page_width = self.page_width, self.page_height
+
+        self.margin = parse_margin(margin)
 
         self.font_family = font_family
         self.font_size = font_size
@@ -95,13 +100,15 @@ class PDF:
     def create_image(self, image):
         return PDFImage(image)
 
-    def add_image(self, pdf_image, x=None, y=None, width=None, height=None, move='bottom'):
+    def add_image(self, pdf_image, x=None, y=None, width=None, height=None,
+        move='bottom'
+    ):
         image_obj = self.base.add(pdf_image.pdf_obj)
         h = pdf_image.height
         w = pdf_image.width
 
         if width is None and height is None:
-            width = self.page.real_width
+            width = self.page.content_width
             height = width * h/w
         elif width is None:
             width = height * w/h
@@ -228,6 +235,93 @@ class PDF:
 
         return self.add_text(pdf_text, x, y, move)
 
+    def content(self, content, width=None, height=None, x=None, y=None,
+        move='bottom'
+    ):
+        width = self.page.content_width if width is None else width
+        if height is None:
+            height = self.page.height - self.page.margin_bottom - self.page.y
+        x = self.x if x is None else x
+        y = self.page.y if y is None else y
+
+        if isinstance(content, PDFContent):
+            pdf_content = content
+            pdf_content.setup(x, y, width, height)
+        else:
+            style = dict(
+                f=self.font_family, s=self.font_size, c=self.font_color,
+                text_align=self.text_align, line_height=self.line_height,
+                indent=0
+            )
+
+            content = content.copy()
+            style.update(content.get('style', {}))
+            content['style'] = style
+
+            pdf_content = PDFContent(content, width, height, x, y)
+
+        pdf_content.run()
+
+        self._add_graphics([*pdf_content.fills,*pdf_content.lines])
+        self._add_parts(pdf_content.parts_)
+
+        if move == 'bottom':
+            self.page.y += pdf_content.current_height
+        if move == 'next':
+            self.page.x += width
+
+        if not pdf_content.finished:
+            return pdf_content
+
+    def table(self, content, width, height, x=0, y=0, widths=None,
+            style=None, borders=None, fills=None, move='bottom'
+    ):
+        width = self.page.content_width if width is None else width
+        if height is None:
+            height = self.page.height - self.page.margin_bottom - self.page.y
+        x = self.x if x is None else x
+        y = self.page.y if y is None else y
+
+        if isinstance(content, PDFTable):
+            pdf_table = content
+            pdf_table.setup(x, y, width, height)
+        else:
+            style_ = dict(
+                f=self.font_family, s=self.font_size, c=self.font_color,
+                text_align=self.text_align, line_height=self.line_height,
+                indent=0
+            )
+            if isinstance(style, dict):
+                style_.update(style)
+
+            pdf_table = PDFTable(content, self.fonts, width, height, x, y,
+                widths, style_, borders, fills)
+
+        pdf_table.run()
+
+        self._add_graphics([*pdf_table.fills,*pdf_table.lines])
+        self._add_parts(pdf_table.parts_)
+
+        if move == 'bottom':
+            self.page.y += pdf_table.current_height
+        if move == 'next':
+            self.page.x += width
+
+        if not pdf_table.finished:
+            return pdf_table
+
+    def _add_graphics(self, graphics):
+        stream = create_graphics(graphics)
+        self.page.add(stream)
+
+    def _add_parts(self, parts):
+        for part in parts:
+            self.page.x = part['x']; self.page.y = part['y']
+            if part['type'] == 'paragraph':
+                self.add_text(part['content'])
+            elif part['type'] == 'image':
+                self.add_image(part['content'], part['width'])
+
     def _build_dests_tree(self, keys, vals, first_level=True):
         k = 7
         new_keys = []
@@ -279,21 +373,4 @@ class PDF:
         self._build_dests()
         self.base.output(buffer)
 
-    def add_content(self, content):
-        pdf_content = PDFContent(content, self)
-        pdf_content.run()
-
-    def add_parts(self, pages):
-        for page in pages:
-            for part in page:
-                if part['type'] == 'stream':
-                    self.page.add(part['content'])
-                    continue
-                self.page.x = part['x']; self.page.y = part['y']
-                if part['type'] == 'paragraph':
-                    self.add_text(part['content'])
-                elif part['type'] == 'image':
-                    self.add_image(part['content'], part['width'])
-
-            self.add_page()
 

@@ -4,8 +4,11 @@ from .utils import parse_style_str
 from .text import PDFText
 from .image import PDFImage
 
+
+TABLE_PROPERTIES = ('widths', 'borders', 'fills')
+
 class PDFContent:
-    def __init__(self, content, width, height, x=0, y=0):
+    def __init__(self, content, fonts, width, height, x=0, y=0):
         if not isinstance(content, dict):
             raise Exception('content must be a dict')
 
@@ -13,6 +16,8 @@ class PDFContent:
         self.finished = False
         self.pdf_content_part = None
         self.setup(x, y, width, height)
+        self.fonts = fonts
+        self.current_height = 0
 
     def setup(self, x=None, y=None, width=None, height=None):
         if x is not None:
@@ -35,6 +40,9 @@ class PDFContent:
                 self.x, self.width, self.min_y, self.max_y, last=True
             )
         ret = self.pdf_content_part.run()
+        self.current_height = self.pdf_content.y - self.pdf_content.min_y \
+            if self.pdf_content.cols_n == 1 \
+            else self.pdf_content.max_y - self.pdf_content.min_y
         if ret == 'continue':
             self.finished = True
         return self.parts
@@ -42,10 +50,12 @@ class PDFContent:
     @property
     def parts(self):
         return self.fills + self.lines + self.parts_
+
+
 class PDFContentPart:
     def __init__(self, content, pdf_content, min_x, width, min_y, max_y,
-        parent=None, last=False, inherited_style=None
-    ):
+                 parent=None, last=False, inherited_style=None
+                 ):
         '''
         content: list of elements (dict) that will be added to the pdf. There are
         currently 3 types of elements, defined by key 'type' in the element dict:
@@ -97,13 +107,13 @@ class PDFContentPart:
 
         self.elements = content.get('content', [])
 
-        self.section_element_index = 0 # index when the last section jump occured
-        self.element_index = 0 # current index
+        self.section_element_index = 0  # index when the last section jump occured
+        self.element_index = 0  # current index
 
-        self.section_delayed = [] # delayed elements when the last section jump occured
-        self.delayed = [] # current delayed elements
+        self.section_delayed = []  # delayed elements when the last section jump occured
+        self.delayed = []  # current delayed elements
 
-        self.children_indexes = [] # the last state of this element
+        self.children_indexes = []  # the last state of this element
 
         self.will_reset = False
         self.resetting = False
@@ -114,7 +124,7 @@ class PDFContentPart:
         self.minim_forward = None
 
         self.paragraph_properties = ('text_align', 'line_height', 'indent',
-            'list_text', 'list_style', 'list_indent')
+                                     'list_text', 'list_style', 'list_indent')
 
     def add_delayed(self):
         '''Function to add delayed elements to pdf.
@@ -177,7 +187,7 @@ class PDFContentPart:
             return 'break'
 
     def process_add_ans(self, ans):
-        if next_section_ret == 'finish':
+        if ans == 'finish':
             return 'finish'
         elif ans == 'break':
             return self.is_element_resetting()
@@ -233,7 +243,6 @@ class PDFContentPart:
                 else:
                     return parent.last_child_of_resetting()
         return False
-
 
     def start_resetting(self):
         parent = self.parent
@@ -305,7 +314,7 @@ class PDFContentPart:
                 self.section_delayed = copy.deepcopy(self.delayed)
                 if children_indexes is None:
                     new_children_indexes = [{
-                        'index': self.element_index, 
+                        'index': self.element_index,
                         'delayed': copy.deepcopy(self.delayed)
                     }]
                 else:
@@ -339,7 +348,8 @@ class PDFContentPart:
     def update_dimensions(self, style):
         s = style
         self.x = self.get_min_x() + s.get('margin_left', 0)
-        self.width = self.col_width - s.get('margin_left', 0) - s.get('margin_right', 0)
+        self.width = self.col_width - \
+            s.get('margin_left', 0) - s.get('margin_right', 0)
 
         if self.starting:
             self.starting = False
@@ -365,7 +375,7 @@ class PDFContentPart:
         the pdf.
         '''
 
-        ret =  {'delayed': None, 'next': False}
+        ret = {'delayed': None, 'next': False}
 
         if not isinstance(element, (dict, str, list, tuple)):
             element = str(element)
@@ -374,7 +384,7 @@ class PDFContentPart:
 
         if not isinstance(element, dict):
             raise TypeError('Elements must be of type dict, str, list or tuple:'
-                + str(element))
+                            + str(element))
 
         style = {}
         style.update(self.style)
@@ -393,8 +403,9 @@ class PDFContentPart:
                 v: style.get(v) for v in self.paragraph_properties if v in style
             }
 
+            key = paragraph_keys[0]
             pdf_text = PDFText(
-                {key: element[paragraph_keys[0]], 'style': style.copy()},
+                {key: element[key], 'style': style.copy()}, self.p.fonts,
                 width=self.width, height=self.max_height, **par_style
             )
             pdf_text.run()
@@ -412,7 +423,7 @@ class PDFContentPart:
 
             if height < self.max_height:
                 content.update({'type': 'image', 'width': self.width,
-                    'height': height, 'content': pdf_image})
+                                'height': height, 'content': pdf_image})
                 self.p.parts_.append(content)
                 self.move_y(height)
             else:
@@ -422,6 +433,34 @@ class PDFContentPart:
                     ret['next'] = True
                 elif image_place == 'flow':
                     ret['image_flow'] = True
+
+        elif 'table' in element:
+            if 'delayed' in element:
+                pdf_table = element['delayed']
+                pdf_table.setup(self.get_min_x(), self.y,
+                    self.col_width, self.max_height)
+            else:
+                table_props = {
+                    v: element.get(v) for v in TABLE_PROPERTIES
+                    if v in element
+                }
+                pdf_table = PDFTable(
+                    element['table'], self.col_width, self.max_height,
+                    self.get_min_x(), self.y, style=style, **table_props
+                )
+
+            pdf_table.run()
+
+            self.p.parts_.extend(pdf_table.parts_)
+            self.p.lines.extend(pdf_table.lines)
+            self.p.fills.extend(pdf_table.fills)
+
+            self.move_y(pdf_table.current_height)
+                
+            if not pdf_table.finished:
+                delayed = copy.deepcopy(element)
+                delayed['delayed'] = pdf_table
+                ret = {'delayed': delayed, 'next': True}
 
         elif 'content' in element:
             pdf_content = PDFContentPart(
@@ -440,7 +479,8 @@ class PDFContentPart:
                     pdf_content.children_indexes = self.children_indexes[:-1]
                 elif isinstance(child, dict):
                     pdf_content.section_element_index = child['index']
-                    pdf_content.section_delayed = copy.deepcopy(child['delayed'])
+                    pdf_content.section_delayed = copy.deepcopy(
+                        child['delayed'])
                     pdf_content.element_index = child['index']
                     pdf_content.delayed = copy.deepcopy(child['delayed'])
 

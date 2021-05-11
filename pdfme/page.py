@@ -12,8 +12,8 @@ class PDFPage:
 
         self.width = width
         self.height = height
-        self.real_width = self.width - self.margin_right - self.margin_left
-        self.real_height = self.height - self.margin_top - self.margin_bottom
+        self.content_width = self.width - self.margin_right - self.margin_left
+        self.content_height = self.height - self.margin_top - self.margin_bottom
 
         self.x = self.margin_left
         self._y = self.height - self.margin_top

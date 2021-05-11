@@ -130,8 +130,7 @@ class PDFTextLinePart:
             )
 
         if self.underline:
-            color = PDFColor(self.state.color)
-            color.stroke = True
+            color = PDFColor(self.state.color, True)
             stroke_width = self.state.size * 0.1
             y_u = round(y + self.state.rise - stroke_width, 3)
 
