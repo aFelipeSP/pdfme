@@ -1,6 +1,6 @@
 import copy
 
-from .utils import parse_style_str
+from .utils import process_style
 from .text import PDFText
 from .image import PDFImage
 
@@ -10,7 +10,9 @@ PARAGRAPH_PROPERTIES = ('text_align', 'line_height', 'indent',
     'list_text', 'list_style', 'list_indent')
 
 class PDFContent:
-    def __init__(self, content, fonts, width, height, x=0, y=0, context=None):
+    def __init__(self, content, fonts, width, height, x=0, y=0, context=None,
+        formats=None
+    ):
         if not isinstance(content, dict):
             raise Exception('content must be a dict')
 
@@ -21,6 +23,7 @@ class PDFContent:
         self.fonts = fonts
         self.current_height = 0
         self.context = context
+        self.formats = formats
 
     def setup(self, x=None, y=None, width=None, height=None):
         if x is not None:
@@ -56,8 +59,8 @@ class PDFContent:
 
 class PDFContentPart:
     def __init__(self, content, pdf_content, min_x, width, min_y, max_y,
-                 parent=None, last=False, inherited_style=None
-                 ):
+            parent=None, last=False, inherited_style=None
+        ):
         '''
         content: list of elements (dict) that will be added to the pdf. There are
         currently 3 types of elements, defined by key 'type' in the element dict:
@@ -84,7 +87,7 @@ class PDFContentPart:
         self.style = {'margin_bottom': 5}
         inherited_style = {} if inherited_style is None else inherited_style
         self.style.update(inherited_style)
-        self.style.update(content.get('style', {}))
+        self.style.update(process_style(self.p.formats, content.get('style')))
 
         self.min_x = min_x
         self.min_y = min_y
@@ -387,10 +390,7 @@ class PDFContentPart:
 
         style = {}
         style.update(self.style)
-        # it was decided that the styles in content are always objects, not strings
-        el_style = element.get('style', {})
-        if isinstance(el_style, dict):
-            style.update(el_style)
+        style.update(process_style(self.p.formats, element.get('style')))
 
         self.update_dimensions(style)
         content = {'x': self.x, 'y': self.y}

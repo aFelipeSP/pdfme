@@ -1,7 +1,7 @@
 import copy
 
 from .utils import (get_page_size, subs, parse_margin, parse_style_str,
-    create_graphics, to_roman
+    create_graphics, to_roman, process_style
 )
 from .standard_fonts import STANDARD_FONTS
 from .base import PDFBase
@@ -28,7 +28,11 @@ class PDF:
         self.text_align = text_align
         self.line_height = line_height
 
+        self.formats = {}
+        self.context = {}
+
         self.dests = {}
+        self.uris = {}
         self.pages = []
         self.running_sections = []
 
@@ -76,10 +80,10 @@ class PDF:
             self._content(**running_section)
 
     def add_running_section(self, name, content, width=None, height=None,
-        x=None, y=None, context=None
+        x=None, y=None
     ):
-        self.running_sections.append(dict(content=content, width=width,
-            height=height, x=x, y=y, context=context
+        self.running_sections.append(dict(
+            content=content, width=width, height=height, x=x, y=y
         ))
 
     def create_image(self, image):
@@ -169,7 +173,7 @@ class PDF:
             style_str = [key[1:] for key in content.keys() if key.startswith('.')]
             if len(style_str) > 0:
                 style.update(parse_style_str(style_str[0], self.fonts))
-            style.update(content.get('style', {}))
+            style.update(process_style(self.formats, content.get('style')))
             content['style'] = style
         return content
 
@@ -177,25 +181,21 @@ class PDF:
         page = self.page_index + 1 + self.page_numbering_offset
         return to_roman(page) if self.page_numbering_style == 'roman' else page
 
-    def _default_context(self, context):
-        if isinstance(context, dict):
-            context = copy.deepcopy(context)
-            context['_PAGE_'] = self.get_page_number()
-        else:
-            raise Exception('context must be a dict')
-        return context
+    def get_context(self):
+        self.context['_PAGE_'] = self.get_page_number()
+        return self.context
 
     def create_text(self, content, width=None, height=None, text_align=None,
         line_height=None, indent=0, list_text=None, list_indent=None,
-        list_style = None, context=None
+        list_style = None
     ):
         par_style = self._default_paragraph_style(width, height, text_align,
             line_height, indent)
         par_style.update({'list_text': list_text, 'list_indent': list_indent,
             'list_style': list_style})
         content = self._init_text(content)
-        context = self._default_context(context)
-        pdf_text = PDFText(content, self.fonts, context=context, **par_style)
+        pdf_text = PDFText(content, self.fonts, context=self.get_context(), 
+            formats=self.formats, **par_style)
         pdf_text.run()
         return pdf_text
 
@@ -218,7 +218,17 @@ class PDF:
 
         for ref, rects in pdf_text.refs.items():
             for rect in rects:
-                self.page.add_link(rect, ref)
+                self.page.add_reference(rect, ref)
+
+        for link, rects in pdf_text.links.items():
+            if not link in self.uris:
+                uri = self.base.add(
+                    {'Type': b'/Action', 'S': b'/URI', 'URI': link}
+                )
+                self.uris[link] = uri.id
+
+            for rect in rects:
+                self.page.add_link(rect, self.uris[link])
 
         if move == 'bottom':
             self.page.y += pdf_text.current_height
@@ -229,10 +239,12 @@ class PDF:
 
     def text(self, content, x=None, y=None, width=None, height=None,
         text_align=None, line_height=None, indent=0, list_text=None,
-        list_indent=None, list_style=None, context=None, move='bottom'
+        list_indent=None, list_style=None, move='bottom'
     ):
-        pdf_text = self.create_text(content, width, height, text_align,
-            line_height, indent, list_text, list_indent, list_style, context)
+        pdf_text = self.create_text(
+            content, width, height, text_align, line_height, indent, list_text,
+            list_indent, list_style, self.get_context()
+        )
 
         return self.add_text(pdf_text, x, y, move)
 
@@ -253,35 +265,28 @@ class PDF:
         )
 
     def _create_table(self, content, width=None, height=None, x=None, y=None,
-        widths=None, style=None, borders=None, fills=None,
-        context=None
+        widths=None, style=None, borders=None, fills=None
     ):
         style_ = self._default_content_style()
-        if isinstance(style, dict):
-            style_.update(style)
-        
-        context = self._default_context(context)
+        style_.update(process_style(self.formats, style))
         pdf_table = PDFTable(content, self.fonts, width, height, x, y,
-            widths, style_, borders, fills, context)
+            widths, style_, borders, fills, self.get_context(), self.formats)
         pdf_table.run()
         return pdf_table
 
     def _table(self, content, width=None, height=None, x=None, y=None,
-        widths=None, style=None, borders=None, fills=None,
-        context=None, move='bottom'
+        widths=None, style=None, borders=None, fills=None, move='bottom'
     ):
         x, y, width, height = self._position_and_size(x, y, width, height)
 
         if isinstance(content, PDFTable):
             pdf_table = content
-            if isinstance(context, dict):
-                pdf_table.context.update(context)
-            pdf_table.context['_PAGE_'] = self.get_page_number()
+            pdf_table.context = self.get_context()
             pdf_table.setup(x, y, width, height)
             pdf_table.run()
         else:
             pdf_table = self._create_table(content, width, height, x, y,
-                widths, style, borders, fills, context
+                widths, style, borders, fills
             )
 
         self._add_graphics([*pdf_table.fills,*pdf_table.lines])
@@ -295,48 +300,42 @@ class PDF:
         return pdf_table
 
     def table(self, content, widths=None, style=None, borders=None,
-        fills=None, context=None
+        fills=None
     ):
-        pdf_table = self._table(content, widths=widths, style=style,
-            borders=borders, fills=fills, context=context,
+        pdf_table = self._table(
+            content, widths=widths, style=style, borders=borders, fills=fills,
             x=self.page.margin_left, width=self.page.content_width
         )
         while not pdf_table.finished:
             self.add_page()
-            pdf_table = self._content(pdf_table,
-                self.page.content_width, self.page.content_height,
+            pdf_table = self._table(
+                pdf_table, self.page.content_width, self.page.content_height,
                 self.page.margin_left, self.page.margin_top
             )
 
-    def _create_content(self, content, width=None, height=None, x=None, y=None,
-        context=None
-    ):
+    def _create_content(self, content, width=None, height=None, x=None, y=None):
         style = self._default_content_style()
-
         content = content.copy()
-        style.update(content.get('style', {}))
+        style.update(process_style(self.formats, content.get('style')))
         content['style'] = style
-
-        context = self._default_context(context)
-        pdf_content = PDFContent(content, width, height, x, y, context)
+        pdf_content = PDFContent(
+            content, width, height, x, y, self.get_context()
+        )
         pdf_content.run()
         return pdf_content
 
-    def _content(self, content, width=None, height=None, x=None, y=None,
-        context=None, move='bottom'
+    def _content(
+        self, content, width=None, height=None, x=None, y=None, move='bottom'
     ):
         x, y, width, height = self._position_and_size(x, y, width, height)
 
         if isinstance(content, PDFContent):
             pdf_content = content
-            if isinstance(context, dict):
-                pdf_content.context.update(context)
-            pdf_content.context['_PAGE_'] = self.get_page_number()
+            pdf_content.context = self.get_context()
             pdf_content.setup(x, y, width, height)
             pdf_content.run()
         else:
-            pdf_content = self._create_content(content, width, height,
-                x, y, context)
+            pdf_content = self._create_content(content, width, height, x, y)
 
         self._add_graphics([*pdf_content.fills,*pdf_content.lines])
         self._add_parts(pdf_content.parts_)
@@ -348,9 +347,10 @@ class PDF:
 
         return pdf_content
 
-    def content(self, content, context=None):
-        pdf_content = self._content(content, context=context,
-            x=self.page.margin_left, width=self.page.content_width)
+    def content(self, content):
+        pdf_content = self._content(
+            content, x=self.page.margin_left, width=self.page.content_width
+        )
         while not pdf_content.finished:
             self.add_page()
             pdf_content = self._content(pdf_content,

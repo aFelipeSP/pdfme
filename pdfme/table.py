@@ -3,17 +3,18 @@ from copy import deepcopy
 from .color import PDFColor
 from .text import PDFText
 from .image import PDFImage
+from .utils import process_style
 
 
 PARAGRAPH_PROPERTIES = ('text_align', 'line_height', 'indent', 'list_text',
                         'list_style', 'list_indent')
 
-TABLE_PROPERTIES = ('widths', 'style', 'borders', 'fills')
+TABLE_PROPERTIES = ('widths', 'borders', 'fills')
 
 
 class PDFTable:
     def __init__(self, content, fonts, width, height, x=0, y=0, widths=None,
-        style=None, borders=None, fills=None, context=None
+        style=None, borders=None, fills=None, context=None, formats=None
     ):
         if not isinstance(content, (list, tuple)):
             raise Exception('content must be a list or tuple')
@@ -23,6 +24,7 @@ class PDFTable:
         self.current_row = 0
         self.fonts = fonts
         self.context = context
+        self.formats = formats
         self.finished = False
         if len(content) == 0 or len(content[0]) == 0:
             return
@@ -48,9 +50,7 @@ class PDFTable:
             self.widths = [1 / cols_count] * cols_count
 
         self.style = {'cell_margin': 5, 'cell_fill': None}
-
-        if isinstance(style, dict):
-            self.style.update(style)
+        self.style.update(process_style(self.formats, style))
 
     @property
     def parts(self):
@@ -292,10 +292,7 @@ class PDFTable:
                         + str(element)
                     )
 
-                el_style = element.get('style', {})
-                if isinstance(el_style, dict):
-                    style.update(el_style)
-
+                style.update(process_style(self.formats, element.get('style')))
                 cell_style = self.parse_style(style)
 
             element = deepcopy(element)
@@ -342,9 +339,9 @@ class PDFTable:
                 }
                 key = paragraph_keys[0]
                 pdf_text = PDFText(
-                    {key: element[key], 'style': style.copy()}, self.fonts,
-                    width=width, height=height, 
-                    context=self.context, **par_style
+                    {key: element[key], 'style': style},
+                    self.fonts, width=width, height=height, 
+                    context=self.context, formats=self.formats, **par_style
                 )
                 pdf_text.run()
 
@@ -389,8 +386,9 @@ class PDFTable:
                     pdf_content.context.update(self.context)
                     pdf_content.setup(x, y, width, height)
                 else:
+                    element['style'] = style
                     pdf_content = PDFContent(element, width, height, x, y,
-                        self.context)
+                        self.context, self.formats)
 
                 pdf_content.run()
 
@@ -416,8 +414,11 @@ class PDFTable:
                     table_props = {v: element.get(v) for v in TABLE_PROPERTIES
                         if v in element}
                     # TODO: pass style to table
-                    pdf_table = PDFTable(element['table'], width, height, x, y,
-                        context=self.context, **table_props)
+                    pdf_table = PDFTable(
+                        element['table'], width, height, x, y, style=style,
+                        context=self.context, formats=self.formats,
+                        **table_props
+                    )
 
                 pdf_table.run()
 

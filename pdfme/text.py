@@ -1,6 +1,6 @@
 import re
 from .color import PDFColor
-from .utils import parse_style_str, default
+from .utils import parse_style_str, default, process_style
 
 PARAGRAPH_DEFAULTS = {'height': 200, 'width': 200, 'text_align': 'l',
     'line_height': 1.1, 'indent': 0}
@@ -53,7 +53,7 @@ class PDFState:
 
 
 class PDFTextLinePart:
-    def __init__(self, fonts, style, label=None, ref=None):
+    def __init__(self, fonts, style, label=None, ref=None, uri=None):
 
         self.fonts = fonts
 
@@ -63,6 +63,7 @@ class PDFTextLinePart:
         self.background = PDFColor(style.get('bg'))
         self.label = label
         self.ref = ref
+        self.uri = uri
 
         self.width = 0
         self.words = []
@@ -184,7 +185,9 @@ class PDFTextLine:
     def get_factor(self):
         return 1 if self.text_align != 'j' else self.justify_min_factor
 
-    def add_line_part(self, line_part=None, style=None, label=None, ref=None):
+    def add_line_part(self, line_part=None, style=None,
+        label=None, ref=None, uri=None
+    ):
         if len(self.line_parts) > 0:
             factor = self.get_factor()
             self.current_width += self.line_parts[-1].current_width(factor)
@@ -195,7 +198,7 @@ class PDFTextLine:
                     'provide wheter an existing line_part, or style (mandatory)'
                     ' and optionally label and ref with it.'
                 )
-            line_part = PDFTextLinePart(self.fonts, style, label, ref)
+            line_part = PDFTextLinePart(self.fonts, style, label, ref, uri)
 
         self.line_parts.append(line_part)
         return line_part
@@ -230,7 +233,8 @@ class PDFTextLine:
                         new_line_part = PDFTextLinePart(self.fonts,
                             line_part.style,
                             line_part.label,
-                            line_part.ref
+                            line_part.ref,
+                            line_part.uri
                         )
                         line_part.pop_word()
                         new_line_part.add_word(word)
@@ -241,7 +245,8 @@ class PDFTextLine:
                 new_line_parts = [PDFTextLinePart(self.fonts, 
                     current_line_part.style, 
                     current_line_part.label,
-                    current_line_part.ref
+                    current_line_part.ref,
+                    current_line_part.uri
                 )]
 
 
@@ -259,9 +264,9 @@ class PDFTextLine:
             return new_text_line
 
 class PDFText:
-    def __init__(self, content, fonts, width, height, text_align = None,
-        line_height = None, indent = None, list_text = None, list_indent = None,
-        list_style = None, context=None
+    def __init__(self, content, fonts, width, height, text_align=None,
+        line_height=None, indent=None, list_text=None, list_indent=None,
+        list_style=None, context=None, formats=None
     ):
         self.fonts = fonts
         self.used_fonts = set([])
@@ -275,6 +280,7 @@ class PDFText:
         self.list_indent = list_indent
         self.list_style = list_style
         self.context = context if isinstance(context, dict) else {}
+        self.formats = formats if isinstance(formats, dict) else {}
 
         self.current_height = 0
 
@@ -286,6 +292,7 @@ class PDFText:
         self.lines = []
         self.labels = {}
         self.refs = {}
+        self.links = {}
 
         if isinstance(content, str): content = {'.': [content]}
         elif isinstance(content, (list, tuple)): content = {'.': content}
@@ -426,12 +433,19 @@ class PDFText:
                 part_width = part.current_width(factor)
                 part_size = round(part.state.size, 3)
 
-                if part.label is not None: self.labels[part.label] = {
-                    'x': round(x_, 3), 'y': round(y_ + part_size, 3)}
-
+                if part.label is not None:
+                    self.labels[part.label] = {
+                        'x': round(x_, 3), 'y': round(y_ + part_size, 3)
+                    }
                 if part.ref is not None:
                     y_ref = y_ + part.state.rise - part_size*0.25
                     self.refs.setdefault(part.ref, []).append(
+                        [round(x_, 3), round(y_ref, 3),
+                        round(x_ + part_width, 3), round(y_ref + part_size, 3)
+                    ])
+                if part.uri is not None:
+                    y_ref = y_ + part.state.rise - part_size*0.25
+                    self.links.setdefault(part.uri, []).append(
                         [round(x_, 3), round(y_ref, 3),
                         round(x_ + part_width, 3), round(y_ref + part_size, 3)
                     ])
@@ -509,9 +523,10 @@ class PDFTextPart:
                 self.elements = value
                 break
 
-        self.style.update(content.get('style', {}))
+        self.style.update(process_style(root.formats, content.get('style')))
         self.label = content.get('label', None)
         self.ref = content.get('ref', None)
+        self.uri = content.get('uri', None)
 
         self.add_new_line_part = True
 
@@ -544,7 +559,7 @@ class PDFTextPart:
     def process(self, text, index):
         if self.add_new_line_part:
             new_line_part = self.root.current_line.add_line_part(
-                style=self.style, label=self.label, ref=self.ref)
+                style=self.style, label=self.label, ref=self.ref, uri=self.uri)
 
             self.root.setup_list()
 

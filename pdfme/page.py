@@ -40,7 +40,14 @@ class PDFPage:
         self.page['Resources'].setdefault('Font', {})
         self.page['Resources']['Font'][font_ref] = font_obj_id
 
-    def add_link(self, rect, dest):
+    def add_link(self, rect, uri_id):
+        if not 'Annots' in self.page:
+            self.page['Annots'] = []
+        self.page['Annots'].append(
+            {'Type': b'/Annot', 'Subtype': b'/Link', 'Rect': rect, 'A': uri_id}
+        )
+
+    def add_reference(self, rect, dest):
         if not 'Annots' in self.page:
             self.page['Annots'] = []
         self.page['Annots'].append(

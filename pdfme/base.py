@@ -5,7 +5,7 @@ from .parser import parse_obj, PDFObject, PDFRef
 from .utils import subs
 
 class PDFBase:
-    def __init__(self, version='1.3', trailer=None):
+    def __init__(self, version='1.5', trailer=None):
         self.version = version
         self.content = []
         if trailer is None:

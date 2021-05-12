@@ -1,3 +1,4 @@
+from copy import deepcopy
 import re
 from .color import PDFColor
 
@@ -16,6 +17,16 @@ page_sizes = {
 
 def subs(string, *args, **kwargs):
     return string.format(*args, **kwargs).encode('latin')
+
+def process_style(formats, style):
+    if style is None:
+        return {}
+    elif isinstance(style, str):
+        return deepcopy(formats[style])
+    elif isinstance(style, dict):
+        return style
+    else:
+        raise Exception('style must be a str with the name of a style or dict')
 
 def get_page_size(size):
     if isinstance(size, int):

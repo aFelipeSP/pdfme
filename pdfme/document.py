@@ -6,7 +6,7 @@ STYLE_PROPERTIES = dict(f='font_family', s='font_size', c='font_color',
 
 PAGE_PROPERTIES = ('page_size', 'portrait', 'margin')
 
-def _set_running_sections(pdf, running_sections, defs, context):
+def _set_running_sections(pdf, running_sections, defs):
     pdf.running_sections = []
     for name in running_sections:
         section = deepcopy(defs[name])
@@ -28,7 +28,6 @@ def _set_running_sections(pdf, running_sections, defs, context):
         if section.get('y') == 'bottom':
             section['y'] = pdf.page_height - pdf.margin['bottom']
 
-        section['context'] = context
         pdf.running_sections.append(section)
 
 def build_pdf(document, buffer, context=None):
@@ -43,6 +42,8 @@ def build_pdf(document, buffer, context=None):
     defs = document.get('defs', {})
 
     pdf = PDF(**page_style, **style_props)
+    pdf.formats = document.get('formats', {})
+    pdf.context.update(context)
 
     for section in document.get('sections', []):
         section_page_style = section.get('page_style', {})
@@ -52,7 +53,7 @@ def build_pdf(document, buffer, context=None):
         })
 
         running_sections = section.get('running_sections', [])
-        _set_running_sections(pdf, running_sections, defs, context)
+        _set_running_sections(pdf, running_sections, defs)
 
         if 'page_numbering_offset' in section_page_style:
             pdf.page_numbering_offset = section_page_style['page_numbering_offset']
@@ -62,6 +63,6 @@ def build_pdf(document, buffer, context=None):
             pdf.page_numbering_offset = -len(pdf.pages)
 
         pdf.add_page()
-        pdf.content(section, context)
+        pdf.content(section)
 
     pdf.output(buffer)
