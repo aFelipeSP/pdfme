@@ -1,7 +1,6 @@
 from copy import deepcopy
 
 from .color import PDFColor
-from .utils import parse_margin
 from .text import PDFText
 from .image import PDFImage
 
@@ -14,7 +13,7 @@ TABLE_PROPERTIES = ('widths', 'style', 'borders', 'fills')
 
 class PDFTable:
     def __init__(self, content, fonts, width, height, x=0, y=0, widths=None,
-        style=None, borders=None, fills=None
+        style=None, borders=None, fills=None, context=None
     ):
         if not isinstance(content, (list, tuple)):
             raise Exception('content must be a list or tuple')
@@ -23,13 +22,14 @@ class PDFTable:
         self.content = content
         self.current_row = 0
         self.fonts = fonts
+        self.context = context
+        self.finished = False
         if len(content) == 0 or len(content[0]) == 0:
             return
 
         cols_count = len(content[0])
         self.delayed = [None] * cols_count
         self.borders_and_fills(borders, fills)
-        self.finished = False
 
         if widths is not None:
             if not isinstance(widths, (list, tuple)):
@@ -343,7 +343,8 @@ class PDFTable:
                 key = paragraph_keys[0]
                 pdf_text = PDFText(
                     {key: element[key], 'style': style.copy()}, self.fonts,
-                    width=width, height=height, **par_style
+                    width=width, height=height, 
+                    context=self.context, **par_style
                 )
                 pdf_text.run()
 
@@ -385,9 +386,11 @@ class PDFTable:
             ):
                 if 'delayed' in element and element['type'] == 'content':
                     pdf_content = element['delayed']
+                    pdf_content.context.update(self.context)
                     pdf_content.setup(x, y, width, height)
                 else:
-                    pdf_content = PDFContent(element, width, height, x, y)
+                    pdf_content = PDFContent(element, width, height, x, y,
+                        self.context)
 
                 pdf_content.run()
 
@@ -407,13 +410,14 @@ class PDFTable:
             ):
                 if 'delayed' in element and element['type'] == 'table':
                     pdf_table = element['delayed']
+                    pdf_table.context.update(self.context)
                     pdf_table.setup(x, y, width, height)
                 else:
                     table_props = {v: element.get(v) for v in TABLE_PROPERTIES
                         if v in element}
                     # TODO: pass style to table
                     pdf_table = PDFTable(element['table'], width, height, x, y,
-                        **table_props)
+                        context=self.context, **table_props)
 
                 pdf_table.run()
 

@@ -4,7 +4,6 @@ class PDFPage:
     def __init__(self, base, width, height, margin_top=0, margin_bottom=0,
         margin_left=0, margin_right=0
     ):
-        self.base = base
         self.margin_top = margin_top
         self.margin_bottom = margin_bottom
         self.margin_left = margin_left
@@ -39,11 +38,11 @@ class PDFPage:
 
     def add_font(self, font_ref, font_obj_id):
         self.page['Resources'].setdefault('Font', {})
-        if not font_ref in self.page['Resources']['Font']:
-            self.page['Resources']['Font'][font_ref] = font_obj_id
+        self.page['Resources']['Font'][font_ref] = font_obj_id
 
     def add_link(self, rect, dest):
-        if not 'Annots' in self.page: self.page['Annots'] = []
+        if not 'Annots' in self.page:
+            self.page['Annots'] = []
         self.page['Annots'].append(
             {'Type': b'/Annot', 'Subtype': b'/Link', 'Rect': rect, 'Dest': dest}
         )

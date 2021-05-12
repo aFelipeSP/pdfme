@@ -6,9 +6,11 @@ from .image import PDFImage
 
 
 TABLE_PROPERTIES = ('widths', 'borders', 'fills')
+PARAGRAPH_PROPERTIES = ('text_align', 'line_height', 'indent',
+    'list_text', 'list_style', 'list_indent')
 
 class PDFContent:
-    def __init__(self, content, fonts, width, height, x=0, y=0):
+    def __init__(self, content, fonts, width, height, x=0, y=0, context=None):
         if not isinstance(content, dict):
             raise Exception('content must be a dict')
 
@@ -18,6 +20,7 @@ class PDFContent:
         self.setup(x, y, width, height)
         self.fonts = fonts
         self.current_height = 0
+        self.context = context
 
     def setup(self, x=None, y=None, width=None, height=None):
         if x is not None:
@@ -50,7 +53,6 @@ class PDFContent:
     @property
     def parts(self):
         return self.fills + self.lines + self.parts_
-
 
 class PDFContentPart:
     def __init__(self, content, pdf_content, min_x, width, min_y, max_y,
@@ -122,9 +124,6 @@ class PDFContentPart:
         self.minim_diff_last = None
         self.minim_diff = None
         self.minim_forward = None
-
-        self.paragraph_properties = ('text_align', 'line_height', 'indent',
-                                     'list_text', 'list_style', 'list_indent')
 
     def add_delayed(self):
         '''Function to add delayed elements to pdf.
@@ -400,13 +399,14 @@ class PDFContentPart:
 
         if len(paragraph_keys) > 0:
             par_style = {
-                v: style.get(v) for v in self.paragraph_properties if v in style
+                v: style.get(v) for v in PARAGRAPH_PROPERTIES if v in style
             }
 
             key = paragraph_keys[0]
             pdf_text = PDFText(
                 {key: element[key], 'style': style.copy()}, self.p.fonts,
-                width=self.width, height=self.max_height, **par_style
+                width=self.width, height=self.max_height,
+                context=self.p.context, **par_style
             )
             pdf_text.run()
 
@@ -437,6 +437,7 @@ class PDFContentPart:
         elif 'table' in element:
             if 'delayed' in element:
                 pdf_table = element['delayed']
+                pdf_table.context.update(self.p.context)
                 pdf_table.setup(self.get_min_x(), self.y,
                     self.col_width, self.max_height)
             else:

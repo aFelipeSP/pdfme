@@ -1,7 +1,7 @@
 import copy
 
 from .utils import (get_page_size, subs, parse_margin, parse_style_str,
-    create_graphics
+    create_graphics, to_roman
 )
 from .standard_fonts import STANDARD_FONTS
 from .base import PDFBase
@@ -13,19 +13,14 @@ from .table import PDFTable
 
 class PDF:
     def __init__(self, page_size='a4', portrait=True, margin=56.693,
-        font_family='Helvetica',
-        font_size=11,
-        font_color=0.1,
-        text_align='l',
-        line_height=1.1,
+        page_numbering_offset=0, page_numbering_style='arabic',
+        font_family='Helvetica', font_size=11, font_color=0.1,
+        text_align='l', line_height=1.1
     ):
 
-        self.page_width, self.page_height = get_page_size(page_size)
-        self.portrait = portrait
-        if not self.portrait:
-            self.page_height, self.page_width = self.page_width, self.page_height
-
-        self.margin = parse_margin(margin)
+        self.setup_page(page_size, portrait, margin)
+        self.page_numbering_offset = page_numbering_offset
+        self.page_numbering_style = page_numbering_style
 
         self.font_family = font_family
         self.font_size = font_size
@@ -35,6 +30,7 @@ class PDF:
 
         self.dests = {}
         self.pages = []
+        self.running_sections = []
 
         self.base = PDFBase()
         self.root = self.base.add({ 'Type': b'/Catalog'})
@@ -43,59 +39,48 @@ class PDF:
         self.fonts = copy.deepcopy(STANDARD_FONTS)
         self.used_fonts = {}
         self._add_font('Helvetica', 'n')
-        
-        self.add_page()
 
-    def add_font(self, font_family, font_files):
-        raise NotImplementedError()
+    @property
+    def page(self):
+        return self.pages[self.page_index]
+
+    def setup_page(self, page_size=None, portrait=None, margin=None):
+        if page_size is not None:
+            self.page_width, self.page_height = get_page_size(page_size)
+        if portrait is not None:
+            self.portrait = portrait
+        if margin is not None:
+            self.margin = parse_margin(margin)
 
     def add_page(self, page_size=None, portrait=None, margin=None):
         if page_size is not None:
             page_width, page_height = get_page_size(page_size)
-            if (portrait is None and not self.portrait) or not portrait:
-                page_height, page_width = page_width, page_height  
         else:
-            page_width, page_height = self.page_width, self.page_height
-            if portrait is not None and portrait != self.portrait:
-                page_height, page_width = page_width, page_height
+            page_height, page_width = self.page_height, self.page_width
 
-        margin = self.margin if margin is None else parse_margin(margin)
+        if (portrait is None and not self.portrait) or not portrait:
+            page_height, page_width = page_width, page_height  
 
-        page = PDFPage(self.base, page_width, page_height, **margin)
+        margin_ = copy.deepcopy(self.margin)
+        if margin is not None:
+            margin_.update(parse_margin(margin))
+
+        page = PDFPage(self.base, page_width, page_height,
+            **{'border_' + side: value for side, value in margin_.items()}
+        )
+
         self.pages.append(page)
+        self.page_index = len(self.pages) - 1
 
-    def set_page(self, index):
-        self.page = self.pages[index]
+        for running_section in self.running_sections:
+            self._content(**running_section)
 
-    def _build_pages_tree(self, page_list, first_level = True):
-        new_page_list = []
-        count = 0
-        for page in page_list:
-            if first_level:
-                page = page.page
-
-            if count % 6 == 0:
-                new_page_list.append(
-                    self.base.add({'Type': b'/Pages', 'Kids': [], 'Count': 0})
-                )
-                count += 1
-
-            last_parent = new_page_list[-1]
-            page['Parent'] = last_parent.id
-            last_parent['Kids'].append(page.id)
-            last_parent['Count'] += 1
-
-        if count == 1:
-            self.root['Pages'] = new_page_list[0].id
-
-            page_size = [self.page.width, self.page.height]
-
-            new_page_list[0]['MediaBox'] = [0, 0] + page_size
-        else:
-            self._build_pages_tree(new_page_list, False)
-
-    def add_stream(self, instructions):
-        self.page.add(instructions)
+    def add_running_section(self, name, content, width=None, height=None,
+        x=None, y=None, context=None
+    ):
+        self.running_sections.append(dict(content=content, width=width,
+            height=height, x=x, y=y, context=context
+        ))
 
     def create_image(self, image):
         return PDFImage(image)
@@ -130,6 +115,9 @@ class PDF:
     def image(self, image, width=None, height=None, move='bottom'):
         pdf_image = self.create_image(image)
         self.add_image(pdf_image, width=width, height=height, move=move)
+
+    def add_font(self, font_family, font_files):
+        raise NotImplementedError()
        
     def _font_or_default(self, font_family, mode):
         return self.fonts[font_family]['n'] \
@@ -157,7 +145,7 @@ class PDF:
 
         self.page.add_font(font['ref'], font_obj.id)
 
-    def default_text_style(self, width=None, height=None, text_align=None,
+    def _default_paragraph_style(self, width=None, height=None, text_align=None,
         line_height=None, indent=0
     ):
         return dict(
@@ -171,7 +159,7 @@ class PDF:
             indent = indent
         )
 
-    def init_content(self, content):
+    def _init_text(self, content):
         style = {'f': self.font_family, 's': self.font_size, 'c': self.font_color}
         if isinstance(content, str):
             content = {'style': style, '.': [content]}
@@ -185,16 +173,29 @@ class PDF:
             content['style'] = style
         return content
 
+    def get_page_number(self):
+        page = self.page_index + 1 + self.page_numbering_offset
+        return to_roman(page) if self.page_numbering_style == 'roman' else page
+
+    def _default_context(self, context):
+        if isinstance(context, dict):
+            context = copy.deepcopy(context)
+            context['_PAGE_'] = self.get_page_number()
+        else:
+            raise Exception('context must be a dict')
+        return context
+
     def create_text(self, content, width=None, height=None, text_align=None,
         line_height=None, indent=0, list_text=None, list_indent=None,
-        list_style = None
+        list_style = None, context=None
     ):
-        par_style = self.default_text_style(width, height, text_align,
+        par_style = self._default_paragraph_style(width, height, text_align,
             line_height, indent)
         par_style.update({'list_text': list_text, 'list_indent': list_indent,
             'list_style': list_style})
-        content = self.init_content(content)
-        pdf_text = PDFText(content, self.fonts, **par_style)
+        content = self._init_text(content)
+        context = self._default_context(context)
+        pdf_text = PDFText(content, self.fonts, context=context, **par_style)
         pdf_text.run()
         return pdf_text
 
@@ -228,76 +229,60 @@ class PDF:
 
     def text(self, content, x=None, y=None, width=None, height=None,
         text_align=None, line_height=None, indent=0, list_text=None,
-        list_indent=None, list_style=None, move='bottom'
+        list_indent=None, list_style=None, context=None, move='bottom'
     ):
         pdf_text = self.create_text(content, width, height, text_align,
-            line_height, indent, list_text, list_indent, list_style)
+            line_height, indent, list_text, list_indent, list_style, context)
 
         return self.add_text(pdf_text, x, y, move)
 
-    def content(self, content, width=None, height=None, x=None, y=None,
-        move='bottom'
-    ):
-        width = self.page.content_width if width is None else width
+    def _position_and_size(self, x=None, y=None, width=None, height=None):
+        if x is not None:
+            self.page.x = x
+        if y is not None:
+            self.page.y = y
+        if width is None:
+            width = self.page.width - self.page.margin_right - self.page.x
         if height is None:
             height = self.page.height - self.page.margin_bottom - self.page.y
-        x = self.x if x is None else x
-        y = self.page.y if y is None else y
+        return x, y, width, height
 
-        if isinstance(content, PDFContent):
-            pdf_content = content
-            pdf_content.setup(x, y, width, height)
-        else:
-            style = dict(
-                f=self.font_family, s=self.font_size, c=self.font_color,
-                text_align=self.text_align, line_height=self.line_height,
-                indent=0
-            )
+    def _default_content_style(self):
+        return dict(f=self.font_family, s=self.font_size, c=self.font_color,
+            text_align=self.text_align, line_height=self.line_height, indent=0
+        )
 
-            content = content.copy()
-            style.update(content.get('style', {}))
-            content['style'] = style
-
-            pdf_content = PDFContent(content, width, height, x, y)
-
-        pdf_content.run()
-
-        self._add_graphics([*pdf_content.fills,*pdf_content.lines])
-        self._add_parts(pdf_content.parts_)
-
-        if move == 'bottom':
-            self.page.y += pdf_content.current_height
-        if move == 'next':
-            self.page.x += width
-
-        if not pdf_content.finished:
-            return pdf_content
-
-    def table(self, content, width, height, x=0, y=0, widths=None,
-            style=None, borders=None, fills=None, move='bottom'
+    def _create_table(self, content, width=None, height=None, x=None, y=None,
+        widths=None, style=None, borders=None, fills=None,
+        context=None
     ):
-        width = self.page.content_width if width is None else width
-        if height is None:
-            height = self.page.height - self.page.margin_bottom - self.page.y
-        x = self.x if x is None else x
-        y = self.page.y if y is None else y
+        style_ = self._default_content_style()
+        if isinstance(style, dict):
+            style_.update(style)
+        
+        context = self._default_context(context)
+        pdf_table = PDFTable(content, self.fonts, width, height, x, y,
+            widths, style_, borders, fills, context)
+        pdf_table.run()
+        return pdf_table
+
+    def _table(self, content, width=None, height=None, x=None, y=None,
+        widths=None, style=None, borders=None, fills=None,
+        context=None, move='bottom'
+    ):
+        x, y, width, height = self._position_and_size(x, y, width, height)
 
         if isinstance(content, PDFTable):
             pdf_table = content
+            if isinstance(context, dict):
+                pdf_table.context.update(context)
+            pdf_table.context['_PAGE_'] = self.get_page_number()
             pdf_table.setup(x, y, width, height)
+            pdf_table.run()
         else:
-            style_ = dict(
-                f=self.font_family, s=self.font_size, c=self.font_color,
-                text_align=self.text_align, line_height=self.line_height,
-                indent=0
+            pdf_table = self._create_table(content, width, height, x, y,
+                widths, style, borders, fills, context
             )
-            if isinstance(style, dict):
-                style_.update(style)
-
-            pdf_table = PDFTable(content, self.fonts, width, height, x, y,
-                widths, style_, borders, fills)
-
-        pdf_table.run()
 
         self._add_graphics([*pdf_table.fills,*pdf_table.lines])
         self._add_parts(pdf_table.parts_)
@@ -307,8 +292,71 @@ class PDF:
         if move == 'next':
             self.page.x += width
 
-        if not pdf_table.finished:
-            return pdf_table
+        return pdf_table
+
+    def table(self, content, widths=None, style=None, borders=None,
+        fills=None, context=None
+    ):
+        pdf_table = self._table(content, widths=widths, style=style,
+            borders=borders, fills=fills, context=context,
+            x=self.page.margin_left, width=self.page.content_width
+        )
+        while not pdf_table.finished:
+            self.add_page()
+            pdf_table = self._content(pdf_table,
+                self.page.content_width, self.page.content_height,
+                self.page.margin_left, self.page.margin_top
+            )
+
+    def _create_content(self, content, width=None, height=None, x=None, y=None,
+        context=None
+    ):
+        style = self._default_content_style()
+
+        content = content.copy()
+        style.update(content.get('style', {}))
+        content['style'] = style
+
+        context = self._default_context(context)
+        pdf_content = PDFContent(content, width, height, x, y, context)
+        pdf_content.run()
+        return pdf_content
+
+    def _content(self, content, width=None, height=None, x=None, y=None,
+        context=None, move='bottom'
+    ):
+        x, y, width, height = self._position_and_size(x, y, width, height)
+
+        if isinstance(content, PDFContent):
+            pdf_content = content
+            if isinstance(context, dict):
+                pdf_content.context.update(context)
+            pdf_content.context['_PAGE_'] = self.get_page_number()
+            pdf_content.setup(x, y, width, height)
+            pdf_content.run()
+        else:
+            pdf_content = self._create_content(content, width, height,
+                x, y, context)
+
+        self._add_graphics([*pdf_content.fills,*pdf_content.lines])
+        self._add_parts(pdf_content.parts_)
+
+        if move == 'bottom':
+            self.page.y += pdf_content.current_height
+        if move == 'next':
+            self.page.x += width
+
+        return pdf_content
+
+    def content(self, content, context=None):
+        pdf_content = self._content(content, context=context,
+            x=self.page.margin_left, width=self.page.content_width)
+        while not pdf_content.finished:
+            self.add_page()
+            pdf_content = self._content(pdf_content,
+                self.page.content_width, self.page.content_height,
+                self.page.margin_left, self.page.margin_top
+            )
 
     def _add_graphics(self, graphics):
         stream = create_graphics(graphics)
@@ -321,6 +369,31 @@ class PDF:
                 self.add_text(part['content'])
             elif part['type'] == 'image':
                 self.add_image(part['content'], part['width'])
+
+    def _build_pages_tree(self, page_list, first_level = True):
+        new_page_list = []
+        count = 0
+        for page in page_list:
+            if first_level:
+                page = page.page
+                page_size = [page.width, page.height]
+                page['MediaBox'] = [0, 0] + page_size
+
+            if count % 6 == 0:
+                new_page_list.append(
+                    self.base.add({'Type': b'/Pages', 'Kids': [], 'Count': 0})
+                )
+                count += 1
+
+            last_parent = new_page_list[-1]
+            page['Parent'] = last_parent.id
+            last_parent['Kids'].append(page.id)
+            last_parent['Count'] += 1
+
+        if count == 1:
+            self.root['Pages'] = new_page_list[0].id
+        else:
+            self._build_pages_tree(new_page_list, False)
 
     def _build_dests_tree(self, keys, vals, first_level=True):
         k = 7
@@ -372,5 +445,3 @@ class PDF:
         self._build_pages_tree(self.pages)
         self._build_dests()
         self.base.output(buffer)
-
-

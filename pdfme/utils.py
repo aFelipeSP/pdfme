@@ -124,7 +124,7 @@ def get_word_width(word, size, fonts, font_family, font_mode):
 
 def create_graphics(graphics):
     last_fill = last_color = last_line_width = last_line_style = None
-    stream = ' q'
+    stream = ''
     for g in graphics:
         if g['type'] == 'fill':
             if g['color'] != last_fill:
@@ -146,13 +146,13 @@ def create_graphics(graphics):
                 stream += ' {} w'.format(round(g['width'], 3))
 
             if g['style'] == 'dashed':
-                line_style = ' 0 J [{} {}] 0'.format(round(g['width']*2, 3),
-                    round(g['width'], 3))
+                line_style = ' 0 J [{} {}] 0 d'.format(round(g['width']*3, 3),
+                    round(g['width']*1.5, 3))
             elif g['style'] == 'dotted':
-                line_style = ' 1 J [0 {}] {}'.format(round(g['width'], 3),
+                line_style = ' 1 J [0 {}] {} d'.format(round(g['width']*2, 3),
                     round(g['width'], 3)*0.5)
             else:
-                line_style = ' 0 J [] 0'
+                line_style = ' 0 J [] 0 d'
 
             if line_style != last_line_style:
                 last_line_style = line_style
@@ -162,4 +162,32 @@ def create_graphics(graphics):
                 round(g['x1'], 3), round(g['y1'], 3),
                 round(g['x2'], 3), round(g['y2'], 3),
             )
-    return stream + ' Q'
+
+    if stream != '':
+        stream = ' q' + stream + ' Q'
+    
+    return stream
+
+def _roman_five(n, one, five):
+    return one * n if n < 4 else (one + five if n == 4 else five)
+
+def _roman_ten(n, one, five, ten):
+    return _roman_five(n, one, five) if n < 5 else ((five if n < 9 else '')
+        + _roman_five(n - 5, one, ten) if n > 5 else five)
+
+def to_roman(n):
+    if not (0 < n < 4000):
+        raise Exception('0 < n < 4000')
+    roman = ''
+    n = str(int(n))
+    if len(n) > 0:
+        roman = _roman_ten(int(n[-1]), 'I', 'V', 'X')
+    if len(n) > 1:
+        roman = _roman_ten(int(n[-2]), 'X', 'L', 'C') + roman
+    if len(n) > 2:
+        roman = _roman_ten(int(n[-3]), 'C', 'D', 'M') + roman
+    if len(n) > 3:
+        roman = _roman_ten(int(n[-4]), 'M', '', '') + roman
+    return roman
+
+    

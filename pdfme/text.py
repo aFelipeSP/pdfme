@@ -96,9 +96,7 @@ class PDFTextLinePart:
             [self.state.font_mode]['widths'][char] / 1000
 
     def get_word_width(self, word):
-        width = 0
-        for char in word: width += self.get_char_width(char)
-        return width
+        return sum(self.get_char_width(char) for char in word)
 
     def output_text(self, last_state, last_factor, factor):
         stream = self.state - last_state
@@ -261,15 +259,9 @@ class PDFTextLine:
             return new_text_line
 
 class PDFText:
-    def __init__(self, content, fonts,
-        width = None,
-        height = None,
-        text_align = None,
-        line_height = None,
-        indent = None,
-        list_text = None,
-        list_indent = None,
-        list_style = None
+    def __init__(self, content, fonts, width, height, text_align = None,
+        line_height = None, indent = None, list_text = None, list_indent = None,
+        list_style = None, context=None
     ):
         self.fonts = fonts
         self.used_fonts = set([])
@@ -282,6 +274,7 @@ class PDFText:
         self.list_text = list_text
         self.list_indent = list_indent
         self.list_style = list_style
+        self.context = context if isinstance(context, dict) else {}
 
         self.current_height = 0
 
@@ -453,8 +446,11 @@ class PDFText:
 
             text += line_stream
 
-        self.stream = 'q {} Q BT 1 0 0 1 {} {} Tm{} ET'.format(
-            graphics.strip(), round(x, 3), round(y, 3), text)
+        if graphics != '':
+            graphics = 'q' + graphics + ' Q '
+
+        self.stream = ' {}BT 1 0 0 1 {} {} Tm{} ET'.format(
+            graphics, round(x, 3), round(y, 3), text)
         return self.stream
 
     def get_last_word(self, line):
@@ -521,6 +517,12 @@ class PDFTextPart:
 
     def run(self):
         for i, element in enumerate(self.elements):
+
+            if (isinstance(element, dict) and len(element) == 1 and
+                list(element.keys())[0] == 'var'
+            ):
+                element = str(self.root.context.get(element['var']))
+
             if isinstance(element, str) and element != '':
                 should_stop = self.process(element, i)
                 if should_stop:
