@@ -14,7 +14,7 @@ TABLE_PROPERTIES = ('widths', 'borders', 'fills')
 
 class PDFTable:
     def __init__(self, content, fonts, width, height, x=0, y=0, widths=None,
-        style=None, borders=None, fills=None, context=None, formats=None
+        style=None, borders=None, fills=None, pdf=None
     ):
         if not isinstance(content, (list, tuple)):
             raise Exception('content must be a list or tuple')
@@ -23,8 +23,7 @@ class PDFTable:
         self.content = content
         self.current_row = 0
         self.fonts = fonts
-        self.context = context
-        self.formats = formats
+        self.pdf = pdf
         self.finished = False
         if len(content) == 0 or len(content[0]) == 0:
             return
@@ -50,7 +49,7 @@ class PDFTable:
             self.widths = [1 / cols_count] * cols_count
 
         self.style = {'cell_margin': 5, 'cell_fill': None}
-        self.style.update(process_style(self.formats, style))
+        self.style.update(process_style(style, self.pdf))
 
     @property
     def parts(self):
@@ -292,7 +291,7 @@ class PDFTable:
                         + str(element)
                     )
 
-                style.update(process_style(self.formats, element.get('style')))
+                style.update(process_style(element.get('style'), self.pdf))
                 cell_style = self.parse_style(style)
 
             element = deepcopy(element)
@@ -339,9 +338,8 @@ class PDFTable:
                 }
                 key = paragraph_keys[0]
                 pdf_text = PDFText(
-                    {key: element[key], 'style': style},
-                    self.fonts, width=width, height=height, 
-                    context=self.context, formats=self.formats, **par_style
+                    {key: element[key], 'style': style}, self.fonts,
+                    width=width, height=height, pdf=self.pdf, **par_style
                 )
                 pdf_text.run()
 
@@ -383,12 +381,12 @@ class PDFTable:
             ):
                 if 'delayed' in element and element['type'] == 'content':
                     pdf_content = element['delayed']
-                    pdf_content.context.update(self.context)
                     pdf_content.setup(x, y, width, height)
                 else:
                     element['style'] = style
-                    pdf_content = PDFContent(element, width, height, x, y,
-                        self.context, self.formats)
+                    pdf_content = PDFContent(
+                        element, width, height, x, y, self.pdf
+                    )
 
                 pdf_content.run()
 
@@ -408,7 +406,6 @@ class PDFTable:
             ):
                 if 'delayed' in element and element['type'] == 'table':
                     pdf_table = element['delayed']
-                    pdf_table.context.update(self.context)
                     pdf_table.setup(x, y, width, height)
                 else:
                     table_props = {v: element.get(v) for v in TABLE_PROPERTIES
@@ -416,8 +413,7 @@ class PDFTable:
                     # TODO: pass style to table
                     pdf_table = PDFTable(
                         element['table'], width, height, x, y, style=style,
-                        context=self.context, formats=self.formats,
-                        **table_props
+                        pdf=self.pdf, **table_props
                     )
 
                 pdf_table.run()
@@ -446,6 +442,7 @@ class PDFTable:
 
         self.current_height += self.max_height
 
+        # TODO: logic to finish when inner elements say it has to finish
         return not self.is_delayed
 
 from .content import PDFContent

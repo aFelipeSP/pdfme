@@ -18,11 +18,13 @@ page_sizes = {
 def subs(string, *args, **kwargs):
     return string.format(*args, **kwargs).encode('latin')
 
-def process_style(formats, style):
+def process_style(style, pdf=None):
     if style is None:
         return {}
     elif isinstance(style, str):
-        return deepcopy(formats[style])
+        if pdf is None:
+            return {}
+        return deepcopy(pdf.formats[style])
     elif isinstance(style, dict):
         return style
     else:

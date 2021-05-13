@@ -266,7 +266,7 @@ class PDFTextLine:
 class PDFText:
     def __init__(self, content, fonts, width, height, text_align=None,
         line_height=None, indent=None, list_text=None, list_indent=None,
-        list_style=None, context=None, formats=None
+        list_style=None, pdf=None
     ):
         self.fonts = fonts
         self.used_fonts = set([])
@@ -279,8 +279,7 @@ class PDFText:
         self.list_text = list_text
         self.list_indent = list_indent
         self.list_style = list_style
-        self.context = context if isinstance(context, dict) else {}
-        self.formats = formats if isinstance(formats, dict) else {}
+        self.pdf = pdf
 
         self.current_height = 0
 
@@ -523,7 +522,7 @@ class PDFTextPart:
                 self.elements = value
                 break
 
-        self.style.update(process_style(root.formats, content.get('style')))
+        self.style.update(process_style(content.get('style'), root.pdf))
         self.label = content.get('label', None)
         self.ref = content.get('ref', None)
         self.uri = content.get('uri', None)
@@ -532,11 +531,11 @@ class PDFTextPart:
 
     def run(self):
         for i, element in enumerate(self.elements):
-
+            # TODO: logic to include in remaining the vars
             if (isinstance(element, dict) and len(element) == 1 and
-                list(element.keys())[0] == 'var'
+                list(element.keys())[0] == 'var' and self.root.pdf
             ):
-                element = str(self.root.context.get(element['var']))
+                element = str(self.root.pdf.context.get(element['var'], ''))
 
             if isinstance(element, str) and element != '':
                 should_stop = self.process(element, i)
@@ -578,7 +577,8 @@ class PDFTextPart:
             elif word == '\n': continue
             elif word == ' ' or word == '\t': word = ' '
 
-            position = self.position.copy(); position.append(index)
+            position = self.position.copy()
+            position.append(index)
             word_ = PDFWord(word, position, i)
             i = j
             should_return = self.root.add_word(word_)

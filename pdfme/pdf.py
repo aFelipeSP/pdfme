@@ -46,7 +46,15 @@ class PDF:
 
     @property
     def page(self):
-        return self.pages[self.page_index]
+        return self.pages[self._page_index]
+
+    @property
+    def page_index(self):
+        return self._page_index
+    @page_index.setter
+    def page_index(self, page_index):
+        self._page_index = page_index
+        self.context['$page'] = self.get_page_number()
 
     def setup_page(self, page_size=None, portrait=None, margin=None):
         if page_size is not None:
@@ -173,17 +181,13 @@ class PDF:
             style_str = [key[1:] for key in content.keys() if key.startswith('.')]
             if len(style_str) > 0:
                 style.update(parse_style_str(style_str[0], self.fonts))
-            style.update(process_style(self.formats, content.get('style')))
+            style.update(process_style(content.get('style'), self))
             content['style'] = style
         return content
 
     def get_page_number(self):
         page = self.page_index + 1 + self.page_numbering_offset
         return to_roman(page) if self.page_numbering_style == 'roman' else page
-
-    def get_context(self):
-        self.context['_PAGE_'] = self.get_page_number()
-        return self.context
 
     def create_text(self, content, width=None, height=None, text_align=None,
         line_height=None, indent=0, list_text=None, list_indent=None,
@@ -194,8 +198,7 @@ class PDF:
         par_style.update({'list_text': list_text, 'list_indent': list_indent,
             'list_style': list_style})
         content = self._init_text(content)
-        pdf_text = PDFText(content, self.fonts, context=self.get_context(), 
-            formats=self.formats, **par_style)
+        pdf_text = PDFText(content, self.fonts, pdf=self, **par_style)
         pdf_text.run()
         return pdf_text
 
@@ -243,9 +246,8 @@ class PDF:
     ):
         pdf_text = self.create_text(
             content, width, height, text_align, line_height, indent, list_text,
-            list_indent, list_style, self.get_context()
+            list_indent, list_style
         )
-
         return self.add_text(pdf_text, x, y, move)
 
     def _position_and_size(self, x=None, y=None, width=None, height=None):
@@ -268,9 +270,9 @@ class PDF:
         widths=None, style=None, borders=None, fills=None
     ):
         style_ = self._default_content_style()
-        style_.update(process_style(self.formats, style))
-        pdf_table = PDFTable(content, self.fonts, width, height, x, y,
-            widths, style_, borders, fills, self.get_context(), self.formats)
+        style_.update(process_style(style, self))
+        pdf_table = PDFTable(content, self.fonts, width, height, x, y, widths,
+            style_, borders, fills, self)
         pdf_table.run()
         return pdf_table
 
@@ -281,7 +283,6 @@ class PDF:
 
         if isinstance(content, PDFTable):
             pdf_table = content
-            pdf_table.context = self.get_context()
             pdf_table.setup(x, y, width, height)
             pdf_table.run()
         else:
@@ -316,11 +317,9 @@ class PDF:
     def _create_content(self, content, width=None, height=None, x=None, y=None):
         style = self._default_content_style()
         content = content.copy()
-        style.update(process_style(self.formats, content.get('style')))
+        style.update(process_style(content.get('style'), self))
         content['style'] = style
-        pdf_content = PDFContent(
-            content, width, height, x, y, self.get_context()
-        )
+        pdf_content = PDFContent(content, width, height, x, y, self)
         pdf_content.run()
         return pdf_content
 
@@ -331,7 +330,6 @@ class PDF:
 
         if isinstance(content, PDFContent):
             pdf_content = content
-            pdf_content.context = self.get_context()
             pdf_content.setup(x, y, width, height)
             pdf_content.run()
         else:

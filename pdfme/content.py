@@ -10,9 +10,7 @@ PARAGRAPH_PROPERTIES = ('text_align', 'line_height', 'indent',
     'list_text', 'list_style', 'list_indent')
 
 class PDFContent:
-    def __init__(self, content, fonts, width, height, x=0, y=0, context=None,
-        formats=None
-    ):
+    def __init__(self, content, fonts, width, height, x=0, y=0, pdf=None):
         if not isinstance(content, dict):
             raise Exception('content must be a dict')
 
@@ -22,8 +20,8 @@ class PDFContent:
         self.setup(x, y, width, height)
         self.fonts = fonts
         self.current_height = 0
-        self.context = context
-        self.formats = formats
+        self.pdf = pdf
+        self.interrupted = False
 
     def setup(self, x=None, y=None, width=None, height=None):
         if x is not None:
@@ -51,11 +49,7 @@ class PDFContent:
             else self.pdf_content.max_y - self.pdf_content.min_y
         if ret == 'continue':
             self.finished = True
-        return self.parts
-
-    @property
-    def parts(self):
-        return self.fills + self.lines + self.parts_
+        return self.interrupted
 
 class PDFContentPart:
     def __init__(self, content, pdf_content, min_x, width, min_y, max_y,
@@ -87,7 +81,7 @@ class PDFContentPart:
         self.style = {'margin_bottom': 5}
         inherited_style = {} if inherited_style is None else inherited_style
         self.style.update(inherited_style)
-        self.style.update(process_style(self.p.formats, content.get('style')))
+        self.style.update(process_style(content.get('style'), self.p.pdf))
 
         self.min_x = min_x
         self.min_y = min_y
@@ -141,6 +135,9 @@ class PDFContentPart:
         n = 0
         while n < len(self.delayed):
             ret = self.process(copy.deepcopy(self.delayed[n]), False)
+            if ret in ['break', 'finish']:
+                return ret
+
             if ret.get('delayed'):
                 self.delayed[n] = copy.deepcopy(ret['delayed'])
             else:
@@ -168,9 +165,8 @@ class PDFContentPart:
         while self.element_index <= len_elems:
             last = self.element_index == len_elems
             ret = self.process(self.elements[self.element_index], last=last)
-
-            if ret.get('break', False):
-                return 'break'
+            if ret in ['break', 'finish']:
+                return ret
 
             self.element_index += 1
             if ret.get('delayed'):
@@ -302,15 +298,15 @@ class PDFContentPart:
         """
 
         if self.column == self.cols_n - 1:
-            if self.resetting:
-                self.minim_forward = True
-                return 'break'
-            elif self.is_root:
+            if self.is_root:
                 self.section_element_index = self.element_index
                 self.section_delayed = copy.deepcopy(self.delayed)
                 if children_indexes is not None:
                     self.children_indexes = copy.deepcopy(children_indexes)
                 return 'finish'
+            elif self.resetting:
+                self.minim_forward = True
+                return 'break'
             else:
                 self.section_element_index = self.element_index
                 self.section_delayed = copy.deepcopy(self.delayed)
@@ -390,7 +386,7 @@ class PDFContentPart:
 
         style = {}
         style.update(self.style)
-        style.update(process_style(self.p.formats, element.get('style')))
+        style.update(process_style(element.get('style'), self.p.pdf))
 
         self.update_dimensions(style)
         content = {'x': self.x, 'y': self.y}
@@ -404,11 +400,14 @@ class PDFContentPart:
 
             key = paragraph_keys[0]
             pdf_text = PDFText(
-                {key: element[key], 'style': style.copy()}, self.p.fonts,
-                width=self.width, height=self.max_height,
-                context=self.p.context, **par_style
+                {key: element[key], 'style': style.copy()},
+                self.p.fonts, width=self.width, height=self.max_height,
+                pdf=self.p.pdf, **par_style
             )
-            pdf_text.run()
+            can_continue = pdf_text.run()
+            if not can_continue:
+                self.p.interrupted = True
+                return 'finish'
 
             content.update({'type': 'paragraph', 'content': pdf_text})
             self.p.parts_.append(content)
@@ -437,7 +436,6 @@ class PDFContentPart:
         elif 'table' in element:
             if 'delayed' in element:
                 pdf_table = element['delayed']
-                pdf_table.context.update(self.p.context)
                 pdf_table.setup(self.get_min_x(), self.y,
                     self.col_width, self.max_height)
             else:
@@ -447,10 +445,14 @@ class PDFContentPart:
                 }
                 pdf_table = PDFTable(
                     element['table'], self.col_width, self.max_height,
-                    self.get_min_x(), self.y, style=style, **table_props
+                    self.get_min_x(), self.y, style=style,
+                    pdf=self.p.pdf, **table_props
                 )
 
-            pdf_table.run()
+            can_continue = pdf_table.run()
+            if not can_continue:
+                self.p.interrupted = True
+                return 'finish'
 
             self.p.parts_.extend(pdf_table.parts_)
             self.p.lines.extend(pdf_table.lines)
@@ -486,14 +488,15 @@ class PDFContentPart:
                     pdf_content.delayed = copy.deepcopy(child['delayed'])
 
             action = pdf_content.run()
-            if action == 'break':
+
+            if action in ['finish', 'break']:
+                return action
+            else:
                 if pdf_content.cols_n == 1:
                     self.move_y(pdf_content.y - pdf_content.min_y)
                 else:
                     self.move_y(pdf_content.max_y - pdf_content.min_y)
                 self.starting = False
-            else:
-                ret['break'] = True
         return ret
 
 from .table import PDFTable
