@@ -410,7 +410,6 @@ class PDFTable:
                 else:
                     table_props = {v: element.get(v) for v in TABLE_PROPERTIES
                         if v in element}
-                    # TODO: pass style to table
                     pdf_table = PDFTable(
                         element['table'], width, height, x, y, style=style,
                         pdf=self.pdf, **table_props
