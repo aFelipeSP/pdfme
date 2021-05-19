@@ -54,7 +54,7 @@ class PDFTextLinePart:
         self.fonts = STANDARD_FONTS if fonts is None else fonts
 
         self.style = style
-        self.state = PDFState(fonts, style)
+        self.state = PDFState(style, fonts)
         self.underline = style.get('u', False)
         self.background = PDFColor(style.get('bg'))
         self.ids = [] if id is None else ids
@@ -162,12 +162,12 @@ class PDFTextLine:
                 self.fonts, self.max_width, self.text_align, self.line_height
             )
 
-        line_part = PDFTextLinePart(self.fonts, style, ids)
+        line_part = PDFTextLinePart(style, self.fonts, ids)
         self.next_line.line_parts.append(line_part)
         return line_part
 
     def add_word(self, word):
-        if len(self.line_parts) == 0:
+        if self.next_line is None:
             raise Exception(
                 'You have to add a line_part, using method "add_line_part" to '
                 'this line, before adding a word'
@@ -190,7 +190,7 @@ class PDFTextLine:
                     last_part.add_word(' ')
                     self.next_line.line_parts = [
                         PDFTextLinePart(
-                            self.fonts,last_part.style, last_part.ids
+                            last_part.style, self.fonts, last_part.ids
                         )
                     ]
                     return {'status': 'added'}
@@ -207,7 +207,11 @@ class PDFTextLine:
                     ):
                         self.line_parts[-1].pop_word(-1)
                     self.next_line.top_margin = self.bottom
-                    return {'status': 'finished', 'new_line': self.next_line}
+                    self.next_line.nex
+                    return {
+                        'status': 'finished', 'top_margin': self.bottom, 
+                        'parts': self.next_line
+                    }
 
 class PDFTextBase:
     def __init__(
@@ -230,7 +234,7 @@ class PDFTextBase:
         self.list_style = list_style
 
         if isinstance(content, str):
-            content = [{'s': TEXT_DEFAULTS.copy(), 't': content}]
+            content = [{'style': TEXT_DEFAULTS.copy(), 'text': content}]
         if not isinstance(content, (list, tuple)):
             raise TypeError(
                 'content must be of type str, list or tuple: {}'.format(content)
@@ -255,6 +259,22 @@ class PDFTextBase:
         stream += ' BT 1 0 0 1 {} {} Tm{} ET'.format(x, y, self.text)
         return stream
 
+    def move(self, x, y):
+        self.x = x
+        self.y = y
+
+    def setup(self, x=None, y=None, width=None, height=None):
+        if x is not None:
+            self.x = x
+        if y is not None:
+            self.y = y
+        if width is not None:
+            self.width = width
+        if height is not None:
+            self.height = height
+
+        self.max_y = self.min_y + self.height
+
     def init(self):
         self.started = False
         self.lines = []
@@ -278,7 +298,7 @@ class PDFTextBase:
         self.last_state = self.last_factor = self.last_fill = None
         self.last_color = self.last_stroke_width = None
 
-        self._y = 0
+        self.y_ = 0
 
     def run(self):
         self.init()
@@ -309,7 +329,7 @@ class PDFTextBase:
         return self.finished
 
     def add_part(self, part, part_index):
-        words = part.get('t')
+        words = part.get('text')
         if not isinstance(words, (str, list, tuple)):
             return 'continue'
 
@@ -329,11 +349,11 @@ class PDFTextBase:
         ))
 
         if isinstance(words, str):
-            self.content[self.current_index]['t'] = words = (
+            part['text'] = words = [
                 ' ' if w.isspace() else w
                 for w in re.split('( +)', words)
                 if w != ''
-            )
+            ]
         for word_index in range(self.last_word_index, len(words)):
             word = words[word_index]
             ans = self.current_line.add_word(word)
@@ -361,7 +381,7 @@ class PDFTextBase:
             self.used_fonts.update(self.current_line_used_fonts)
             self.current_line_used_fonts = set()
 
-            self.add_line_to_stream()
+            self.add_line_to_stream(self.current_line)
 
             return True
 
@@ -378,7 +398,7 @@ class PDFTextBase:
                             .format(self.list_style))
 
         style.update(self.list_style)
-        line_part = PDFTextLinePart(self.fonts, style)
+        line_part = PDFTextLinePart(style, self.fonts)
 
         self.current_line_used_fonts.add(
             (line_part.state.font_family, line_part.state.font_mode)
@@ -395,7 +415,7 @@ class PDFTextBase:
 
 
     def add_line_to_stream(self, line, is_last=False):
-        words_width, spaces_width = line.get_width()
+        words_width, spaces_width = line.get_widths()
         line_width = words_width + spaces_width
 
         x = self.list_indent if self.list_text else 0
@@ -449,10 +469,10 @@ class PDFTextBase:
             self.text += ' {} -{} Td'.format(round(adjusted_indent, 3),
                                         round(full_line_height, 3))
 
-        self._y -= full_line_height
+        self.y_ -= full_line_height
 
         for part in line.line_parts:
-            self.text += part.output_text(factor)
+            self.text += self.output_text(part, factor)
             part_width = part.current_width(factor)
             part_size = round(part.state.size, 3)
 
@@ -460,11 +480,11 @@ class PDFTextBase:
                 for id_ in part.ids:
                     self.ids.setdefault(id_, []).append([
                         round(x, 3),
-                        round(self._y + part.state.rise - part_size*0.25, 3),
+                        round(self.y_ + part.state.rise - part_size*0.25, 3),
                         round(x + part_width, 3), round(part_size, 3)
                     ])
 
-            part_graphics = part.output_graphics(part, x, self._y, part_width)
+            part_graphics = self.output_graphics(part, x, self.y_, part_width)
 
             self.graphics += part_graphics
             x += part_width
@@ -524,80 +544,26 @@ class PDFText(PDFTextBase):
         line_height=None, indent=None, list_text=None, list_indent=None,
         list_style=None, pdf=None
     ):
+        self.pdf = pdf
+        self.fonts = STANDARD_FONTS if fonts is None else fonts
+        self.content = []
+        self._recursive_content_parse(content, TEXT_DEFAULTS, [])
         super().__init__(
-            content, width, height, x, y, fonts, text_align, line_height,
+            self.content, width, height, x, y, fonts, text_align, line_height,
             indent, list_text, list_indent, list_style
         )
-        self.pdf = pdf
-        self.labels = {}
-        self.refs = {}
-        self.links = {}
-        self.footnotes = {}
 
-    def _new_text_part(self, style, label, ref, uri):
-        text_part = {'style': style, 'label': label, 'words': []}
-        self.elements.append(text_part)
+    def _new_text_part(self, style, ids, last_part=None):
+        if last_part is not None and last_part['text'] == '':
+            self.content.remove(last_part)
+        text_part = {'style': style, 'text': '', 'ids': ids}
+        self.content.append(text_part)
         return text_part
 
-    def _recursive_content_parse(self, content, parent_style):
+    def _recursive_content_parse(self, content, parent_style, ids):
         style = deepcopy(parent_style)
-        elements = []
-        for key, value in content.items():
-            if key.startswith('.'):
-                style.update(parse_style_str(key[1:], self.fonts))
-                if isinstance(value, str):
-                    value = [value]
-                if not isinstance(value, (list, tuple)):
-                    raise TypeError('value of .* attr must be of type str, list'
-                                    ' or tuple: {}'.format(value))
-                elements = value
-                break
+        ids = deepcopy(ids)
 
-        style.update(process_style(content.get('style'), self.pdf))
-        label = content.get('label', None)
-        ref = content.get('ref', None)
-        uri = content.get('uri', None)
-
-        consecutive_strings = True
-        text_part = self._new_text_part(style, label, ref, uri)
-
-        for element in elements:
-            if (
-                isinstance(element, dict) and len(element) == 1 and
-                list(element.keys())[0] == 'var' and self.root.pdf
-            ):
-                element = str(self.root.pdf.context.get(element['var'], ''))
-
-            # TODO: footnotes
-            # if (
-            #     isinstance(element, dict) and
-            #     'footnote' in element and self.root.pdf
-            # ):
-            #     element = str(self.root.pdf.context.get(element['var'], ''))
-
-            if isinstance(element, str) and element != '':
-                lines = element.split('\n')
-                if not consecutive_strings:
-                    text_part = self._new_text_part(style, label, ref, uri)
-                text_part['words'].extend(lines[0])
-                for line in lines[1:]:
-                    self.elements.append({'type': 'br'})
-                    text_part = self._new_text_part(style, label, ref, uri)
-                    text_part['words'].extend(line)
-            elif isinstance(element, dict):
-                text_part = PDFTextPart(element, self.root, self)
-                should_stop = text_part.run()
-                if should_stop:
-                    return True
-                self.add_new_line_part = True
-            else:
-                raise TypeError(
-                    'elements must be of type str or dict: {}'.format(element)
-                )
-        return False
-
-    def parse_content(self, content):
-        self.elements = []
         if isinstance(content, str):
             content = {'.': [content]}
         elif isinstance(content, (list, tuple)):
@@ -609,4 +575,62 @@ class PDFText(PDFTextBase):
                 .format(content)
             )
 
-        self._recursive_content_parse(content, TEXT_DEFAULTS)
+        if len(content) == 1 and 'var' in content and self.pdf:
+            content = {'.': [str(self.pdf.context.get(content['var'], ''))]} 
+
+        elements = []
+        for key, value in content.items():
+            if key.startswith('.'):
+                style.update(parse_style_str(key[1:], self.fonts))
+                if isinstance(value, str):
+                    value = [value]
+                if not isinstance(value, (list, tuple)):
+                    raise TypeError(
+                        'value of . attr must be of type str, list or tuple: {}'
+                        .format(value)
+                    )
+                elements = value
+                break
+
+        style.update(process_style(content.get('style'), self.pdf))
+
+        text_part = self._new_text_part(style, ids)
+
+        label = content.get('label', None)
+        if label is not None:
+            text_part['ids'].append['$label:' + label]
+        ref = content.get('ref', None)
+        if ref is not None:
+            text_part['ids'].append['$ref:' + ref]
+        uri = content.get('uri', None)
+        if uri is not None:
+            text_part['ids'].append['$uri:' + uri]
+
+        is_last_string = False
+
+        for element in elements:
+            if isinstance(element, str) and element != '':
+                lines = element.split('\n')
+                if not is_last_string:
+                    text_part = self._new_text_part(
+                        style, text_part['ids'], text_part
+                    )
+                text_part['text'] += lines[0]
+                for line in lines[1:]:
+                    self.elements.append({'type': 'br'})
+                    text_part = self._new_text_part(style, label, ref, uri)
+                    text_part['text'] += line
+                is_last_string = True
+            elif isinstance(element, dict):
+                self._recursive_content_parse(element, style, text_part['ids'])
+                is_last_string = False
+            else:
+                raise TypeError(
+                    'elements must be of type str or dict: {}'.format(element)
+                )
+
+        if text_part is not None and text_part['text'] == '':
+            self.content.remove(text_part)
+
+        return False
+

@@ -163,7 +163,7 @@ class PDFColor:
     def __eq__(self, color):
         if color is None: return self.color is None
         if not isinstance(color, PDFColor):
-            raise TypeError("Can't compare PDFColor with {}".format(type(color)))
+            return False
         return self.color == color.color and self.stroke == color.stroke
 
     def __neq__(self, color):

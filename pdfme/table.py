@@ -441,7 +441,6 @@ class PDFTable:
 
         self.current_height += self.max_height
 
-        # TODO: logic to finish when inner elements say it has to finish
         return not self.is_delayed
 
 from .content import PDFContent

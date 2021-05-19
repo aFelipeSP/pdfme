@@ -66,3 +66,42 @@ def build_pdf(document, buffer, context=None):
         pdf.content(section)
 
     pdf.output(buffer)
+
+
+    def reset_added_footnotes(self):
+        self.added_footnotes = set()
+
+    def add_footnote(self, id_, content):
+        if id_ in self.footnotes_ids:
+            self.added_footnotes.add(id_)
+            return False
+        else:
+            # add line before
+            self.footnotes_height = 0
+            self.footnotes_ids.add(id_)
+            self.footnotes.append({'id': id_, 'content': content})
+            for footnote in self.footnotes:
+                content = deepcopy(footnote['content'])
+                content.setdefault('style', {}).setdefault('s', 10)
+                pdf_text = self.pdf.create_text(footnote['content'],
+                    self.content_width, self.content_height,
+                    list_text=footnote['id'], list_indent=15,
+                    list_style={'r':0.5, 's': 6}
+                )
+                self.footnotes_height += pdf_text.current_height # add margin_bottom
+        
+            return True
+
+    def end_page(self):
+        self._y = self.margin_bottom + self.footnotes_height
+        for footnote in self.footnotes:
+            if footnote['id'] not in self.added_footnotes:
+                continue
+
+            content = deepcopy(footnote['content'])
+            content.setdefault('style', {}).setdefault('s', 10)
+            pdf_text = self.pdf.text(footnote['content'],
+                self.content_width, self.content_height,
+                list_text=footnote['id'], list_indent=15,
+                list_style={'r':0.5, 's': 6}
+            )

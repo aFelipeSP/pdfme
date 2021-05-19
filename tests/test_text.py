@@ -5,19 +5,22 @@ from .utils import gen_rich_text
 from pdfme import PDF
 
 def page_rect(pdf):
-    rect = '0.9 0.9 0.9 rg {} {} {} {} re F'.format(pdf.margin['left'], pdf.margin['bottom'], pdf.width,pdf.height)
-    pdf.stream(rect)
+    rect = 'q 0.9 0.9 0.9 rg {} {} {} {} re F Q'.format(
+        pdf.margin['left'], pdf.margin['bottom'], pdf.width, pdf.height
+    )
+    pdf.page.add(rect)
     return rect
 
 def output(pdf, name):
     with open(name, 'wb') as f:
         pdf.output(f)
 
-def add_remaining(pdf, ret, rect=None, text_options={}):
-    while not ret is None:
+def add_remaining(pdf, pdf_text, rect=None):
+    while not pdf_text.finished:
         pdf.add_page()
-        if rect is not None: pdf.stream(rect)
-        ret = pdf.text(ret, **text_options)
+        if rect is not None:
+            pdf.stream(rect)
+        pdf_text.run()
 
 def base(text_options={}, name='test', words=5000):
     input_file = Path(name + '.json')
@@ -29,9 +32,11 @@ def base(text_options={}, name='test', words=5000):
         with input_file.open('w') as f:
             json.dump(content, f, ensure_ascii=False)
     pdf = PDF()
+    pdf.add_page()
     rect = page_rect(pdf)
-    ret = pdf.text(content, **text_options)
-    add_remaining(pdf, ret, rect, text_options)
+    pdf_text = pdf.text(content, **text_options)
+    pdf_text.run()
+    add_remaining(pdf, pdf_text, rect)
     output(pdf, name + '.pdf')
 
 def test_text_indent():
