@@ -116,7 +116,8 @@ class PDFTextLine:
 
         self.top_margin = top_margin
         self.next_line = None
-        self.is_last_word_space = False
+        self.is_last_word_space = True
+        self.firstWordAdded = False
         self.started = False
 
     @property
@@ -166,7 +167,15 @@ class PDFTextLine:
         self.next_line.line_parts.append(line_part)
         return line_part
 
-    def add_word(self, word):
+    def add_accumulated(self):
+        self.line_parts.extend(self.next_line.line_parts)
+        last_part = self.line_parts[-1]
+        last_part.add_word(' ')
+        self.next_line.line_parts = [
+            PDFTextLinePart(last_part.style, self.fonts, last_part.ids)
+        ]
+
+    def add_word(self, word, new_width):
         if self.next_line is None:
             raise Exception(
                 'You have to add a line_part, using method "add_line_part" to '
@@ -175,9 +184,14 @@ class PDFTextLine:
 
         if not self.started:
             if word.isspace():
-                return {'status': 'ignored'}
+                if self.firstWordAdded:
+                    self.started = True
+                    self.add_accumulated()
+                    return {'status': 'added'}
+                else:
+                    return {'status': 'ignored'}
             else:
-                self.started = True
+                self.firstWordAdded = True
                 self.next_line.line_parts[-1].add_word(word)
                 return {'status': 'added'}
         else:
@@ -185,19 +199,11 @@ class PDFTextLine:
                 if self.is_last_word_space:
                     return {'status': 'ignored'}
                 else:
-                    self.line_parts.extend(self.next_line.line_parts)
-                    last_part = self.line_parts[-1]
-                    last_part.add_word(' ')
-                    self.next_line.line_parts = [
-                        PDFTextLinePart(
-                            last_part.style, self.fonts, last_part.ids
-                        )
-                    ]
+                    self.add_accumulated()
                     return {'status': 'added'}
             else:
+                self.is_last_word_space = False
                 self.next_line.line_parts[-1].add_word(word)
-                if len(self.line_parts) == 0:
-                    return {'status': 'added'}
                 if (self.min_width + self.next_line.min_width < self.max_width):
                     return {'status': 'preadded'}
                 else:
@@ -206,17 +212,22 @@ class PDFTextLine:
                         self.line_parts[-1].words[-1] == ' '
                     ):
                         self.line_parts[-1].pop_word(-1)
+                    self.next_line.firstWordAdded = True
                     self.next_line.top_margin = self.bottom
-                    self.next_line.nex
+                    self.next_line.next_line = PDFTextLine(
+                        self.fonts, new_width, self.text_align, self.line_height
+                    )
+                    line_parts = self.next_line.line_parts
+                    self.next_line.next_line.line_parts = line_parts
+                    self.next_line.line_parts = []
                     return {
-                        'status': 'finished', 'top_margin': self.bottom, 
-                        'parts': self.next_line
+                        'status': 'finished', 'new_line': self.next_line  
                     }
 
 class PDFTextBase:
     def __init__(
         self, content, width, height, x=0, y=0, fonts=None, text_align=None,
-        line_height=None, indent=None, list_text=None, list_indent=None,
+        line_height=None, indent=0, list_text=None, list_indent=0,
         list_style=None
     ):
         self.fonts = STANDARD_FONTS if fonts is None else fonts
@@ -226,7 +237,7 @@ class PDFTextBase:
         self.height = max(0, default(height, PARAGRAPH_DEFAULTS['height']))
         self.x = x
         self.y = y
-        self.indent = default(indent, PARAGRAPH_DEFAULTS['indent'])
+        self.indent = indent
         self.text_align = default(text_align, PARAGRAPH_DEFAULTS['text_align'])
         self.line_height = default(line_height, PARAGRAPH_DEFAULTS['line_height'])
         self.list_text = list_text
@@ -252,7 +263,7 @@ class PDFTextBase:
     @property
     def stream(self):
         stream = ''
-        x, y= round(self.x, 3), round(self.y, 3)
+        x, y = round(self.x, 3), round(self.y, 3)
         if self.graphics != '':
             stream += ' q 1 0 0 1 {} {} cm{} Q'.format(x, y, self.graphics)
 
@@ -273,8 +284,6 @@ class PDFTextBase:
         if height is not None:
             self.height = height
 
-        self.max_y = self.min_y + self.height
-
     def init(self):
         self.started = False
         self.lines = []
@@ -286,7 +295,7 @@ class PDFTextBase:
         self.current_line_used_fonts = set()
         self.lines = []
 
-        line_width = self.width
+        line_width = self.width - self.list_indent
         if self.is_first_line:
             line_width -= self.indent
 
@@ -356,7 +365,7 @@ class PDFTextBase:
             ]
         for word_index in range(self.last_word_index, len(words)):
             word = words[word_index]
-            ans = self.current_line.add_word(word)
+            ans = self.current_line.add_word(word, self.width-self.list_indent)
             if ans['status'] == 'added':
                 self.last_part_index = part_index + 1
                 self.last_word_index = 0
@@ -386,7 +395,7 @@ class PDFTextBase:
             return True
 
     def setup_list(self):
-        style = self.current_line.line_parts[0].style.copy()
+        style = self.current_line.next_line.line_parts[0].style.copy()
 
         if self.list_style is None:
             self.list_style = {}
@@ -394,8 +403,10 @@ class PDFTextBase:
             self.list_style = parse_style_str(self.list_style, self.fonts)
 
         if not isinstance(self.list_style, dict):
-            raise TypeError('list_style must be a str or a dict. Value: {}'
-                            .format(self.list_style))
+            raise TypeError(
+                'list_style must be a str or a dict. Value: {}'
+                .format(self.list_style)
+            )
 
         style.update(self.list_style)
         line_part = PDFTextLinePart(style, self.fonts)
@@ -407,27 +418,24 @@ class PDFTextBase:
         if self.list_indent is None:
             self.list_indent = line_part.get_word_width(self.list_text)
         elif not isinstance(self.list_indent, (float, int)):
-            raise TypeError('list_indent must be int or float. Value: {}'
-                            .format(self.list_style))
+            raise TypeError(
+                'list_indent must be int or float. Value: {}'
+                .format(self.list_style)
+            )
 
         self.list_state = line_part.state
-        self.current_line.max_width -= self.list_indent
-
 
     def add_line_to_stream(self, line, is_last=False):
         words_width, spaces_width = line.get_widths()
-        line_width = words_width + spaces_width
-
         x = self.list_indent if self.list_text else 0
         line_height = line.height
         full_line_height = line_height
         ignore_factor = self.text_align != 'j' or is_last or spaces_width == 0
+        factor_width = self.width - self.list_indent - words_width
         if not self.started:
             self.started = True
-            factor = 1 if ignore_factor else\
-                (self.width - self.indent - words_width) / spaces_width
-
             if self.is_first_line:
+                factor_width -= self.indent
                 self.is_first_line = False
                 if self.list_text:
                     if self.list_state.size > full_line_height:
@@ -448,12 +456,9 @@ class PDFTextBase:
                     round(first_indent, 3), round(full_line_height, 3)
                 )
         else:
-            factor = 1 if ignore_factor else\
-                (self.width - words_width) / spaces_width
-
             adjusted_indent = 0
             if self.text_align in ['r', 'c']:
-                indent = self.width - line_width
+                indent = self.width - words_width - spaces_width
                 if self.text_align == 'c':
                     indent /= 2
                 x += indent
@@ -470,6 +475,8 @@ class PDFTextBase:
                                         round(full_line_height, 3))
 
         self.y_ -= full_line_height
+
+        factor = 1 if ignore_factor else factor_width / spaces_width
 
         for part in line.line_parts:
             self.text += self.output_text(part, factor)
@@ -541,7 +548,7 @@ class PDFTextBase:
 class PDFText(PDFTextBase):
     def __init__(
         self, content, width, height, x=0, y=0, fonts=None, text_align=None,
-        line_height=None, indent=None, list_text=None, list_indent=None,
+        line_height=None, indent=0, list_text=None, list_indent=0,
         list_style=None, pdf=None
     ):
         self.pdf = pdf
@@ -598,13 +605,13 @@ class PDFText(PDFTextBase):
 
         label = content.get('label', None)
         if label is not None:
-            text_part['ids'].append['$label:' + label]
+            text_part['ids'].append('$label:' + label)
         ref = content.get('ref', None)
         if ref is not None:
-            text_part['ids'].append['$ref:' + ref]
+            text_part['ids'].append('$ref:' + ref)
         uri = content.get('uri', None)
         if uri is not None:
-            text_part['ids'].append['$uri:' + uri]
+            text_part['ids'].append('$uri:' + uri)
 
         is_last_string = False
 

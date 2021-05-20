@@ -78,7 +78,7 @@ class PDF:
         else:
             page_height, page_width = self.page_height, self.page_width
 
-        if (portrait is None and not self.portrait) or not portrait:
+        if (portrait is None and not self.portrait) or portrait == False:
             page_height, page_width = page_width, page_height  
 
         margin_ = copy.deepcopy(self.margin)
@@ -96,7 +96,7 @@ class PDF:
             self._content(**running_section)
 
     def add_running_section(
-        self, name, content, width=None, height=None, x=None, y=None
+        self, content, width=None, height=None, x=None, y=None
     ):
         self.running_sections.append(dict(
             content=content, width=width, height=height, x=x, y=y
@@ -202,14 +202,14 @@ class PDF:
             width = self.page.width - self.page.margin_right - self.page.x
         if height is None:
             height = self.page.height - self.page.margin_bottom - self.page.y
-        return x, y, width, height
+        return self.page.x, self.page._y, width, height
 
     def get_page_number(self):
         page = self.page_index + 1 + self.page_numbering_offset
         return to_roman(page) if self.page_numbering_style == 'roman' else page
 
     def _create_text(self, content, width, height, text_align=None,
-        line_height=None, indent=0, list_text=None, list_indent=None,
+        line_height=None, indent=0, list_text=None, list_indent=0,
         list_style = None
     ):
         par_style = self._default_paragraph_style(
@@ -265,7 +265,7 @@ class PDF:
                     self.uris[link] = uri.id
 
                 for r in rects:
-                    self.page.add_reference(
+                    self.page.add_link(
                         id_[5:],
                         [
                             round(self.page.x + r[0], 3),
@@ -283,7 +283,7 @@ class PDF:
 
     def _text(
         self, content, x=None, y=None, width=None, height=None, text_align=None,
-        line_height=None, indent=0, list_text=None, list_indent=None,
+        line_height=None, indent=0, list_text=None, list_indent=0,
         list_style = None, move='bottom'
     ):
         x, y, width, height = self._position_and_size(x, y, width, height)
@@ -296,12 +296,13 @@ class PDF:
                 content, width, height, text_align, line_height, indent,
                 list_text, list_indent, list_style
             )
+            pdf_text.move(x, y)
 
         return self._add_text(pdf_text, move)
 
     def text(
         self, content, text_align=None, line_height=None, indent=0,
-        list_text=None, list_indent=None, list_style=None
+        list_text=None, list_indent=0, list_style=None
     ):
         pdf_text = self._text(
             content, x=self.page.margin_left, width=self.page.content_width,
@@ -427,8 +428,8 @@ class PDF:
         count = 0
         for page in page_list:
             if first_level:
-                page = page.page
                 page_size = [page.width, page.height]
+                page = page.page
                 page['MediaBox'] = [0, 0] + page_size
 
             if count % 6 == 0:

@@ -15,13 +15,6 @@ def output(pdf, name):
     with open(name, 'wb') as f:
         pdf.output(f)
 
-def add_remaining(pdf, pdf_text, rect=None):
-    while not pdf_text.finished:
-        pdf.add_page()
-        if rect is not None:
-            pdf.stream(rect)
-        pdf_text.run()
-
 def base(text_options={}, name='test', words=5000):
     input_file = Path(name + '.json')
     if input_file.exists():
@@ -33,10 +26,8 @@ def base(text_options={}, name='test', words=5000):
             json.dump(content, f, ensure_ascii=False)
     pdf = PDF()
     pdf.add_page()
-    rect = page_rect(pdf)
-    pdf_text = pdf.text(content, **text_options)
-    pdf_text.run()
-    add_remaining(pdf, pdf_text, rect)
+    page_rect(pdf)
+    pdf.text(content, **text_options)
     output(pdf, name + '.pdf')
 
 def test_text_indent():
@@ -70,11 +61,10 @@ def test_text_list_style_indent():
 
 def test_text_ref_label():
     pdf = PDF()
-    rect = page_rect(pdf)
+    pdf.add_page()
+    page_rect(pdf)
     pdf.text({'ref': 'asdf', '.': 'asd fa sdf asdf asdfa sdfa'})
-    ret = pdf.text(gen_rich_text(1000))
-    add_remaining(pdf, ret, rect)
+    pdf.text(gen_rich_text(1000))
     pdf.text({'label': 'asdf', '.': 'ertyer sdfgsd'})
-    ret = pdf.text(gen_rich_text(1000))
-    add_remaining(pdf, ret, rect)
+    pdf.text(gen_rich_text(1000))
     output(pdf, 'test_text_ref_label.pdf')

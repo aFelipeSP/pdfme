@@ -51,10 +51,10 @@ class PDFPage:
         self.page['Annots'].append(_obj)
 
     def add_link(self, uri_id, rect):
-        self.add_annot(rect, {'A': uri_id})
+        self.add_annot({'A': uri_id}, rect)
 
     def add_reference(self, dest, rect):
-        self.add_annot(rect, {'Dest': dest})
+        self.add_annot({'Dest': dest}, rect)
 
     def add_image(self, image_obj, width, height):
         self.page['Resources'].setdefault('XObject', {})
