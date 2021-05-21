@@ -155,10 +155,9 @@ class PDFColor:
     def __init__(self, color, stroke=False):
         if isinstance(color, PDFColor):
             self.color = color.color
-            self.stroke = color.stroke
         else:
             self.color = parse_color(color)
-            self.stroke = stroke
+        self.stroke = stroke
 
     def __eq__(self, color):
         if color is None: return self.color is None

@@ -209,7 +209,7 @@ class PDF:
         return to_roman(page) if self.page_numbering_style == 'roman' else page
 
     def _create_text(self, content, width, height, text_align=None,
-        line_height=None, indent=0, list_text=None, list_indent=0,
+        line_height=None, indent=0, list_text=None, list_indent=None,
         list_style = None
     ):
         par_style = self._default_paragraph_style(
@@ -243,7 +243,7 @@ class PDF:
                 d = rects[0]
                 x_ref = x + d[0]
                 self.dests[id_[7:]] = [
-                    page_id, b'/XYZ', round(x_ref, 3), round(y + d[1], 3),
+                    page_id, b'/XYZ', round(x_ref, 3), round(y + d[3], 3),
                     round(x_ref/self.page.width, 3) + 1
                 ]
             elif id_.startswith('$ref:'):
@@ -251,9 +251,8 @@ class PDF:
                     self.page.add_reference(
                         id_[5:],
                         [
-                            round(self.page.x + r[0], 3),
-                            round(self.page.y + r[1], 3),
-                            r[2], r[3]
+                            round(x + r[0], 3), round(y + r[1], 3),
+                            round(x + r[2], 3), round(y + r[3], 3)
                         ]
                     )
             elif id_.startswith('$uri:'):
@@ -268,9 +267,8 @@ class PDF:
                     self.page.add_link(
                         id_[5:],
                         [
-                            round(self.page.x + r[0], 3),
-                            round(self.page.y + r[1], 3),
-                            r[2], r[3]
+                            round(x + r[0], 3), round(y + r[1], 3),
+                            round(x + r[2], 3), round(y + r[3], 3)
                         ]
                     )
 
@@ -283,7 +281,7 @@ class PDF:
 
     def _text(
         self, content, x=None, y=None, width=None, height=None, text_align=None,
-        line_height=None, indent=0, list_text=None, list_indent=0,
+        line_height=None, indent=0, list_text=None, list_indent=None,
         list_style = None, move='bottom'
     ):
         x, y, width, height = self._position_and_size(x, y, width, height)
@@ -302,7 +300,7 @@ class PDF:
 
     def text(
         self, content, text_align=None, line_height=None, indent=0,
-        list_text=None, list_indent=0, list_style=None
+        list_text=None, list_indent=None, list_style=None
     ):
         pdf_text = self._text(
             content, x=self.page.margin_left, width=self.page.content_width,

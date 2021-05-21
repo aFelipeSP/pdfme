@@ -6,7 +6,7 @@ from pdfme import PDF
 
 def page_rect(pdf):
     rect = 'q 0.9 0.9 0.9 rg {} {} {} {} re F Q'.format(
-        pdf.margin['left'], pdf.margin['bottom'], pdf.width, pdf.height
+        pdf.margin['left'], pdf.margin['bottom'], pdf.page.content_width, pdf.page.content_height
     )
     pdf.page.add(rect)
     return rect
@@ -56,8 +56,13 @@ def test_text_list_style():
         'test_text_list_style', 500)
 
 def test_text_list_style_indent():
-    base({'list_text': chr(183) + ' ', 'list_style': {'f': 'Symbol'}, 'list_indent': 40}, 
-        'test_text_list_style_indent', 500)
+    base(
+        {
+            'list_text': chr(183) + ' ', 'list_style': {'f': 'Symbol'},
+            'list_indent': 40, 'indent': 20
+        },
+        'test_text_list_style_indent', 500
+    )
 
 def test_text_ref_label():
     pdf = PDF()
