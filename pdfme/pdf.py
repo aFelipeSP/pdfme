@@ -265,7 +265,7 @@ class PDF:
 
                 for r in rects:
                     self.page.add_link(
-                        id_[5:],
+                        self.uris[link],
                         [
                             round(x + r[0], 3), round(y + r[1], 3),
                             round(x + r[2], 3), round(y + r[3], 3)

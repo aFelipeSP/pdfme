@@ -5,15 +5,28 @@ from .utils import gen_rich_text
 from pdfme import PDF
 
 def page_rect(pdf):
-    rect = 'q 0.9 0.9 0.9 rg {} {} {} {} re F Q'.format(
-        pdf.margin['left'], pdf.margin['bottom'], pdf.page.content_width, pdf.page.content_height
-    )
-    pdf.page.add(rect)
-    return rect
+    pdf.page.add('q 0.9 0.9 0.9 rg {} {} {} {} re F Q'.format(
+        pdf.margin['left'], pdf.margin['bottom'],
+        pdf.page.content_width, pdf.page.content_height
+    ))
 
 def output(pdf, name):
     with open(name, 'wb') as f:
         pdf.output(f)
+
+def add_content(content, text_options, name):
+    pdf = PDF()
+    pdf.add_page()
+    pdf_text = pdf._text(
+        content, x=pdf.page.margin_left, width=pdf.page.content_width,
+        **text_options
+    )
+    while not pdf_text.finished:
+        pdf.add_page()
+        page_rect(pdf)
+        pdf_text = pdf._text(pdf_text)
+    output(pdf, name + '.pdf')
+
 
 def base(text_options={}, name='test', words=5000):
     input_file = Path(name + '.json')
@@ -24,11 +37,7 @@ def base(text_options={}, name='test', words=5000):
         content = gen_rich_text(words)
         with input_file.open('w') as f:
             json.dump(content, f, ensure_ascii=False)
-    pdf = PDF()
-    pdf.add_page()
-    page_rect(pdf)
-    pdf.text(content, **text_options)
-    output(pdf, name + '.pdf')
+    add_content(content, text_options, name)
 
 def test_text_indent():
     base({'indent': 20, 'text_align': 'j'}, 'test_text_indent')
@@ -64,12 +73,29 @@ def test_text_list_style_indent():
         'test_text_list_style_indent', 500
     )
 
+def get_content_list(content):
+    for key, val in content.items():
+        if key.startswith('.'):
+            return val
+
+def append_text(content, new):
+    for key, val in content.items():
+        if key.startswith('.'):
+            val.extend(new)
+            break
+
 def test_text_ref_label():
-    pdf = PDF()
-    pdf.add_page()
-    page_rect(pdf)
-    pdf.text({'ref': 'asdf', '.': 'asd fa sdf asdf asdfa sdfa'})
-    pdf.text(gen_rich_text(1000))
-    pdf.text({'label': 'asdf', '.': 'ertyer sdfgsd'})
-    pdf.text(gen_rich_text(1000))
-    output(pdf, 'test_text_ref_label.pdf')
+    content = gen_rich_text(1)
+    append_text(content, [{'ref': 'asdf', '.': 'asd fa sdf asdf asdfa sdfa'}])
+    append_text(content, get_content_list(gen_rich_text(500)))
+    append_text(content, [{'label': 'asdf', '.': 'ertyer sdfgsd'}])
+    append_text(content, get_content_list(gen_rich_text(1000)))
+    add_content(content, {}, 'test_text_ref_label')
+
+def test_text_link():
+    content = gen_rich_text(500)
+    append_text(content, [{'uri': 'www.google.com', '.': 'its me google '*10}])
+    append_text(content, get_content_list(gen_rich_text(1000)))
+    append_text(content, [{'uri': 'www.google.com', '.': 'its me google '*10}])
+    append_text(content, get_content_list(gen_rich_text(500)))
+    add_content(content, {}, 'test_text_link')
