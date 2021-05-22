@@ -11,7 +11,6 @@ PARAGRAPH_PROPERTIES = ('text_align', 'line_height', 'indent', 'list_text',
 
 TABLE_PROPERTIES = ('widths', 'borders', 'fills')
 
-
 class PDFTable:
     def __init__(self, content, fonts, width, height, x=0, y=0, widths=None,
         style=None, borders=None, fills=None, pdf=None
@@ -111,7 +110,7 @@ class PDFTable:
                 continue
             border, data, vert = ans
             border_l = self.borders_v if vert else self.borders_h
-            self.decoration_second_step(self, data, vert, 
+            self.decoration_second_step(self, data, vert,
                 h_count - 1 if vert else h_count,
                 v_count if vert else v_count - 1
             )
@@ -163,7 +162,7 @@ class PDFTable:
         if not self.top_lines_interrupted:
             self.top_lines[-1]['x2'] = self.x_abs + horiz_correction
 
-        if border_top['width'] > 0:   
+        if border_top['width'] > 0:
             x2 = self.x_abs + self.widths[col] * self.width
             if (not self.top_lines_interrupted
                 and self.top_lines[-1]['width'] == border_top['width']
@@ -196,13 +195,14 @@ class PDFTable:
         ret = self.add_row(self.delayed)
         return ret
 
-    def run(self):
+    def run(self, x=None, y=None, width=None, height=None):
+        self.setup(x, y, width, height)
         self.parts_ = []
         self.lines = []
         self.fills = []
         col_count = len(self.content[0])
         self.rowspan = [None] * col_count
-        self.vert_lines = [{'list': [], 'interrupted': True} 
+        self.vert_lines = [{'list': [], 'interrupted': True}
             for i in range(col_count + 1)]
         self.current_height = 0
 
@@ -218,7 +218,7 @@ class PDFTable:
             self.current_row += 1
             if not can_continue:
                 break
-        
+
         self.top_lines = []
         self.top_lines_interrupted = True
         self.y_abs = self.y + self.current_height
@@ -318,7 +318,7 @@ class PDFTable:
                 cell_style['cell_margin_right']
             height = self.row_max_height - padd_y_top - padd_y_bottom
 
-            fill_color = cell_style.get('cell_fill', 
+            fill_color = cell_style.get('cell_fill',
                 self.fills_defs[(self.current_row, col)]
                 if (self.current_row, col) in self.fills_defs
                 else None

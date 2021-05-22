@@ -4,9 +4,7 @@ from .color import PDFColor
 from .utils import parse_style_str, default, process_style
 from .standard_fonts import STANDARD_FONTS
 
-PARAGRAPH_DEFAULTS = {'height': 200, 'width': 200, 'text_align': 'l',
-                      'line_height': 1.1, 'indent': 0}
-
+PARAGRAPH_DEFAULTS = {'text_align': 'l', 'line_height': 1.1, 'indent': 0}
 TEXT_DEFAULTS = {'f': 'Helvetica', 'c': 0.1, 's': 11, 'r': 0, 'bg': None}
 
 
@@ -218,7 +216,7 @@ class PDFTextLine:
                     self.next_line.next_line.line_parts = line_parts
                     self.next_line.line_parts = []
                     return {
-                        'status': 'finished', 'new_line': self.next_line  
+                        'status': 'finished', 'new_line': self.next_line
                     }
 
 class PDFTextBase:
@@ -228,12 +226,8 @@ class PDFTextBase:
         list_style=None
     ):
         self.fonts = STANDARD_FONTS if fonts is None else fonts
+        self.setup(x, y, width, height)
         self.used_fonts = set([])
-
-        self.width = default(width, PARAGRAPH_DEFAULTS['width'])
-        self.height = max(0, default(height, PARAGRAPH_DEFAULTS['height']))
-        self.x = x
-        self.y = y
         self.indent = indent
         self.text_align = default(text_align, PARAGRAPH_DEFAULTS['text_align'])
         self.line_height = default(
@@ -311,7 +305,8 @@ class PDFTextBase:
 
         self.y_ = 0
 
-    def run(self):
+    def run(self, x=None, y=None, width=None, height=None):
+        self.setup(x, y, width, height)
         self.init()
         for part_index in range(self.last_part, len(self.content)):
             part = self.content[part_index]
@@ -625,7 +620,7 @@ class PDFText(PDFTextBase):
             )
 
         if len(content) == 1 and 'var' in content and self.pdf:
-            content = {'.': [str(self.pdf.context.get(content['var'], ''))]} 
+            content = {'.': [str(self.pdf.context.get(content['var'], ''))]}
 
         elements = []
         for key, value in content.items():

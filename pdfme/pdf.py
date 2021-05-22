@@ -12,7 +12,8 @@ from .content import PDFContent
 from .table import PDFTable
 
 class PDF:
-    def __init__(self, page_size='a4', portrait=True, margin=56.693,
+    def __init__(
+        self, page_size='a4', portrait=True, margin=56.693,
         page_numbering_offset=0, page_numbering_style='arabic',
         font_family='Helvetica', font_size=11, font_color=0.1,
         text_align='l', line_height=1.1
@@ -59,7 +60,7 @@ class PDF:
     @property
     def width(self):
         return self.page.width
-    
+
     @property
     def height(self):
         return self.page.height
@@ -79,7 +80,7 @@ class PDF:
             page_height, page_width = self.page_height, self.page_width
 
         if (portrait is None and not self.portrait) or portrait == False:
-            page_height, page_width = page_width, page_height  
+            page_height, page_width = page_width, page_height
 
         margin_ = copy.deepcopy(self.margin)
         if margin is not None:
@@ -138,7 +139,7 @@ class PDF:
 
     def add_font(self, font_family, font_files):
         raise NotImplementedError()
-       
+
     def _font_or_default(self, font_family, mode):
         return self.fonts[font_family]['n'] \
             if mode not in self.fonts[font_family] \
@@ -165,8 +166,9 @@ class PDF:
 
         self.page.add_font(font['ref'], font_obj.id)
 
-    def _default_paragraph_style(self, width=None, height=None, text_align=None,
-        line_height=None, indent=0
+    def _default_paragraph_style(
+        self, width=None, height=None, text_align=None, line_height=None,
+        indent=0
     ):
         return dict(
             width = self.page.width - self.page.margin_right - self.page.x \
@@ -208,9 +210,9 @@ class PDF:
         page = self.page_index + 1 + self.page_numbering_offset
         return to_roman(page) if self.page_numbering_style == 'roman' else page
 
-    def _create_text(self, content, width, height, text_align=None,
-        line_height=None, indent=0, list_text=None, list_indent=None,
-        list_style = None
+    def _create_text(
+        self, content, width, height, text_align=None, line_height=None,
+        indent=0, list_text=None, list_indent=None, list_style = None
     ):
         par_style = self._default_paragraph_style(
             width, height, text_align, line_height, indent
@@ -287,8 +289,7 @@ class PDF:
         x, y, width, height = self._position_and_size(x, y, width, height)
         if isinstance(content, PDFText):
             pdf_text = content
-            pdf_text.setup(x, y, width, height)
-            pdf_text.run()
+            pdf_text.run(x, y, width, height)
         else:
             pdf_text = self._create_text(
                 content, width, height, text_align, line_height, indent,
@@ -309,7 +310,10 @@ class PDF:
         )
         while not pdf_text.finished:
             self.add_page()
-            pdf_text = self._text(pdf_text)
+            pdf_text = self._text(pdf_text, self.page.content_width,
+                self.page.content_height, self.page.margin_left,
+                self.page.margin_top
+            )
 
     def _default_content_style(self):
         return dict(
@@ -336,8 +340,7 @@ class PDF:
 
         if isinstance(content, PDFTable):
             pdf_table = content
-            pdf_table.setup(x, y, width, height)
-            pdf_table.run()
+            pdf_table.run(x, y, width, height)
         else:
             pdf_table = self._create_table(content, width, height, x, y,
                 widths, style, borders, fills
@@ -383,8 +386,7 @@ class PDF:
 
         if isinstance(content, PDFContent):
             pdf_content = content
-            pdf_content.setup(x, y, width, height)
-            pdf_content.run()
+            pdf_content.run(x, y, width, height)
         else:
             pdf_content = self._create_content(content, width, height, x, y)
 

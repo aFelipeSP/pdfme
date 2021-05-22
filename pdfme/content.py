@@ -1,7 +1,8 @@
 import copy
+from pdfme.table import PDFTable
 
 from .utils import process_style
-from .text import PDFText
+from .text import PDFText, PDFTextBase
 from .image import PDFImage
 
 
@@ -35,7 +36,8 @@ class PDFContent:
 
         self.max_y = self.min_y + self.height
 
-    def run(self):
+    def run(self, x=None, y=None, width=None, height=None):
+        self.setup(x, y, width, height)
         self.fills = []
         self.lines = []
         self.parts_ = []
@@ -90,7 +92,6 @@ class PDFContentPart:
         self.full_width = width
         self.max_y = max_y
         self.max_height = self.max_y - self.y
-        self.height = 0
         self.last_bottom = 0
         self.starting = True
 
@@ -125,11 +126,12 @@ class PDFContentPart:
     def add_delayed(self):
         '''Function to add delayed elements to pdf.
 
-        This function will try to add the delayed elements to the pdf, and it can
-        return any of these strings:
+        This function will try to add the delayed elements to the pdf, and it
+        can return any of these strings:
 
         - 'continue' means caller could add all the delayed elements
-        - 'break' means a parent element is reseting, and this instance must stop
+        - 'break' means a parent element is reseting, and this instance must
+          stop
         - 'next' means we need to move to the next section.
         '''
         n = 0
@@ -158,7 +160,8 @@ class PDFContentPart:
         return any of these strings:
 
         - 'continue' means caller could add all the elements
-        - 'break' means a parent element is reseting, and this instance must stop
+        - 'break' means a parent element is reseting, and this instance must
+          stop
         - 'next' means we need to move to the next section
         '''
         len_elems = len(self.elements) - 1
@@ -339,10 +342,6 @@ class PDFContentPart:
     def get_min_x(self):
         return self.min_x + self.column * (self.col_width + self.cols_gap)
 
-    def move_y(self, h):
-        self.height += h
-        self.y += h
-
     def update_dimensions(self, style):
         s = style
         self.x = self.get_min_x() + s.get('margin_left', 0)
@@ -352,10 +351,23 @@ class PDFContentPart:
         if self.starting:
             self.starting = False
         else:
-            self.move_y(self.last_bottom + s.get('margin_top', 0))
+            self.y += self.last_bottom + s.get('margin_top', 0)
 
         self.max_height = max(0, self.max_y - self.y)
         self.last_bottom = s.get('margin_bottom', 0)
+
+    def run_text(self, pdf_text):
+        pdf_text.run()
+        if not can_continue:
+            self.p.interrupted = True
+            return 'finish'
+
+        content.update({'type': 'paragraph', 'content': pdf_text})
+        self.p.parts_.append(content)
+
+        self.y += pdf_text.current_height
+        if pdf_text.remaining is not None:
+            ret = {'delayed': pdf_text.remaining, 'next': True}
 
     def process(self, element, last=False):
         '''Function to add a single element to the pdf
@@ -373,46 +385,46 @@ class PDFContentPart:
         the pdf.
         '''
 
-        ret = {'delayed': None, 'next': False}
-
         if not isinstance(element, (dict, str, list, tuple)):
             element = str(element)
         if isinstance(element, (str, list, tuple)):
             element = {'.': element}
 
         if not isinstance(element, dict):
-            raise TypeError('Elements must be of type dict, str, list or tuple:'
-                            + str(element))
+            raise TypeError(
+                'Elements must be of type dict, str, list or tuple:{}'
+                .format(element)
+            )
 
         style = {}
         style.update(self.style)
-        style.update(process_style(element.get('style'), self.p.pdf))
+        element_style = process_style(element.get('style'), self.p.pdf)
+        style.update(element_style)
 
         self.update_dimensions(style)
-        content = {'x': self.x, 'y': self.y}
 
         paragraph_keys = [key for key in element.keys() if key.startswith('.')]
 
-        if len(paragraph_keys) > 0:
-            par_style = {
-                v: style.get(v) for v in PARAGRAPH_PROPERTIES if v in style
-            }
+        if len(paragraph_keys) > 0 or 'paragraph' in element:
+            if 'paragraph' in element:
+                pdf_text = element['paragraph']
+                pdf_text.setup(self.x, self.y, self.width, self.max_height)
+            else:
+                par_style = {
+                    v: style.get(v) for v in PARAGRAPH_PROPERTIES if v in style
+                }
+                key = paragraph_keys[0]
+                pdf_text = PDFText(
+                    {key: element[key], 'style': style.copy()},
+                    self.p.fonts, width=self.width, height=self.max_height,
+                    pdf=self.p.pdf, **par_style
+                )
+            pdf_text.run()
 
-            key = paragraph_keys[0]
-            pdf_text = PDFText(
-                {key: element[key], 'style': style.copy()},
-                self.p.fonts, width=self.width, height=self.max_height,
-                pdf=self.p.pdf, **par_style
-            )
-            can_continue = pdf_text.run()
-            if not can_continue:
-                self.p.interrupted = True
-                return 'finish'
-
-            content.update({'type': 'paragraph', 'content': pdf_text})
+            content.update({'type': 'stream', 'content': pdf_text.stream})
             self.p.parts_.append(content)
 
-            self.move_y(pdf_text.current_height)
+            self.y += pdf_text.current_height
             if pdf_text.remaining is not None:
                 ret = {'delayed': pdf_text.remaining, 'next': True}
 
@@ -424,7 +436,7 @@ class PDFContentPart:
                 content.update({'type': 'image', 'width': self.width,
                                 'height': height, 'content': pdf_image})
                 self.p.parts_.append(content)
-                self.move_y(height)
+                self.y += height
             else:
                 image_place = style.get('image_place', 'flow')
                 ret['delayed'] = element
@@ -458,8 +470,8 @@ class PDFContentPart:
             self.p.lines.extend(pdf_table.lines)
             self.p.fills.extend(pdf_table.fills)
 
-            self.move_y(pdf_table.current_height)
-                
+            self.y += pdf_table.current_height
+
             if not pdf_table.finished:
                 delayed = copy.deepcopy(element)
                 delayed['delayed'] = pdf_table
@@ -493,9 +505,9 @@ class PDFContentPart:
                 return action
             else:
                 if pdf_content.cols_n == 1:
-                    self.move_y(pdf_content.y - pdf_content.min_y)
+                    self.y += pdf_content.y - pdf_content.min_y
                 else:
-                    self.move_y(pdf_content.max_y - pdf_content.min_y)
+                    self.y += pdf_content.max_y - pdf_content.min_y
                 self.starting = False
         return ret
 
