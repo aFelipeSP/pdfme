@@ -387,6 +387,7 @@ class PDFTextBase:
                 if not continue_:
                     return False
 
+        self.last_word = 0
         return True
 
     def add_current_line(self, is_last=False):

@@ -17,6 +17,7 @@ def output(pdf, name):
 def add_content(content, text_options, name):
     pdf = PDF()
     pdf.add_page()
+    page_rect(pdf)
     pdf_text = pdf._text(
         content, x=pdf.page.margin_left, width=pdf.page.content_width,
         **text_options
