@@ -43,6 +43,7 @@ class PDF:
 
         self.fonts = copy.deepcopy(STANDARD_FONTS)
         self.used_fonts = {}
+        self.images = {}
         self._add_font('Helvetica', 'n')
 
     @property
@@ -109,7 +110,12 @@ class PDF:
     def add_image(
         self, pdf_image, x=None, y=None, width=None, height=None, move='bottom'
     ):
-        image_obj = self.base.add(pdf_image.pdf_obj)
+        if pdf_image.image_name not in self.images:
+            image_obj = self.base.add(pdf_image.pdf_obj)
+            self.images[pdf_image.image_name] = image_obj.id
+        else:
+            image_obj = self.base[self.images[pdf_image.image_name]]
+
         h = pdf_image.height
         w = pdf_image.width
 
@@ -375,7 +381,7 @@ class PDF:
         content = content.copy()
         style.update(process_style(content.get('style'), self))
         content['style'] = style
-        pdf_content = PDFContent(content, width, height, x, y, self)
+        pdf_content = PDFContent(content, self.fonts, width, height, x, y, self)
         pdf_content.run()
         return pdf_content
 
@@ -417,10 +423,10 @@ class PDF:
 
     def _add_parts(self, parts):
         for part in parts:
-            self.page.x = part['x']; self.page.y = part['y']
-            if part['type'] == 'paragraph':
+            if part['type'] == 'stream':
                 self._add_text(part['content'])
             elif part['type'] == 'image':
+                self.page.x = part['x']; self.page.y = part['y']
                 self.add_image(part['content'], part['width'])
 
     def _build_pages_tree(self, page_list, first_level = True):

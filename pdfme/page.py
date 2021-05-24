@@ -20,7 +20,7 @@ class PDFPage:
         self.page = base.add({
             'Type': b'/Page', 'Contents': self.stream.id, 'Resources': {}
         })
-        self.x_objects = set()
+        self.x_objects = {}
         self.current_id = 0
 
     @property
@@ -56,12 +56,16 @@ class PDFPage:
     def add_reference(self, dest, rect):
         self.add_annot({'Dest': dest}, rect)
 
-    def add_image(self, image_obj, width, height):
+    def add_image(self, image_obj_id, width, height):
         self.page['Resources'].setdefault('XObject', {})
-        if not image_obj.id in self.x_objects:
+        if not image_obj_id in self.x_objects:
             image_id = 'Im{}'.format(len(self.page['Resources']['XObject']))
-            self.page['Resources']['XObject'][image_id] = image_obj.id
-            self.x_objects.add(image_obj.id)
+            self.page['Resources']['XObject'][image_id] = image_obj_id
+            self.x_objects[image_obj_id] = image_id
 
-        self.add(' q {} 0 0 {} {} {} cm /{} Do Q'.format(round(width, 3),
-            round(height, 3), round(self.x, 3), round(self._y, 3), image_id))
+        self.add(
+            ' q {} 0 0 {} {} {} cm /{} Do Q'.format(
+                round(width, 3), round(height, 3), round(self.x, 3),
+                round(self._y, 3), self.x_objects[image_obj_id]
+            )
+        )

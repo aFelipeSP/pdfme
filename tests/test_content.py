@@ -6,7 +6,7 @@ from .utils import gen_rich_text, maybe, gen_text, gen_content
 
 def run_test(index):
     pdf = PDF()
-
+    pdf.add_page()
     name = 'test_content{}'.format(index)
     input_file = Path(name + '.json')
     if input_file.exists():
@@ -17,7 +17,7 @@ def run_test(index):
         with input_file.open('w') as f:
             json.dump(content, f, ensure_ascii=False)
 
-    pdf.add_content(content)
+    pdf.content(content)
     with open('test_content{}.pdf'.format(index), 'wb') as f:
         pdf.output(f)
 
