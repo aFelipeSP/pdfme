@@ -76,7 +76,7 @@ def parse_stream(obj):
     stream_copy = deepcopy(stream_)
     skip_filter = obj.pop('__skip_filter__', False)
 
-    if isinstance(stream_copy, str):
+    if isinstance(stream_copy, bytes):
         stream_str = stream_copy
     elif isinstance(stream_copy, dict):
         stream_str = b''.join(stream_copy.values())

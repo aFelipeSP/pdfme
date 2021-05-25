@@ -130,9 +130,9 @@ class PDF:
         if x is not None:
             self.page.x = x
         if y is not None:
-            self.page.y = y
+            self.page._y = y
 
-        self.page.add_image(image_obj, width, height)
+        self.page.add_image(image_obj.id, width, height)
 
         if move == 'bottom':
             self.page.y += height
@@ -223,12 +223,10 @@ class PDF:
         par_style = self._default_paragraph_style(
             width, height, text_align, line_height, indent
         )
-        par_style.update(
-            {
-                'list_text': list_text, 'list_indent': list_indent,
-                'list_style': list_style
-            }
-        )
+        par_style.update({
+            'list_text': list_text, 'list_indent': list_indent,
+            'list_style': list_style
+        })
         content = self._init_text(content)
         pdf_text = PDFText(content, fonts=self.fonts, pdf=self, **par_style)
         pdf_text.run()
@@ -423,11 +421,12 @@ class PDF:
 
     def _add_parts(self, parts):
         for part in parts:
-            if part['type'] == 'stream':
+            if part['type'] == 'paragraph':
                 self._add_text(part['content'])
             elif part['type'] == 'image':
-                self.page.x = part['x']; self.page.y = part['y']
-                self.add_image(part['content'], part['width'])
+                self.add_image(
+                    part['content'], part['x'], part['y'], part['width']
+                )
 
     def _build_pages_tree(self, page_list, first_level = True):
         new_page_list = []

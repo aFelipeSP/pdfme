@@ -32,7 +32,7 @@ class PDFContent:
         if height is not None:
             self.height = height
 
-        self.max_y = self.min_y + self.height
+        self.max_y = self.min_y - self.height
 
     def run(self, x=None, y=None, width=None, height=None):
         self.setup(x, y, width, height)
@@ -49,7 +49,7 @@ class PDFContent:
             if self.pdf_content_part.cols_n == 1
             else self.pdf_content_part.max_y - self.pdf_content_part.min_y
         )
-        if ret == 'continue':
+        if ret == 'finish':
             self.finished = True
 
 class PDFContentPart:
@@ -91,9 +91,8 @@ class PDFContentPart:
 
         self.full_width = width
         self.max_y = max_y
-        self.max_height = self.max_y - self.y
+        self.max_height = self.y - self.max_y
         self.last_bottom = 0
-        self.starting = True
 
         column_info = content.get('cols', {'count': 1, 'gap': 10})
 
@@ -261,18 +260,17 @@ class PDFContentPart:
         self.will_reset = False
         self.p.parts_ = self.p.parts_[:self.parts_index]
         self.go_to_beggining()
-        self.starting = True
 
         if self.minim_diff is None:
-            self.minim_diff = (self.max_y - self.min_y) / 2
-            self.max_y = self.min_y + self.minim_diff
+            self.minim_diff = (self.min_y - self.max_y) / 2
+            self.max_y += self.minim_diff
         else:
             self.minim_diff_last = self.minim_diff
             self.minim_diff /= 2
             if self.minim_forward:
-                self.max_y += self.minim_diff
-            else:
                 self.max_y -= self.minim_diff
+            else:
+                self.max_y += self.minim_diff
 
         self.resetting = True
 
@@ -285,6 +283,7 @@ class PDFContentPart:
         self.y = self.min_y
         self.x = self.min_x
         self.column = 0
+        self.starting = True
 
     def next_section(self, children_indexes=None):
         """Goes to the new section of the pdf document.
@@ -330,7 +329,6 @@ class PDFContentPart:
                 self.min_x = ret['min_x']
                 self.parts_index = len(self.p.parts_)
                 self.go_to_beggining()
-                self.starting = True
                 return 'continue' if children_indexes is None else ret
         else:
             self.column += 1
@@ -351,9 +349,9 @@ class PDFContentPart:
         if self.starting:
             self.starting = False
         else:
-            self.y += self.last_bottom + s.get('margin_top', 0)
+            self.y -= self.last_bottom + s.get('margin_top', 0)
 
-        self.max_height = max(0, self.max_y - self.y)
+        self.max_height = max(0, self.y - self.max_y)
         self.last_bottom = s.get('margin_bottom', 0)
 
     def process(self, element, last=False):
@@ -413,7 +411,7 @@ class PDFContentPart:
 
             pdf_text.run()
             self.p.parts_.append({'type': 'paragraph', 'content': pdf_text})
-            self.y += pdf_text.current_height
+            self.y -= pdf_text.current_height
 
             if not pdf_text.finished:
                 ret = {'delayed': remaining, 'next': True}
@@ -426,10 +424,10 @@ class PDFContentPart:
 
             if height < self.max_height:
                 self.p.parts_.append({
-                    'type': 'image', 'x': self.x, 'y': self.y, 
+                    'type': 'image', 'x': self.x, 'y': self.y - height, 
                     'width': self.width, 'height': height, 'content': pdf_image
                 })
-                self.y += height
+                self.y -= height
             else:
                 image_place = style.get('image_place', 'flow')
                 ret['delayed'] = element
@@ -459,7 +457,7 @@ class PDFContentPart:
             self.p.lines.extend(pdf_table.lines)
             self.p.fills.extend(pdf_table.fills)
 
-            self.y += pdf_table.current_height
+            self.y -= pdf_table.current_height
 
             if not pdf_table.finished:
                 ret = {'delayed': remaining, 'next': True}
@@ -493,9 +491,9 @@ class PDFContentPart:
                 return action
             else:
                 if pdf_content.cols_n == 1:
-                    self.y += pdf_content.y - pdf_content.min_y
+                    self.y -= pdf_content.min_y - pdf_content.y
                 else:
-                    self.y += pdf_content.max_y - pdf_content.min_y
+                    self.y -= pdf_content.min_y - pdf_content.max_y
                 self.starting = False
         return ret
 
