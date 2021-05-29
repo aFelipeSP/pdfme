@@ -1,7 +1,8 @@
 import copy
 
-from .utils import (get_page_size, subs, parse_margin, parse_style_str,
-    create_graphics, to_roman, process_style
+from .utils import (
+    get_page_size, subs, parse_margin, parse_style_str, create_graphics,
+    to_roman, process_style, get_paragraph_stream
 )
 from .standard_fonts import STANDARD_FONTS
 from .base import PDFBase
@@ -232,25 +233,25 @@ class PDF:
         pdf_text.run()
         return pdf_text
 
-    def _add_text(self, pdf_text, move='bottom'):
-        self.page.add(pdf_text.stream)
+    def _add_text(
+        self, text_stream, x=None, y=None, width=None, height=None,
+        graphics_stream=None, used_fonts=None, ids=None, move='bottom'
+    ):
+        stream = get_paragraph_stream(x, y, text_stream, graphics_stream)
+        self.page.add(stream)
 
-        x, y = pdf_text.x, pdf_text.y
-
-        for font in pdf_text.used_fonts:
+        for font in used_fonts:
             self._used_font(*font)
 
-        page_id = self.page.page.id
-
-        for id_, rects in pdf_text.ids.items():
+        for id_, rects in ids.items():
             if len(rects) == 0:
                 continue
             if id_.startswith('$label:'):
                 d = rects[0]
                 x_ref = x + d[0]
                 self.dests[id_[7:]] = [
-                    page_id, b'/XYZ', round(x_ref, 3), round(y + d[3], 3),
-                    round(x_ref/self.page.width, 3) + 1
+                    self.page.page.id, b'/XYZ', round(x_ref, 3),
+                    round(y + d[3], 3), round(x_ref/self.page.width, 3) + 1
                 ]
             elif id_.startswith('$ref:'):
                 for r in rects:
@@ -279,11 +280,9 @@ class PDF:
                     )
 
         if move == 'bottom':
-            self.page.y += pdf_text.current_height
+            self.page.y += height
         if move == 'next':
-            self.page.x += pdf_text.width
-
-        return pdf_text
+            self.page.x += width
 
     def _text(
         self, content, x=None, y=None, width=None, height=None, text_align=None,
@@ -301,7 +300,7 @@ class PDF:
             )
             pdf_text.move(x, y)
 
-        return self._add_text(pdf_text, move)
+        return self._add_text(move=move, **pdf_text.result)
 
     def text(
         self, content, text_align=None, line_height=None, indent=0,
@@ -350,7 +349,7 @@ class PDF:
                 widths, style, borders, fills
             )
 
-        self._add_graphics([*pdf_table.fills,*pdf_table.lines])
+        self._add_graphics([*pdf_table.fills, *pdf_table.lines])
         self._add_parts(pdf_table.parts_)
 
         if move == 'bottom':
@@ -421,12 +420,12 @@ class PDF:
 
     def _add_parts(self, parts):
         for part in parts:
-            if part['type'] == 'paragraph':
-                self._add_text(part['content'])
-            elif part['type'] == 'image':
-                self.add_image(
-                    part['content'], part['x'], part['y'], part['width']
-                )
+            part = part.copy()
+            type_ = part.pop('type')
+            if type_ == 'paragraph':
+                self._add_text(**part)
+            elif type_ == 'image':
+                self.add_image(**part)
 
     def _build_pages_tree(self, page_list, first_level = True):
         new_page_list = []

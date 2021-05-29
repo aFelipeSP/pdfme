@@ -1,7 +1,7 @@
 from copy import deepcopy
 import re
 from .color import PDFColor
-from .utils import parse_style_str, default, process_style
+from .utils import parse_style_str, default, process_style, get_paragraph_stream
 from .standard_fonts import STANDARD_FONTS
 
 PARAGRAPH_DEFAULTS = {'text_align': 'l', 'line_height': 1.1, 'indent': 0}
@@ -227,7 +227,6 @@ class PDFTextBase:
     ):
         self.fonts = STANDARD_FONTS if fonts is None else fonts
         self.setup(x, y, width, height)
-        self.used_fonts = set([])
         self.indent = indent
         self.text_align = default(text_align, PARAGRAPH_DEFAULTS['text_align'])
         self.line_height = default(
@@ -260,13 +259,15 @@ class PDFTextBase:
 
     @property
     def stream(self):
-        stream = ''
-        x, y = round(self.x, 3), round(self.y, 3)
-        if self.graphics != '':
-            stream += ' q 1 0 0 1 {} {} cm{} Q'.format(x, y, self.graphics)
+        return get_paragraph_stream(self.x, self.y, self.text, self.graphics)
 
-        stream += ' BT 1 0 0 1 {} {} Tm{} ET'.format(x, y, self.text)
-        return stream
+    @property
+    def result(self):
+        return dict(
+            x=self.x, y=self.y, height=self.current_height, width=self.width,
+            text_stream=self.text, graphics_stream=self.graphics,
+            used_fonts=self.used_fonts, ids=self.ids, 
+        )
 
     def move(self, x, y):
         self.x = x
@@ -290,8 +291,9 @@ class PDFTextBase:
         self.ids = {}
         self.first_line_added = False
 
-        self.current_height = 0
+        self.used_fonts = set()
         self.current_line_used_fonts = set()
+        self.current_height = 0
         self.lines = []
 
         line_width = self.width - (self.indent if self.is_first_line else 0)
@@ -334,7 +336,7 @@ class PDFTextBase:
         continue_ = self.add_current_line(True)
         if continue_:
             self.finished = True
-        return self.finished
+        return self.result
 
     def add_part(self, part, part_index):
         words = part.get('text')

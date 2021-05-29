@@ -49,7 +49,7 @@ class PDFContent:
             if self.pdf_content_part.cols_n == 1
             else self.pdf_content_part.max_y - self.pdf_content_part.min_y
         )
-        if ret == 'finish':
+        if ret == 'continue':
             self.finished = True
 
 class PDFContentPart:
@@ -136,7 +136,7 @@ class PDFContentPart:
         n = 0
         while n < len(self.delayed):
             ret = self.process(copy.deepcopy(self.delayed[n]), False)
-            if ret in ['break', 'finish']:
+            if ret == 'break':
                 return ret
 
             if ret.get('delayed'):
@@ -167,7 +167,7 @@ class PDFContentPart:
         while self.element_index <= len_elems:
             last = self.element_index == len_elems
             ret = self.process(self.elements[self.element_index], last=last)
-            if ret in ['break', 'finish']:
+            if ret == 'break':
                 return ret
 
             self.element_index += 1
@@ -187,15 +187,11 @@ class PDFContentPart:
             return 'break'
 
     def process_add_ans(self, ans):
-        if ans == 'finish':
-            return 'finish'
-        elif ans == 'break':
+        if ans == 'break':
             return self.is_element_resetting()
         elif ans == 'next':
             next_section_ret = self.next_section()
-            if next_section_ret == 'finish':
-                return 'finish'
-            elif next_section_ret == 'break':
+            if next_section_ret == 'break':
                 return self.is_element_resetting()
             else:
                 return 'retry'
@@ -203,7 +199,7 @@ class PDFContentPart:
     def run(self):
         while True:
             action = self.process_add_ans(self.add_delayed())
-            if action in ['break', 'finish']:
+            if action == 'break':
                 return action
             elif action == 'retry':
                 continue
@@ -211,7 +207,7 @@ class PDFContentPart:
                 break
 
             action = self.process_add_ans(self.add_elements())
-            if action in ['break', 'finish']:
+            if action == 'break':
                 return action
             elif action == 'retry':
                 continue
@@ -254,7 +250,12 @@ class PDFContentPart:
         self.will_reset = True
 
     def reset(self):
-        if self.minim_diff_last and not self.minim_forward and (self.minim_diff_last - self.minim_diff) < 1:
+        if (
+            self.minim_diff_last and not self.minim_forward and
+            (self.minim_diff_last - self.minim_diff) < 1
+        ):
+            # self.section_element_index = self.element_index
+            # self.section_delayed = copy.deepcopy(self.delayed)
             return False
 
         self.will_reset = False
@@ -300,13 +301,7 @@ class PDFContentPart:
         """
 
         if self.column == self.cols_n - 1:
-            if self.is_root:
-                self.section_element_index = self.element_index
-                self.section_delayed = copy.deepcopy(self.delayed)
-                if children_indexes is not None:
-                    self.children_indexes = copy.deepcopy(children_indexes)
-                return 'finish'
-            elif self.resetting:
+            if self.resetting:
                 self.minim_forward = True
                 return 'break'
             else:
@@ -323,7 +318,7 @@ class PDFContentPart:
                         + [self.element_index]
 
                 ret = self.parent.next_section(new_children_indexes)
-                if ret in ['break', 'finish']:
+                if ret == 'break':
                     return ret
                 self.min_y = ret['min_y']
                 self.min_x = ret['min_x']
@@ -409,8 +404,9 @@ class PDFContentPart:
                 )
                 remaining = {'paragraph': pdf_text, 'style': element_style}
 
-            pdf_text.run()
-            self.p.parts_.append({'type': 'paragraph', 'content': pdf_text})
+            result = pdf_text.run()
+            result['type'] = 'paragraph'
+            self.p.parts_.append(result)
             self.y -= pdf_text.current_height
 
             if not pdf_text.finished:
@@ -424,8 +420,8 @@ class PDFContentPart:
 
             if height < self.max_height:
                 self.p.parts_.append({
-                    'type': 'image', 'x': self.x, 'y': self.y - height, 
-                    'width': self.width, 'height': height, 'content': pdf_image
+                    'pdf_image': pdf_image, 'type': 'image', 'x': self.x,
+                    'y': self.y - height, 'width': self.width, 'height': height
                 })
                 self.y -= height
             else:
@@ -487,7 +483,7 @@ class PDFContentPart:
 
             action = pdf_content.run()
 
-            if action in ['finish', 'break']:
+            if action == 'break':
                 return action
             else:
                 if pdf_content.cols_n == 1:

@@ -203,4 +203,11 @@ def to_roman(n):
         roman = _roman_ten(int(n[-4]), 'M', '', '') + roman
     return roman
 
-    
+def get_paragraph_stream(x, y, text_stream, graphics_stream):
+    stream = ''
+    x, y = round(x, 3), round(y, 3)
+    if graphics_stream != '':
+        stream += ' q 1 0 0 1 {} {} cm{} Q'.format(x, y, graphics_stream)
+    if text_stream != '':
+        stream += ' BT 1 0 0 1 {} {} Tm{} ET'.format(x, y, text_stream)
+    return stream
