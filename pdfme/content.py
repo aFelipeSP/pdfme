@@ -136,7 +136,7 @@ class PDFContentPart:
         n = 0
         while n < len(self.delayed):
             ret = self.process(copy.deepcopy(self.delayed[n]), False)
-            if ret == 'break':
+            if ret in ['interrupt', 'break']:
                 return ret
 
             if ret.get('delayed'):
@@ -149,6 +149,12 @@ class PDFContentPart:
 
             if ret.get('image_flow', False):
                 n += 1
+
+        if (
+            len(self.delayed) > 0 and
+            self.element_index >= len(self.elements) - 1
+        ):
+            return 'next'
 
         return 'continue'
 
@@ -167,7 +173,7 @@ class PDFContentPart:
         while self.element_index <= len_elems:
             last = self.element_index == len_elems
             ret = self.process(self.elements[self.element_index], last=last)
-            if ret == 'break':
+            if ret in ['interrupt', 'break']:
                 return ret
 
             self.element_index += 1
@@ -182,37 +188,38 @@ class PDFContentPart:
     def is_element_resetting(self):
         if self.will_reset or self.resetting:
             continue_reset = self.reset()
-            return 'retry' if continue_reset else 'reset_done'
+            return 'retry' if continue_reset else 'continue'
         else:
             return 'break'
 
     def process_add_ans(self, ans):
-        if ans == 'break':
+        if ans == 'interrupt':
+            return ans
+        elif ans == 'break':
             return self.is_element_resetting()
         elif ans == 'next':
             next_section_ret = self.next_section()
             if next_section_ret == 'break':
                 return self.is_element_resetting()
             else:
-                return 'retry'
+                return next_section_ret
 
     def run(self):
         while True:
             action = self.process_add_ans(self.add_delayed())
-            if action == 'break':
-                return action
-            elif action == 'retry':
+            if action == 'retry':
                 continue
-            elif action == 'reset_done':
-                break
+            elif action in ['interrupt', 'break']:
+                return action
 
             action = self.process_add_ans(self.add_elements())
-            if action == 'break':
-                return action
-            elif action == 'retry':
+            if action == 'retry':
                 continue
-            elif action == 'reset_done':
-                break
+            elif action in ['interrupt', 'break']:
+                return action
+
+            if len(self.delayed) > 0:
+                continue
 
             if not self.resetting and self.cols_n > 1:
                 if self.last_child_of_resetting():
@@ -237,27 +244,26 @@ class PDFContentPart:
                     parent.mimim_forward = False
                     return True
                 else:
+                # elif len(parent.delayed) == 0:
                     return parent.last_child_of_resetting()
         return False
 
     def start_resetting(self):
         parent = self.parent
-        if parent:
-            if self.last and parent.cols_n > 1:
-                parent.start_resetting()
-                return
+        if parent and self.last  and parent.cols_n > 1:
+            # and len(parent.delayed) == 0
+            parent.start_resetting()
+            return
 
         self.will_reset = True
 
     def reset(self):
-        if (
-            self.minim_diff_last and not self.minim_forward and
-            (self.minim_diff_last - self.minim_diff) < 1
-        ):
-            # self.section_element_index = self.element_index
-            # self.section_delayed = copy.deepcopy(self.delayed)
-            return False
-
+        if self.minim_diff_last and self.minim_diff_last - self.minim_diff < 1:
+            if self.minim_forward:
+                self.minim_diff *= 2
+            else:
+                return False
+ 
         self.will_reset = False
         self.p.parts_ = self.p.parts_[:self.parts_index]
         self.go_to_beggining()
@@ -317,19 +323,22 @@ class PDFContentPart:
                     new_children_indexes = copy.deepcopy(children_indexes) \
                         + [self.element_index]
 
+                if self.is_root:
+                    return 'interrupt'
+
                 ret = self.parent.next_section(new_children_indexes)
-                if ret == 'break':
+                if ret in ['interrupt', 'break']:
                     return ret
                 self.min_y = ret['min_y']
                 self.min_x = ret['min_x']
                 self.parts_index = len(self.p.parts_)
                 self.go_to_beggining()
-                return 'continue' if children_indexes is None else ret
+                return 'retry' if children_indexes is None else ret
         else:
             self.column += 1
             self.starting = True
             self.y = self.min_y
-            return 'continue' if children_indexes is None else \
+            return 'retry' if children_indexes is None else \
                 {'min_x': self.get_min_x(), 'min_y': self.min_y}
 
     def get_min_x(self):
@@ -483,7 +492,7 @@ class PDFContentPart:
 
             action = pdf_content.run()
 
-            if action == 'break':
+            if action in ['interrupt', 'break']:
                 return action
             else:
                 if pdf_content.cols_n == 1:

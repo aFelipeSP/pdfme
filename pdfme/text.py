@@ -327,11 +327,11 @@ class PDFTextBase:
                         self.line_height
                     )
                     if not continue_:
-                        return False
+                        return self.result
             else:
                 continue_ = self.add_part(part, part_index)
                 if not continue_:
-                    return False
+                    return self.result
 
         continue_ = self.add_current_line(True)
         if continue_:

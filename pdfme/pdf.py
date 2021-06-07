@@ -300,7 +300,8 @@ class PDF:
             )
             pdf_text.move(x, y)
 
-        return self._add_text(move=move, **pdf_text.result)
+        self._add_text(move=move, **pdf_text.result)
+        return pdf_text
 
     def text(
         self, content, text_align=None, line_height=None, indent=0,
