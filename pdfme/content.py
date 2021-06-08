@@ -100,9 +100,9 @@ class PDFContentPart:
             raise TypeError('column_info must be a dict:'.format(column_info))
 
         self.cols_n = column_info.get('count', 1)
-        self.cols_gap = column_info.get('gap', 10)
+        self.cols_gap = column_info.get('gap', max(width / 25, 7))
         cols_spaces = self.cols_gap * (self.cols_n - 1)
-        self.col_width = (self.full_width - cols_spaces) / self.cols_n
+        self.col_width = (width - cols_spaces) / self.cols_n
 
         self.elements = content.get('content', [])
 
@@ -113,6 +113,7 @@ class PDFContentPart:
         self.delayed = []  # current delayed elements
 
         self.children_indexes = []  # the last state of this element
+        self.other_children_indexes = None
 
         self.will_reset = False
         self.resetting = False
@@ -136,7 +137,7 @@ class PDFContentPart:
         n = 0
         while n < len(self.delayed):
             ret = self.process(copy.deepcopy(self.delayed[n]), False)
-            if ret in ['interrupt', 'break']:
+            if ret in ['interrupt', 'break', 'partial_next']:
                 return ret
 
             if ret.get('delayed'):
@@ -173,7 +174,7 @@ class PDFContentPart:
         while self.element_index <= len_elems:
             last = self.element_index == len_elems
             ret = self.process(self.elements[self.element_index], last=last)
-            if ret in ['interrupt', 'break']:
+            if ret in ['interrupt', 'break', 'partial_next']:
                 return ret
 
             self.element_index += 1
@@ -195,6 +196,11 @@ class PDFContentPart:
     def process_add_ans(self, ans):
         if ans == 'interrupt':
             return ans
+        elif ans == 'partial_next':
+            if self.other_children_indexes is None:
+                return ans
+            else:
+                return 'retry'
         elif ans == 'break':
             return self.is_element_resetting()
         elif ans == 'next':
@@ -209,13 +215,13 @@ class PDFContentPart:
             action = self.process_add_ans(self.add_delayed())
             if action == 'retry':
                 continue
-            elif action in ['interrupt', 'break']:
+            elif action in ['interrupt', 'break', 'partial_next']:
                 return action
 
             action = self.process_add_ans(self.add_elements())
             if action == 'retry':
                 continue
-            elif action in ['interrupt', 'break']:
+            elif action in ['interrupt', 'break', 'partial_next']:
                 return action
 
             if len(self.delayed) > 0:
@@ -327,7 +333,7 @@ class PDFContentPart:
                     return 'interrupt'
 
                 ret = self.parent.next_section(new_children_indexes)
-                if ret in ['interrupt', 'break']:
+                if ret in ['interrupt', 'break', 'partial_next']:
                     return ret
                 self.min_y = ret['min_y']
                 self.min_x = ret['min_x']
@@ -338,6 +344,11 @@ class PDFContentPart:
             self.column += 1
             self.starting = True
             self.y = self.min_y
+
+            if len(self.delayed) > 0 and children_indexes is not None:
+                self.other_children_indexes = copy.deepcopy(children_indexes)
+                return 'partial_next'
+
             return 'retry' if children_indexes is None else \
                 {'min_x': self.get_min_x(), 'min_y': self.min_y}
 
@@ -473,15 +484,18 @@ class PDFContentPart:
                 self.max_y, self, last, copy.deepcopy(style)
             )
 
-            if (
-                self.element_index == self.section_element_index
+            down_condition1 = self.element_index == self.section_element_index \
                 and len(self.children_indexes)
-            ):
-                child = self.children_indexes[-1]
+            down_condition2 = self.other_children_indexes is not None
+
+            if down_condition1 or down_condition2:
+                child = self.children_indexes[-1] if down_condition1 else \
+                    self.other_children_indexes[-1]
                 if isinstance(child, int):
                     pdf_content.section_element_index = child
                     pdf_content.element_index = child
-                    pdf_content.children_indexes = self.children_indexes[:-1]
+                    pdf_content.children_indexes = self.children_indexes[:-1] \
+                        if down_condition1 else self.other_children_indexes[:-1]
                 elif isinstance(child, dict):
                     pdf_content.section_element_index = child['index']
                     pdf_content.section_delayed = copy.deepcopy(
@@ -490,9 +504,11 @@ class PDFContentPart:
                     pdf_content.element_index = child['index']
                     pdf_content.delayed = copy.deepcopy(child['delayed'])
 
+                self.other_children_indexes = None
+
             action = pdf_content.run()
 
-            if action in ['interrupt', 'break']:
+            if action in ['interrupt', 'break', 'partial_next']:
                 return action
             else:
                 if pdf_content.cols_n == 1:
