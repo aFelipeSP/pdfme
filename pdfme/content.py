@@ -43,6 +43,11 @@ class PDFContent:
             self.pdf_content_part = PDFContentPart(self.content, self,
                 self.x, self.width, self.min_y, self.max_y, last=True
             )
+        else:
+            self.pdf_content_part.init(
+                self.x, self.width, self.min_y, self.max_y
+            )
+
         ret = self.pdf_content_part.run()
         self.current_height = (
             self.pdf_content_part.y - self.pdf_content_part.min_y
@@ -85,6 +90,22 @@ class PDFContentPart:
         self.style.update(inherited_style)
         self.style.update(process_style(content.get('style'), self.p.pdf))
 
+        self.column_info = content.get('cols', {'count': 1, 'gap': 10})
+
+        if not isinstance(self.column_info, dict):
+            raise TypeError(
+                'self.column_info must be a dict:'.format(self.column_info)
+            )
+        self.elements = content.get('content', [])
+        
+        self.section_element_index = 0  # index when the last section jump occured
+        self.section_delayed = []  # delayed elements when the last section jump occured
+        self.children_indexes = []  # the last state of this element
+        self.other_children_indexes = None
+
+        self.init(min_x, width, min_y, max_y)
+
+    def init(self, min_x, width, min_y, max_y):
         self.min_x = min_x
         self.min_y = min_y
         self.go_to_beggining()
@@ -94,27 +115,13 @@ class PDFContentPart:
         self.max_height = self.y - self.max_y
         self.last_bottom = 0
 
-        column_info = content.get('cols', {'count': 1, 'gap': 10})
-
-        if not isinstance(column_info, dict):
-            raise TypeError('column_info must be a dict:'.format(column_info))
-
-        self.cols_n = column_info.get('count', 1)
-        self.cols_gap = column_info.get('gap', max(width / 25, 7))
+        self.cols_n = self.column_info.get('count', 1)
+        self.cols_gap = self.column_info.get('gap', max(width / 25, 7))
         cols_spaces = self.cols_gap * (self.cols_n - 1)
         self.col_width = (width - cols_spaces) / self.cols_n
 
-        self.elements = content.get('content', [])
-
-        self.section_element_index = 0  # index when the last section jump occured
-        self.element_index = 0  # current index
-
-        self.section_delayed = []  # delayed elements when the last section jump occured
-        self.delayed = []  # current delayed elements
-
-        self.children_indexes = []  # the last state of this element
-        self.other_children_indexes = None
-
+        self.element_index = self.section_element_index # current index
+        self.delayed = copy.deepcopy(self.section_delayed) # current delayed elements
         self.will_reset = False
         self.resetting = False
         self.parts_index = len(self.p.parts_)
@@ -483,9 +490,18 @@ class PDFContentPart:
                 element, self.p, self.get_min_x(), self.col_width, self.y,
                 self.max_y, self, last, copy.deepcopy(style)
             )
-
-            down_condition1 = self.element_index == self.section_element_index \
-                and len(self.children_indexes)
+            down_condition1 = False
+            if len(self.children_indexes) > 0:
+                if not self.is_root and len(self.parent.children_indexes) > 0:
+                    index = self.parent.children_indexes[-1]
+                    idx = index if isinstance(index, int) else index['index']
+                    down_condition1 = (
+                        self.element_index == self.section_element_index == idx
+                    )
+                else:
+                    down_condition1 = (
+                        self.element_index == self.section_element_index
+                    )
             down_condition2 = self.other_children_indexes is not None
 
             if down_condition1 or down_condition2:

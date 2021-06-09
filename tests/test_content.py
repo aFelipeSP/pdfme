@@ -13,7 +13,7 @@ def run_test(index):
         with input_file.open() as f:
             content = json.load(f)
     else:
-        content = gen_content(7)
+        content = gen_content(14)
         with input_file.open('w') as f:
             json.dump(content, f, ensure_ascii=False)
 
