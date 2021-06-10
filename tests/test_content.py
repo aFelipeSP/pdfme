@@ -2,7 +2,7 @@ from pdfme import PDF
 import json
 from pathlib import Path
 
-from .utils import gen_rich_text, maybe, gen_text, gen_content
+from .utils import gen_content
 
 def run_test(index):
     pdf = PDF()
@@ -13,7 +13,7 @@ def run_test(index):
         with input_file.open() as f:
             content = json.load(f)
     else:
-        content = gen_content(14)
+        content = gen_content(20)
         with input_file.open('w') as f:
             json.dump(content, f, ensure_ascii=False)
 

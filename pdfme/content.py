@@ -327,6 +327,7 @@ class PDFContentPart:
                 self.section_element_index = self.element_index
                 self.section_delayed = copy.deepcopy(self.delayed)
                 if children_indexes is None:
+                    self.children_indexes = []
                     new_children_indexes = [{
                         'index': self.element_index,
                         'delayed': copy.deepcopy(self.delayed)
@@ -371,6 +372,7 @@ class PDFContentPart:
         if self.starting:
             self.starting = False
         else:
+            # TODO: should this be set if image is not added?
             self.y -= self.last_bottom + s.get('margin_top', 0)
 
         self.max_height = max(0, self.y - self.max_y)
@@ -417,8 +419,11 @@ class PDFContentPart:
         if len(paragraph_keys) > 0 or 'paragraph' in element:
             if 'paragraph' in element:
                 pdf_text = element['paragraph']
-                pdf_text.setup(self.x, self.y, self.width, self.max_height)
-                remaining = element
+                pdf_text.setup(
+                    self.x, self.y, self.width, self.max_height,
+                    element['last_part'], element['last_word']
+                )
+                remaining = copy.deepcopy(element)
             else:
                 par_style = {
                     v: style.get(v) for v in PARAGRAPH_PROPERTIES if v in style
@@ -432,6 +437,8 @@ class PDFContentPart:
                 remaining = {'paragraph': pdf_text, 'style': element_style}
 
             result = pdf_text.run()
+            remaining['last_part'] = pdf_text.last_part
+            remaining['last_word'] = pdf_text.last_word
             result['type'] = 'paragraph'
             self.p.parts_.append(result)
             self.y -= pdf_text.current_height
@@ -490,18 +497,8 @@ class PDFContentPart:
                 element, self.p, self.get_min_x(), self.col_width, self.y,
                 self.max_y, self, last, copy.deepcopy(style)
             )
-            down_condition1 = False
-            if len(self.children_indexes) > 0:
-                if not self.is_root and len(self.parent.children_indexes) > 0:
-                    index = self.parent.children_indexes[-1]
-                    idx = index if isinstance(index, int) else index['index']
-                    down_condition1 = (
-                        self.element_index == self.section_element_index == idx
-                    )
-                else:
-                    down_condition1 = (
-                        self.element_index == self.section_element_index
-                    )
+            down_condition1 = len(self.children_indexes) > 0 and \
+                self.element_index == self.section_element_index
             down_condition2 = self.other_children_indexes is not None
 
             if down_condition1 or down_condition2:

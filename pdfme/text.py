@@ -273,7 +273,10 @@ class PDFTextBase:
         self.x = x
         self.y = y
 
-    def setup(self, x=None, y=None, width=None, height=None):
+    def setup(
+        self, x=None, y=None, width=None, height=None, last_part=None,
+        last_word=None
+    ):
         if x is not None:
             self.x = x
         if y is not None:
@@ -282,6 +285,10 @@ class PDFTextBase:
             self.width = width
         if height is not None:
             self.height = height
+        if last_part is not None:
+            self.last_part = last_part
+        if last_word is not None:
+            self.last_word = last_word
 
     def init(self):
         self.started = False
@@ -307,8 +314,11 @@ class PDFTextBase:
 
         self.y_ = 0
 
-    def run(self, x=None, y=None, width=None, height=None):
-        self.setup(x, y, width, height)
+    def run(
+        self, x=None, y=None, width=None, height=None, last_part=None,
+        last_word=None
+    ):
+        self.setup(x, y, width, height, last_part, last_word)
         self.init()
         for part_index in range(self.last_part, len(self.content)):
             part = self.content[part_index]
