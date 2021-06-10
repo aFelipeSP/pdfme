@@ -326,16 +326,17 @@ class PDFContentPart:
             else:
                 self.section_element_index = self.element_index
                 self.section_delayed = copy.deepcopy(self.delayed)
+                new_index = {
+                    'index': self.element_index,
+                    'delayed': copy.deepcopy(self.delayed)
+                }
                 if children_indexes is None:
                     self.children_indexes = []
-                    new_children_indexes = [{
-                        'index': self.element_index,
-                        'delayed': copy.deepcopy(self.delayed)
-                    }]
+                    new_children_indexes = [new_index]
                 else:
                     self.children_indexes = copy.deepcopy(children_indexes)
-                    new_children_indexes = copy.deepcopy(children_indexes) \
-                        + [self.element_index]
+                    new_children_indexes = copy.deepcopy(children_indexes)
+                    new_children_indexes.append(new_index)
 
                 if self.is_root:
                     return 'interrupt'
@@ -369,14 +370,17 @@ class PDFContentPart:
         self.width = self.col_width - \
             s.get('margin_left', 0) - s.get('margin_right', 0)
 
-        if self.starting:
-            self.starting = False
-        else:
-            # TODO: should this be set if image is not added?
-            self.y -= self.last_bottom + s.get('margin_top', 0)
+        if not self.starting:
+            self.y -= self.last_bottom
 
         self.max_height = max(0, self.y - self.max_y)
         self.last_bottom = s.get('margin_bottom', 0)
+
+    def add_top_margin(self, style):
+        if self.starting:
+            self.starting = False
+        else:
+            self.y -=  style.get('margin_top', 0)
 
     def process(self, element, last=False):
         '''Function to add a single element to the pdf
@@ -393,9 +397,6 @@ class PDFContentPart:
         - next: if True, the caller function should go to the next section of
         the pdf.
         '''
-
-        ret = {'delayed': None, 'next': False}
-
         if not isinstance(element, (dict, str, list, tuple)):
             element = str(element)
         if isinstance(element, (str, list, tuple)):
@@ -414,121 +415,140 @@ class PDFContentPart:
 
         self.update_dimensions(style)
 
-        paragraph_keys = [key for key in element.keys() if key.startswith('.')]
+        keys = [key for key in element.keys() if key.startswith('.')]
 
-        if len(paragraph_keys) > 0 or 'paragraph' in element:
-            if 'paragraph' in element:
-                pdf_text = element['paragraph']
-                pdf_text.setup(
-                    self.x, self.y, self.width, self.max_height,
-                    element['last_part'], element['last_word']
-                )
-                remaining = copy.deepcopy(element)
-            else:
-                par_style = {
-                    v: style.get(v) for v in PARAGRAPH_PROPERTIES if v in style
-                }
-                key = paragraph_keys[0]
-                pdf_text = PDFText(
-                    {key: element[key], 'style': style.copy()},
-                    self.width, self.max_height, self.x, self.y,
-                    fonts=self.p.fonts, pdf=self.p.pdf, **par_style
-                )
-                remaining = {'paragraph': pdf_text, 'style': element_style}
-
-            result = pdf_text.run()
-            remaining['last_part'] = pdf_text.last_part
-            remaining['last_word'] = pdf_text.last_word
-            result['type'] = 'paragraph'
-            self.p.parts_.append(result)
-            self.y -= pdf_text.current_height
-
-            if not pdf_text.finished:
-                ret = {'delayed': remaining, 'next': True}
+        if len(keys) > 0 or 'paragraph' in element:
+            return self.process_text(element, style, element_style, keys)
         elif 'image' in element:
-            pdf_image = PDFImage(
-                element['image'], element.get('extension'),
-                element.get('image_name')
-            )
-            height = self.width * pdf_image.height / pdf_image.width
-
-            if height < self.max_height:
-                self.p.parts_.append({
-                    'pdf_image': pdf_image, 'type': 'image', 'x': self.x,
-                    'y': self.y - height, 'width': self.width, 'height': height
-                })
-                self.y -= height
-            else:
-                image_place = style.get('image_place', 'flow')
-                ret['delayed'] = element
-                if image_place == 'normal':
-                    ret['next'] = True
-                elif image_place == 'flow':
-                    ret['image_flow'] = True
-
+            return self.process_image(element, style)
         elif 'table' in element or 'table_delayed' in element:
-            if 'table_delayed' in element:
-                pdf_table = element['table_delayed']
-                pdf_table.setup(self.x, self.y, self.width, self.max_height)
-                remaining = element
-            else:
-                table_props = {
-                    v: element.get(v) for v in TABLE_PROPERTIES
-                    if v in element
-                }
-                pdf_table = PDFTable(
-                    element['table'], self.width, self.max_height, self.x,
-                    self.y, style=style, pdf=self.p.pdf, **table_props
-                )
-                remaining = {'table_delayed': pdf_table, 'style': element_style}
-
-            pdf_table.run()
-            self.p.parts_.extend(pdf_table.parts_)
-            self.p.lines.extend(pdf_table.lines)
-            self.p.fills.extend(pdf_table.fills)
-
-            self.y -= pdf_table.current_height
-
-            if not pdf_table.finished:
-                ret = {'delayed': remaining, 'next': True}
-
+            return self.process_table(element, style, element_style)
         elif 'content' in element:
-            pdf_content = PDFContentPart(
-                element, self.p, self.get_min_x(), self.col_width, self.y,
-                self.max_y, self, last, copy.deepcopy(style)
+            return self.process_child(element, style, last)
+
+    def process_text(self, element, style, element_style, paragraph_keys):
+        if 'paragraph' in element:
+            pdf_text = element['paragraph']
+            pdf_text.setup(
+                self.x, self.y, self.width, self.max_height,
+                element['last_part'], element['last_word']
             )
-            down_condition1 = len(self.children_indexes) > 0 and \
-                self.element_index == self.section_element_index
-            down_condition2 = self.other_children_indexes is not None
+            remaining = copy.deepcopy(element)
+        else:
+            par_style = {
+                v: style.get(v) for v in PARAGRAPH_PROPERTIES if v in style
+            }
+            key = paragraph_keys[0]
+            pdf_text = PDFText(
+                {key: element[key], 'style': style.copy()},
+                self.width, self.max_height, self.x, self.y,
+                fonts=self.p.fonts, pdf=self.p.pdf, **par_style
+            )
+            remaining = {'paragraph': pdf_text, 'style': element_style}
 
-            if down_condition1 or down_condition2:
-                child = self.children_indexes[-1] if down_condition1 else \
-                    self.other_children_indexes[-1]
-                if isinstance(child, int):
-                    pdf_content.section_element_index = child
-                    pdf_content.element_index = child
-                    pdf_content.children_indexes = self.children_indexes[:-1] \
-                        if down_condition1 else self.other_children_indexes[:-1]
-                elif isinstance(child, dict):
-                    pdf_content.section_element_index = child['index']
-                    pdf_content.section_delayed = copy.deepcopy(
-                        child['delayed']
-                    )
-                    pdf_content.element_index = child['index']
-                    pdf_content.delayed = copy.deepcopy(child['delayed'])
+        result = pdf_text.run()
+        remaining['last_part'] = pdf_text.last_part
+        remaining['last_word'] = pdf_text.last_word
+        result['type'] = 'paragraph'
+        self.p.parts_.append(result)
+        self.y -= pdf_text.current_height
 
-                self.other_children_indexes = None
+        if pdf_text.current_height > 0:
+            self.add_top_margin(style)
 
-            action = pdf_content.run()
+        if not pdf_text.finished:
+            return {'delayed': remaining, 'next': True}
+        else:
+            return {'delayed': None, 'next': False}
 
-            if action in ['interrupt', 'break', 'partial_next']:
-                return action
-            else:
-                if pdf_content.cols_n == 1:
-                    self.y -= pdf_content.min_y - pdf_content.y
-                else:
-                    self.y -= pdf_content.min_y - pdf_content.max_y
-                self.starting = False
+    def process_image(self, element, style):
+        ret = {'delayed': None, 'next': False}
+        pdf_image = PDFImage(
+            element['image'], element.get('extension'),
+            element.get('image_name')
+        )
+        height = self.width * pdf_image.height / pdf_image.width
+
+        if height < self.max_height:
+            self.p.parts_.append({
+                'pdf_image': pdf_image, 'type': 'image', 'x': self.x,
+                'y': self.y - height, 'width': self.width, 'height': height
+            })
+            self.y -= height
+            self.add_top_margin(style)
+        else:
+            image_place = style.get('image_place', 'flow')
+            ret['delayed'] = element
+            if image_place == 'normal':
+                ret['next'] = True
+            elif image_place == 'flow':
+                ret['image_flow'] = True
         return ret
+
+    def process_table(self, element, style, element_style):
+        if 'table_delayed' in element:
+            pdf_table = element['table_delayed']
+            pdf_table.setup(self.x, self.y, self.width, self.max_height)
+            remaining = element
+        else:
+            table_props = {
+                v: element.get(v) for v in TABLE_PROPERTIES
+                if v in element
+            }
+            pdf_table = PDFTable(
+                element['table'], self.width, self.max_height, self.x,
+                self.y, style=style, pdf=self.p.pdf, **table_props
+            )
+            remaining = {'table_delayed': pdf_table, 'style': element_style}
+
+        pdf_table.run()
+        self.p.parts_.extend(pdf_table.parts_)
+        self.p.lines.extend(pdf_table.lines)
+        self.p.fills.extend(pdf_table.fills)
+
+        self.y -= pdf_table.current_height
+        if pdf_table.current_height > 0:
+            self.add_top_margin(style)
+
+        if not pdf_table.finished:
+            return {'delayed': remaining, 'next': True}
+        else:
+            return {'delayed': None, 'next': False}
+
+    def process_child(self, element, style, last):
+        pdf_content = PDFContentPart(
+            element, self.p, self.get_min_x(), self.col_width, self.y,
+            self.max_y, self, last, copy.deepcopy(style)
+        )
+        down_condition1 = len(self.children_indexes) > 0 and \
+            self.element_index == self.section_element_index
+        down_condition2 = self.other_children_indexes is not None
+
+        if down_condition1 or down_condition2:
+            child = self.children_indexes[-1] if down_condition1 else \
+                self.other_children_indexes[-1]
+            pdf_content.section_element_index = child['index']
+            pdf_content.section_delayed = copy.deepcopy(child['delayed'])
+            pdf_content.element_index = child['index']
+            pdf_content.delayed = copy.deepcopy(child['delayed'])
+            pdf_content.children_indexes = self.children_indexes[:-1] \
+                if down_condition1 else self.other_children_indexes[:-1]
+
+            self.other_children_indexes = None
+
+        action = pdf_content.run()
+
+        if action in ['interrupt', 'break', 'partial_next']:
+            return action
+        else:
+            current_height = pdf_content.min_y - pdf_content.y \
+                if pdf_content.cols_n == 1 else \
+                pdf_content.min_y - pdf_content.max_y
+            self.y -= current_height
+            
+            if current_height > 0:
+                self.add_top_margin(style)
+            self.starting = False
+            return {'delayed': None, 'next': False}
 
 from .table import PDFTable
