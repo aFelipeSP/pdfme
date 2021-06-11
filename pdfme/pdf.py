@@ -331,8 +331,10 @@ class PDF:
     ):
         style_ = self._default_content_style()
         style_.update(process_style(style, self))
-        pdf_table = PDFTable(content, self.fonts, width, height, x, y, widths,
-            style_, borders, fills, self)
+        pdf_table = PDFTable(
+            content, self.fonts, width, height, x, y,
+            widths, style_, borders, fills, self
+        )
         pdf_table.run()
         return pdf_table
 
@@ -346,8 +348,8 @@ class PDF:
             pdf_table = content
             pdf_table.run(x, y, width, height)
         else:
-            pdf_table = self._create_table(content, width, height, x, y,
-                widths, style, borders, fills
+            pdf_table = self._create_table(
+                content, width, height, x, y, widths, style, borders, fills
             )
 
         self._add_graphics([*pdf_table.fills, *pdf_table.lines])

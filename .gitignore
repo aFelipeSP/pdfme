@@ -5,4 +5,5 @@ dist/
 *.pdf
 
 .vscode/
-test_*
+test_*.json
+test_*.pdf

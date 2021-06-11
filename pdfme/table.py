@@ -6,13 +6,16 @@ from .image import PDFImage
 from .utils import process_style
 
 
-PARAGRAPH_PROPERTIES = ('text_align', 'line_height', 'indent', 'list_text',
-                        'list_style', 'list_indent')
+PARAGRAPH_PROPERTIES = (
+    'text_align', 'line_height', 'indent', 'list_text', 
+    'list_style', 'list_indent'
+)
 
 TABLE_PROPERTIES = ('widths', 'borders', 'fills')
 
 class PDFTable:
-    def __init__(self, content, fonts, width, height, x=0, y=0, widths=None,
+    def __init__(
+        self, content, fonts, width, height, x=0, y=0, widths=None,
         style=None, borders=None, fills=None, pdf=None
     ):
         if not isinstance(content, (list, tuple)):
@@ -29,7 +32,8 @@ class PDFTable:
 
         cols_count = len(content[0])
         self.delayed = [None] * cols_count
-        self.borders_and_fills(borders, fills)
+        self.setup_borders(borders)
+        self.setup_fills(fills)
 
         if widths is not None:
             if not isinstance(widths, (list, tuple)):
@@ -49,10 +53,6 @@ class PDFTable:
 
         self.style = {'cell_margin': 5, 'cell_fill': None}
         self.style.update(process_style(style, self.pdf))
-
-    @property
-    def parts(self):
-        return self.fills + self.lines + self.parts_
 
     def setup(self, x=None, y=None, width=None, height=None):
         if x is not None:
@@ -96,13 +96,23 @@ class PDFTable:
             else:
                 data[i] = (int(j) for j in data[i].split(','))
 
-    def borders_and_fills(self, borders, fills):
+    def setup_borders(self, borders):
         h_count = len(self.content) + 1
         v_count = len(self.content[0]) + 1
-        self.borders_h = [[{'width': 1, 'color': 'black', 'style': 'solid'}
-                           for j in range(v_count - 1)] for i in range(h_count)]
-        self.borders_v = [[{'width': 1, 'color': 'black', 'style': 'solid'}
-                           for j in range(h_count - 1)] for i in range(v_count)]
+        self.borders_h = [
+            [
+                {'width': 1, 'color': 'black', 'style': 'solid'}
+                for j in range(v_count - 1)
+            ]
+            for i in range(h_count)
+        ]
+        self.borders_v = [
+            [
+                {'width': 1, 'color': 'black', 'style': 'solid'}
+                for j in range(h_count - 1)
+            ]
+            for i in range(v_count)
+        ]
 
         for b in borders:
             ans = self.decoration_first_step(b)
@@ -110,8 +120,8 @@ class PDFTable:
                 continue
             border, data, vert = ans
             border_l = self.borders_v if vert else self.borders_h
-            self.decoration_second_step(self, data, vert,
-                h_count - 1 if vert else h_count,
+            self.decoration_second_step(
+                self, data, vert, h_count - 1 if vert else h_count,
                 v_count if vert else v_count - 1
             )
 
@@ -121,8 +131,12 @@ class PDFTable:
                     pdf_color = PDFColor(border_l[i][j]['color'], True)
                     border_l[i][j]['color'] = pdf_color
 
-        self.fills_defs = {}
 
+    def setup_fills(self,  fills):
+        h_count = len(self.content) + 1
+        v_count = len(self.content[0]) + 1
+
+        self.fills_defs = {}
         for f in fills:
             ans = self.decoration_first_step(f)
             if ans is None:

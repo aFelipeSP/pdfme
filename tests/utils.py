@@ -100,3 +100,17 @@ def gen_content(size, level=1):
                 })
 
     return obj
+
+
+def gen_table(rows=None, cols=None):
+    rows = 20 if rows is None else rows
+    cols = int(random.triangular(1, 7, 2)) if cols is None else cols
+
+    table = []
+    row_spans = {}
+    for i in range(rows):
+        row = []
+        for j in range(cols):
+            pass
+
+    
