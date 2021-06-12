@@ -46,8 +46,7 @@ class PDFTable:
             except TypeError:
                 raise Exception('widths must be numbers')
             except ZeroDivisionError:
-                raise Exception(
-                    'at least one of the widths must be greater than zero')
+                raise Exception('sum of widths must be greater than zero')
         else:
             self.widths = [1 / cols_count] * cols_count
 
@@ -64,89 +63,86 @@ class PDFTable:
         if height is not None:
             self.height = height
 
-    def decoration_first_step(self, obj):
-        obj = deepcopy(obj)
-        pos = obj.pop('p', None)
-        if not pos:
-            return None
-        pos = pos.lower()
-        data = pos.lower().split(';')
-        data[0] = data[0][1:]
-        if data[0] == '':
-            data[0] = ':'
-        if len(data) == 1:
-            data.append(':')
+    def parse_style_string(self, pos, counts):
+        range_strs = pos.split(';')
+        if len(range_strs) == 1:
+            range_strs.append(':')
+        ranges = [
+            self.parse_range_string(range_str, count)
+            for range_str, count in zip(range_strs, counts)
+        ]
+        for i in ranges[0]:
+            for j in ranges[1]:
+                yield i, j
+    
+    def range_generator(self, list_str, count):
+        for i in list_str.split(','):
+            num = int(i)
+            yield num if num >= 0  else count + num
 
-        vert = pos.startswith('v')
-        return obj, data, vert
-
-    def decoration_second_step(self, data, vert, h_count, v_count):
-        for i in range(2):
-            count = v_count if (vert and i == 0) or (
-                not vert and i == 1) else h_count
-            if ':' in data[i]:
-                parts = [int(j) for j in data[i].split(':')]
-                parts[0] = 0 if parts[0].strip() == '' else int(parts[0])
-                if len(parts) > 1:
-                    num = count if parts[0].strip() == '' else int(parts[1])
-                    parts[1] = num if num >= 0 else count + num
-                if len(parts) > 2:
-                    parts[2] = int(parts[2])
-                data[i] = range(*parts)
-            else:
-                data[i] = (int(j) for j in data[i].split(','))
+    def parse_range_string(self, data, count):
+        data = ':' if data == '' else data
+        if ':' in data:
+            parts = data.split(':')
+            parts[0] = 0 if parts[0].strip() == '' else int(parts[0])
+            if len(parts) > 1:
+                num = count - 1 if parts[1].strip() == '' else int(parts[1])
+                parts[1] = num if num >= 0 else count + num
+            if len(parts) > 2:
+                parts[2] = 1 if parts[2].strip() == '' else int(parts[2])
+            return range(*parts)
+        else:
+            return [i for i in self.range_generator(data, count)]
 
     def setup_borders(self, borders):
-        h_count = len(self.content) + 1
-        v_count = len(self.content[0]) + 1
-        self.borders_h = [
-            [
-                {'width': 1, 'color': 'black', 'style': 'solid'}
-                for j in range(v_count - 1)
-            ]
-            for i in range(h_count)
-        ]
-        self.borders_v = [
-            [
-                {'width': 1, 'color': 'black', 'style': 'solid'}
-                for j in range(h_count - 1)
-            ]
-            for i in range(v_count)
-        ]
+        v_count = len(self.content) + 1
+        h_count = len(self.content[0]) + 1
 
-        for b in borders:
-            ans = self.decoration_first_step(b)
-            if ans is None:
+        self.default_border = {'width': 1, 'color': 'black', 'style': 'solid'}
+        self.borders_h = {}
+        self.borders_v = {}
+
+        for i, b in enumerate(borders):
+            border = deepcopy(b)
+            pos = border.pop('pos', None)
+            if pos is None:
+                if i == 0:
+                    self.default_border.update(border)
                 continue
-            border, data, vert = ans
+            
+            vert = pos[0].lower() == 'v'
+            counts = (v_count, h_count) if vert else (h_count, v_count)
             border_l = self.borders_v if vert else self.borders_h
-            self.decoration_second_step(
-                self, data, vert, h_count - 1 if vert else h_count,
-                v_count if vert else v_count - 1
-            )
+            for i, j in self.parse_style_string(pos[1:], counts):
+                first = border_l.setdefault(i, {})
+                sec = first.setdefault(j, deepcopy(self.default_border))
+                sec.update(border)
+                sec['color'] = PDFColor(sec['color'], True)
 
-            for i in data[0]:
-                for j in data[i]:
-                    border_l[i][j].update(border)
-                    pdf_color = PDFColor(border_l[i][j]['color'], True)
-                    border_l[i][j]['color'] = pdf_color
-
+    def get_border(self, i, j, is_vert):
+        border_l = self.borders_v if is_vert else self.borders_h
+        if i in border_l and j in border_l[i]:
+            return deepcopy(border_l[i][j])
+        else:
+            return deepcopy(self.default_border)
 
     def setup_fills(self,  fills):
-        h_count = len(self.content) + 1
-        v_count = len(self.content[0]) + 1
+        v_count = len(self.content)
+        h_count = len(self.content[0])
 
+        self.default_fill = None
         self.fills_defs = {}
-        for f in fills:
-            ans = self.decoration_first_step(f)
-            if ans is None:
+
+        for i, f in enumerate(fills):
+            fill = fill['color']
+            pos = fill.get('pos', None)
+            if pos is None:
+                if i == 0:
+                    self.default_fill = fill
                 continue
-            fill, data, vert = ans
-            self.decoration_second_step(self, data, vert, h_count-1, v_count-1)
-            for i in data[0]:
-                for j in data[i]:
-                    key = (j, i) if vert else (i, j)
-                    self.fills_defs[key] = fill['color']
+            for i, j in self.parse_style_string(pos, (v_count, h_count)):
+                first = self.fills_defs.setdefault(i, {})
+                first[j] = fill
 
     def parse_style(self, style):
         cell_style = {}
@@ -238,7 +234,7 @@ class PDFTable:
         self.y_abs = self.y + self.current_height
         for col in range(col_count):
             self.x_abs = self.x + self.widths[col] * self.width
-            border_top = deepcopy(self.border_h[self.current_row][col])
+            border_top = self.get_border(self.current_row, col, False)
             self.process_borders(col, {}, border_top)
 
         self.process_borders(col_count, {}, {})
@@ -260,9 +256,9 @@ class PDFTable:
         for col, element in enumerate(row):
             self.x_abs = self.x + self.accum_width
 
-            rowspan_memory = self.rowspan[col]
-            border_left = deepcopy(self.border_v[col][self.current_row])
-            border_top = deepcopy(self.border_h[self.current_row][col])
+            rowspan_memory = self.rowspan[col]            
+            border_left = self.get_border(self.current_row, col, True)
+            border_top = self.get_border(self.current_row, col, False)
             should_continue = False
             if rowspan_memory is None:
                 if self.colspan > 0:
@@ -314,9 +310,13 @@ class PDFTable:
             rowspan = element.pop('rowspan', 1) - 1
             if rowspan > 0:
                 self.rowspan[col] = {'rows': rowspan, 'cols': self.colspan}
-
-            border_right = self.border_v[col + self.colspan + 1][self.current_row]
-            border_bottom = self.border_h[self.current_row + rowspan + 1][col]
+            
+            border_right = self.get_border(
+                self.current_row, col + self.colspan + 1, False
+            )
+            border_bottom = self.get_border(
+                self.current_row + rowspan + 1, col, False
+            )
 
             full_width = sum(self.widths[col:col+self.colspan]) * self.width
             padd_x = border_left.get('width', 0)/2 + \
@@ -446,7 +446,7 @@ class PDFTable:
             if real_height > self.max_height:
                 self.max_height = real_height
 
-        last_border = self.border_v[len(row)][self.current_row]
+        last_border = self.get_border(self.current_row, len(row), True)
         self.self.process_borders(len(row), last_border, {})
 
         for fill in self.row_fills:

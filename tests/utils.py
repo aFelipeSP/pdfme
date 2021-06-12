@@ -56,18 +56,19 @@ def gen_rich_text(n):
 
     return obj
 
-def gen_content(size, level=1):
-
+def gen_content(size, font_size=4, level=1):
+    font_size = max(2.5, font_size)
+    cols = random.randint(2,3)
     style = {}
     if maybe(0.1): style['b'] = 1
     if maybe(0.1): style['i'] = 1
     if maybe(0.1): style['u'] = 1
     if maybe(0.1): style['c'] = random_color()
     if maybe(0.1):
-        style['f'] = random.choices(['Helvetica', 'Times', 'Courier'], [8, 1, 1])[0]
+        style['f'] = random.choices(['Helvetica', 'Times', 'Courier'], [3, 1, 1])[0]
     if maybe(0.1): style['bg'] = random_color()
     if level == 1 or maybe(0.1):
-        style['s'] = random.triangular(4, (0.15 * (1 - level) + 1) * 8, 5)
+        style['s'] = -1.6 * level + font_size + 6 - cols
     if maybe(0.1): style['r'] = random.triangular(-0.4, 0.4)
     if maybe(0.1):
         style['text_align'] = random.choices(['j', 'c', 'l', 'r'], [4, 2, 2, 2])[0]
@@ -79,7 +80,7 @@ def gen_content(size, level=1):
     if maybe(0.1): style['margin-bottom'] = random.triangular(0, 10, 0)
 
     c = []
-    obj = {'style': style, 'content': c, 'cols': {"count": random.randint(2,3)}}
+    obj = {'style': style, 'content': c, 'cols': {"count": cols}}
     n = int(random.triangular(3, (0.15 * (1 - level) + 1) * size))
     l = random.choice([0,1])
 
@@ -89,7 +90,7 @@ def gen_content(size, level=1):
 
     for i in range(n):
         if i%2 == l:
-            ans = gen_content(size, level + 1)
+            ans = gen_content(size, font_size, level + 1)
             c.append(ans)
         else:
             if maybe(0.5):
@@ -106,11 +107,60 @@ def gen_table(rows=None, cols=None):
     rows = 20 if rows is None else rows
     cols = int(random.triangular(1, 7, 2)) if cols is None else cols
 
-    table = []
+    obj = {'content': [], 'style': {}}
+    obj['widths'] = [random.triangular(3, 6) for _ in range(cols)]
+    if maybe(0.1): obj['style']['cell_fill'] = random_color()
+    if maybe(0.1): obj['style']['cell_margin'] = random.triangular(5, 20, 5)
+
+    obj['borders'] = [
+        {'width': 1, 'color': 0.6, 'style': 'dotted'},
+        {'pos': 'h::2;', 'width': 1.5, 'color': 'green', 'style': 'dotted'},
+        {'pos': 'v;1::2', 'width': 2, 'color': 'red', 'style': 'dashed'},
+        {'pos': 'h0,1,-1;', 'width': 2.5, 'color': 'blue', 'style': 'solid'},
+    ]
+
+    obj['fills'] = [
+        {'color': 0.9},
+        {'pos': '::2;::2', 'color': 0.8},
+        {'pos': '1::2;::2', 'color': 0.7},
+        {'pos': '::2;1::2', 'color': 0.8},
+        {'pos': '1::2;1::2', 'color': 0.7},
+    ]
+
     row_spans = {}
     for i in range(rows):
         row = []
+        col_spans = 0
         for j in range(cols):
-            pass
+            if col_spans > 0:
+                col_spans -= 1
+                row.append(None)
+            elif row_spans.get(j, {}).get('rows', 0) > 0:
+                row_spans[j]['rows'] -= 1
+                col_spans = row_spans[j]['cols']
+                row.append(None)
+            else:
+                prob = random.random()
+                if prob < 0.4:
+                    element = gen_content(3)
+                elif prob < 0.75:
+                    element = gen_rich_text(200)
+                else:
+                    element = {'image': 'tests/image_test.jpg', 'style': {
+                        'image_place': 'flow' if maybe(0.7) else 'normal'
+                    }}
+                rowspan = int(random.triangular(1, rows - i, 1))
+                colspan = int(random.triangular(1, cols - j, 1))
+                col_spans = colspan - 1
+                element['rowspan'] = rowspan
+                element['colspan'] = colspan
+                style = {}
+                if maybe(0.1): style['cell_fill'] = random_color()
+                if maybe(0.1): style['cell_margin'] = random.triangular(5, 20, 5)
+                element['style'] = style
+                row_spans[j] = {'rows': rowspan - 1, 'cols': colspan - 1}
+                row.append(element)
+        obj['content'].append(row)
 
+    return obj
     

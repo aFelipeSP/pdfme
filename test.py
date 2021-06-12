@@ -10,18 +10,20 @@ if __name__ == '__main__':
 
     parser = ArgumentParser()
     parser.add_argument('-s', '--single_test')
-    parser.add_argument('-g', '--group_test', choices=['text', 'content'])
+    parser.add_argument('-g', '--group_test', choices=['text', 'content', 'table'])
     args = parser.parse_args()
     
     if args.single_test:
         if args.single_test.startswith('test_content'):
             test_content(int(args.single_test[12:]))
+        elif args.single_test.startswith('test_table'):
+            test_table(int(args.single_test[10:]))
         else:
             globals()[args.single_test]()
     else:
         test_start = 'test'
         if args.group_test:
-            test_start = 'test_text' if args.group_test == 'text' else 'test_content'
+            test_start = 'test_' + args.group_test
 
         globals_ = list(globals().keys())
         for key in globals_:

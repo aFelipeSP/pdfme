@@ -17,11 +17,11 @@ def run_test(index):
         with input_file.open('w') as f:
             json.dump(content, f, ensure_ascii=False)
 
-    pdf.table(content)
+    pdf.table(**content)
     with open('test_table{}.pdf'.format(index), 'wb') as f:
         pdf.output(f)
 
-def test_content(index=None):
+def test_table(index=None):
     if index is not None:
         run_test(index)
     else:
