@@ -456,10 +456,10 @@ class PDFContentPart:
         if pdf_text.current_height > 0:
             self.add_top_margin(style)
 
-        if not pdf_text.finished:
-            return {'delayed': remaining, 'next': True}
-        else:
+        if pdf_text.finished:
             return {'delayed': None, 'next': False}
+        else:
+            return {'delayed': remaining, 'next': True}
 
     def process_image(self, element, style):
         ret = {'delayed': None, 'next': False}
