@@ -6,12 +6,12 @@ from .image import PDFImage
 from .utils import process_style
 
 
-PARAGRAPH_PROPERTIES = (
-    'text_align', 'line_height', 'indent', 'list_text', 
+PARAGRAPH_PROPS = (
+    'text_align', 'line_height', 'indent', 'list_text',
     'list_style', 'list_indent'
 )
 
-TABLE_PROPERTIES = ('widths', 'borders', 'fills')
+TABLE_PROPS = ('widths', 'borders', 'fills')
 
 class PDFTable:
     def __init__(
@@ -74,7 +74,7 @@ class PDFTable:
         for i in ranges[0]:
             for j in ranges[1]:
                 yield i, j
-    
+
     def range_generator(self, list_str, count):
         for i in list_str.split(','):
             num = int(i)
@@ -112,7 +112,7 @@ class PDFTable:
                 if i == 0:
                     self.default_border.update(border)
                 continue
-            
+
             is_vert = pos[0].lower() == 'v'
             counts = (rows, cols + 1) if is_vert else (rows + 1, cols)
             border_l = self.borders_v if is_vert else self.borders_h
@@ -173,7 +173,7 @@ class PDFTable:
         if not self.top_lines_interrupted:
             self.top_lines[-1]['x2'] = self.x_abs + horiz_correction
 
-        if border_top['width'] > 0:
+        if border_top.get('width', 0) > 0:
             x2 = self.x_abs + self.widths[col] * self.width
             if (not self.top_lines_interrupted
                 and self.top_lines[-1]['width'] == border_top['width']
@@ -189,7 +189,7 @@ class PDFTable:
         else:
             self.top_lines_interrupted = True
 
-        if border_left['width'] > 0:
+        if border_left.get('width', 0) > 0:
             if not (not v_line['interrupted']
                 and v_line['list'][-1]['width'] == border_left['width']
                 and v_line['list'][-1]['color'] == border_left['color']
@@ -202,13 +202,6 @@ class PDFTable:
         else:
             v_line['interrupted'] = True
 
-    def add_delayed(self):
-        if len(self.delayed) == 0:
-            return True
-        row = [self.delayed.get(i) for i in range(len(self.content[0]))]
-        ret = self.add_row(row)
-        return ret
-
     def run(self, x=None, y=None, width=None, height=None):
         self.setup(x, y, width, height)
         self.parts_ = []
@@ -220,18 +213,14 @@ class PDFTable:
             for i in range(col_count + 1)]
         self.current_height = 0
 
-        can_continue = self.add_delayed()
-        if not can_continue:
-            return
-
-        self.delayed = {}
-
-        can_continue = True
-        while self.current_row < len(self.content):
-            can_continue = self.add_row(self.content[self.current_row])
-            self.current_row += 1
-            if not can_continue:
-                break
+        if len(self.delayed) > 0:
+            self.add_row([self.delayed.get(i) for i in range(col_count)])
+        if len(self.delayed) == 0:
+            while self.current_row < len(self.content):
+                self.add_row(self.content[self.current_row])
+                self.current_row += 1
+                if len(self.delayed) > 0:
+                    break
 
         self.top_lines = []
         self.top_lines_interrupted = True
@@ -243,7 +232,7 @@ class PDFTable:
 
         self.process_borders(col_count, {}, {})
 
-        if can_continue:
+        if self.current_row == len(self.content) and len(self.delayed) == 0:
             self.finished = True
 
     def add_row(self, row):
@@ -259,7 +248,7 @@ class PDFTable:
         for col, element in enumerate(row):
             self.x_abs = self.x + self.accum_width
 
-            rowspan_memory = self.rowspan[col]            
+            rowspan_memory = self.rowspan[col]
             border_left = self.get_border(self.current_row, col, True)
             border_top = self.get_border(self.current_row, col, False)
             should_continue = False
@@ -313,7 +302,7 @@ class PDFTable:
             rowspan = element.pop('rowspan', 1) - 1
             if rowspan > 0:
                 self.rowspan[col] = {'rows': rowspan, 'cols': self.colspan}
-            
+
             border_right = self.get_border(
                 self.current_row, col + self.colspan + 1, False
             )
@@ -321,12 +310,12 @@ class PDFTable:
                 self.current_row + rowspan + 1, col, False
             )
 
-            full_width = sum(self.widths[col:col+self.colspan]) * self.width
-            padd_x = border_left.get('width', 0)/2 + \
+            full_width = sum(self.widths[col:col + self.colspan]) * self.width
+            padd_x = border_left.get('width', 0) / 2 + \
                 cell_style['cell_margin_left']
-            padd_y_top = border_top.get('width', 0)/2 + \
+            padd_y_top = border_top.get('width', 0) / 2 + \
                 cell_style['cell_margin_top']
-            padd_y_bottom = border_bottom.get('width', 0)/2 + \
+            padd_y_bottom = border_bottom.get('width', 0) / 2 + \
                 cell_style['cell_margin_bottom']
             padd_y = padd_y_top + padd_y_bottom
             x = self.x_abs + padd_x
@@ -350,33 +339,36 @@ class PDFTable:
             keys = [key for key in element.keys() if key.startswith('.')]
             if (
                 len(keys) > 0 or
-                ('delayed' in element and element['type'] == 'content')
+                ('delayed' in element and element['type'] == 'text')
             ):
                 if 'delayed' in element:
                     pdf_text = element['delayed']
-                    pdf_text.setup(x + self.accum_width, y, width, height)
+                    pdf_text.setup(x, y, width, height)
                 else:
                     par_style = {
-                        v: style.get(v) for v in PARAGRAPH_PROPERTIES if v in style
+                        v: style.get(v) for v in PARAGRAPH_PROPS if v in style
                     }
                     key = keys[0]
                     pdf_text = PDFText(
-                        {key: element[key], 'style': style.copy()},
-                        width, height, x + self.accum_width, y,
+                        {key: element[key], 'style': style},
+                        width, height, x, y,
                         fonts=self.fonts, pdf=self.pdf, **par_style
                     )
 
                 result = pdf_text.run()
                 result['type'] = 'paragraph'
                 self.parts_.append(result)
+                real_height = pdf_text.current_height + padd_y
 
                 if not pdf_text.finished:
                     self.delayed[col] = {
-                        'delayed': pdf_content, 'type': 'text',
+                        'delayed': pdf_text, 'type': 'text',
                         'cell_style': cell_style
                     }
+                else:
+                    self.delayed.pop(col, None)
             elif (
-                len(keys) > 0 or
+                'image' in element or
                 ('delayed' in element and element['type'] == 'image')
             ):
                 if 'delayed' in element:
@@ -384,18 +376,16 @@ class PDFTable:
                 else:
                     pdf_image = PDFImage(element['image'])
                 img_width = width
-                img_height = img_width * pdf_image.height/pdf_image.width
+                img_height = img_width * pdf_image.height / pdf_image.width
 
                 if img_height < height:
                     real_height = img_height + padd_y
                     self.parts_.append({
-                        'x': x + self.accum_width, 'y': y,
-                        'type': 'image', 'width': img_width,
-                        'height': img_height, 'pdf_image': pdf_image
+                        'type': 'image', 'pdf_image': pdf_image, 'x': x, 'y': y,
+                        'width': img_width, 'height': img_height,
                     })
+                    self.delayed.pop(col, None)
                 else:
-                    image_dict = deepcopy(element)
-                    image_dict['image_delayed'] = True
                     self.delayed[col] = {
                         'delayed': pdf_image, 'type': 'image',
                         'cell_style': cell_style
@@ -410,7 +400,7 @@ class PDFTable:
                 else:
                     element['style'] = style
                     pdf_content = PDFContent(
-                        element, width, height, x, y, self.pdf
+                        element, self.fonts, width, height, x, y, self.pdf
                     )
 
                 pdf_content.run()
@@ -422,21 +412,27 @@ class PDFTable:
                 real_height = padd_y + pdf_content.current_height
 
                 if not pdf_content.finished:
-                    self.delayed[col] = {'delayed': pdf_content,
-                        'type': 'content', 'cell_style': deepcopy(cell_style)}
+                    self.delayed[col] = {
+                        'delayed': pdf_content, 'type': 'content',
+                        'cell_style': cell_style
+                    }
+                else:
+                    self.delayed.pop(col, None)
 
-            elif ('table' in element or
+            elif (
+                'table' in element or
                 ('delayed' in element and element['type'] == 'table')
             ):
                 if 'delayed' in element and element['type'] == 'table':
                     pdf_table = element['delayed']
                     pdf_table.setup(x, y, width, height)
                 else:
-                    table_props = {v: element.get(v) for v in TABLE_PROPERTIES
-                        if v in element}
+                    table_props = {
+                        v: element.get(v) for v in TABLE_PROPS if v in element
+                    }
                     pdf_table = PDFTable(
-                        element['table'], width, height, x, y, style=style,
-                        pdf=self.pdf, **table_props
+                        element['table'], self.fonts, width, height, x, y,
+                        style=style, pdf=self.pdf, **table_props
                     )
 
                 pdf_table.run()
@@ -448,15 +444,19 @@ class PDFTable:
                 real_height = pdf_table.current_height + padd_y
 
                 if not pdf_table.finished:
-                    self.delayed[col] = {'delayed': pdf_table,
-                        'type': 'table', 'cell_style': deepcopy(cell_style)}
+                    self.delayed[col] = {
+                        'delayed': pdf_table, 'type': 'table',
+                        'cell_style': cell_style
+                    }
+                else:
+                    self.delayed.pop(col, None)
 
             self.accum_width += full_width
             if real_height > self.max_height:
                 self.max_height = real_height
 
         last_border = self.get_border(self.current_row, len(row), True)
-        self.self.process_borders(len(row), last_border, {})
+        self.process_borders(len(row), last_border, {})
 
         for fill in self.row_fills:
             fill['height'] = self.max_height

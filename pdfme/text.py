@@ -665,7 +665,9 @@ class PDFText(PDFTextBase):
         is_last_string = False
 
         for element in elements:
-            if isinstance(element, str) and element != '':
+            if isinstance(element, str):
+                if element == '':
+                    continue
                 lines = element.split('\n')
                 if not is_last_string:
                     text_part = self._new_text_part(
