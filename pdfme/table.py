@@ -32,8 +32,8 @@ class PDFTable:
 
         cols_count = len(content[0])
         self.delayed = {}
-        self.setup_borders(borders)
-        self.setup_fills(fills)
+        self.setup_borders([] if borders is None else borders)
+        self.setup_fills([] if fills is None else fills)
 
         if widths is not None:
             if not isinstance(widths, (list, tuple)):
@@ -165,7 +165,7 @@ class PDFTable:
         v_line = self.vert_lines[col]
         horiz_correction = border_left.get('width', 0)/2
         if not v_line['interrupted']:
-            v_line['list'][-1]['y2'] = self.y_abs + vert_correction
+            v_line['list'][-1]['y2'] = self.y_abs - vert_correction
             aux = v_line['list'][-1].get('width', 0)/2
             if aux > horiz_correction:
                 horiz_correction = aux
@@ -182,23 +182,28 @@ class PDFTable:
             ):
                 self.top_lines[-1]['x2'] = x2 + horiz_correction
             else:
-                border_top.update(dict(type='line', y1=self.y_abs,
-                    y2=self.y_abs, x2=x2, x1=self.x_abs - horiz_correction))
+                border_top.update(dict(
+                    type='line', y1=self.y_abs, 
+                    y2=self.y_abs, x2=x2, x1=self.x_abs - horiz_correction
+                ))
                 self.top_lines.append(border_top)
                 self.top_lines_interrupted = False
         else:
             self.top_lines_interrupted = True
 
         if border_left.get('width', 0) > 0:
-            if not (not v_line['interrupted']
+            if not (
+                not v_line['interrupted']
                 and v_line['list'][-1]['width'] == border_left['width']
                 and v_line['list'][-1]['color'] == border_left['color']
                 and v_line['list'][-1]['style'] == border_left['style']
             ):
-                border_left.update(dict(type='line', x1=self.x_abs,
-                    x2=self.x_abs, y1=self.y_abs - vert_correction))
+                border_left.update(dict(
+                    type='line', x1=self.x_abs,
+                    x2=self.x_abs, y1=self.y_abs - vert_correction
+                ))
                 v_line['list'].append(border_left)
-                self.top_lines_interrupted = False
+                v_line['interrupted'] = False
         else:
             v_line['interrupted'] = True
 
@@ -208,9 +213,11 @@ class PDFTable:
         self.lines = []
         self.fills = []
         col_count = len(self.content[0])
-        self.rowspan = [None] * col_count
-        self.vert_lines = [{'list': [], 'interrupted': True}
-            for i in range(col_count + 1)]
+        self.rowspan = {}
+        self.vert_lines = [
+            {'list': [], 'interrupted': True}
+            for i in range(col_count + 1)
+        ]
         self.current_height = 0
 
         if len(self.delayed) > 0:
@@ -224,7 +231,7 @@ class PDFTable:
 
         self.top_lines = []
         self.top_lines_interrupted = True
-        self.y_abs = self.y + self.current_height
+        self.y_abs = self.y - self.current_height
         for col in range(col_count):
             self.x_abs = self.x + self.widths[col] * self.width
             border_top = self.get_border(self.current_row, col, False)
@@ -244,11 +251,11 @@ class PDFTable:
         self.top_lines_interrupted = True
         self.row_fills = []
         self.is_rowspan = False
-        self.y_abs = self.y + self.current_height
+        self.y_abs = self.y - self.current_height
         for col, element in enumerate(row):
             self.x_abs = self.x + self.accum_width
 
-            rowspan_memory = self.rowspan[col]
+            rowspan_memory = self.rowspan.get(col, None)
             border_left = self.get_border(self.current_row, col, True)
             border_top = self.get_border(self.current_row, col, False)
             should_continue = False
@@ -268,7 +275,7 @@ class PDFTable:
                 border_top['width'] = 0
 
                 if rowspan_memory['rows'] == 0:
-                    self.rowspan[col] = None
+                    self.rowspan.pop(col)
                 should_continue = True
 
             self.process_borders(col, border_left, border_top)
@@ -310,7 +317,7 @@ class PDFTable:
                 self.current_row + rowspan + 1, col, False
             )
 
-            full_width = sum(self.widths[col:col + self.colspan]) * self.width
+            full_width = sum(self.widths[col:col+self.colspan+1]) * self.width
             padd_x = border_left.get('width', 0) / 2 + \
                 cell_style['cell_margin_left']
             padd_y_top = border_top.get('width', 0) / 2 + \
@@ -319,10 +326,10 @@ class PDFTable:
                 cell_style['cell_margin_bottom']
             padd_y = padd_y_top + padd_y_bottom
             x = self.x_abs + padd_x
-            y = self.y_abs + padd_y_top
+            y = self.y_abs - padd_y_top
             width = full_width - padd_x - border_right.get('width', 0) / 2 - \
                 cell_style['cell_margin_right']
-            height = self.row_max_height - padd_y_top - padd_y_bottom
+            height = self.row_max_height - padd_y
 
             fill_color = cell_style.get('cell_fill',
                 self.fills_defs[(self.current_row, col)]
