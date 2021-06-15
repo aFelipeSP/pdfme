@@ -416,7 +416,9 @@ class PDFTextBase:
         else:
             self.last_part_line = self.last_part_added
             self.last_word_line = self.last_word_added
-            self.current_height += line_height
+            self.current_height += (
+                line_height + (self.current_line.height*0.35 if is_last else 0)
+            )
             self.lines.append(self.current_line)
             self.used_fonts.update(self.current_line_used_fonts)
             self.current_line_used_fonts = set()
@@ -577,7 +579,7 @@ class PDFTextBase:
 
         if part.underline:
             color = PDFColor(part.state.color, True)
-            stroke_width = part.state.size * 0.1
+            stroke_width = part.state.size * 0.07
             y_u = round(y + part.state.rise - stroke_width, 3)
 
             if color != self.last_color:

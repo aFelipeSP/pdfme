@@ -2,7 +2,7 @@ import random
 import json
 from pdfme import PDF
 
-abc = 'abcdefghijklmnñopqrstuvwxyzáéíóú'
+abc = 'abcdefghijklmnñopqrstuvwxyzABCDEFGHIJKLMNÑOPQRSTUVWXYZáéíóúÁÉÍÓÚ'
 
 def gen_word():
     return ''.join(random.choice(abc) for _ in range(random.randint(1, 10)))
@@ -14,7 +14,7 @@ def maybe(n=0.5):
     return random.choices([True, False], [n, 1 - n])[0]
 
 def random_color():
-    return [round(random.random(), 3) for _ in range(3)]
+    return [random.uniform(0.5, 1) for _ in range(3)]
 
 def gen_rich_text(n):
 
@@ -111,16 +111,17 @@ def gen_table(rows=None, cols=None):
     obj['widths'] = [random.triangular(3, 6) for _ in range(cols)]
     if maybe(0.1): obj['style']['cell_fill'] = random_color()
     if maybe(0.1): obj['style']['cell_margin'] = random.triangular(5, 20, 5)
+    if maybe(0.1): obj['style']['border_width'] = random.triangular(1, 4)
+    if maybe(0.1): obj['style']['border_color'] = random_color()
+    if maybe(0.1): obj['style']['border_style'] = random.choice(['solid', 'dotted', 'dashed'])
 
     obj['borders'] = [
-        {'width': 1, 'color': 0.6, 'style': 'dotted'},
         {'pos': 'h::2;', 'width': 1.5, 'color': 'green', 'style': 'dotted'},
         {'pos': 'v;1::2', 'width': 2, 'color': 'red', 'style': 'dashed'},
         {'pos': 'h0,1,-1;', 'width': 2.5, 'color': 'blue', 'style': 'solid'},
     ]
 
     obj['fills'] = [
-        {'color': 0.9},
         {'pos': '::2;::2', 'color': 0.8},
         {'pos': '1::2;::2', 'color': 0.7},
         {'pos': '::2;1::2', 'color': 0.8},

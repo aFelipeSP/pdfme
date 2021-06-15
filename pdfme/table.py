@@ -32,8 +32,6 @@ class PDFTable:
 
         cols_count = len(content[0])
         self.delayed = {}
-        self.setup_borders([] if borders is None else borders)
-        self.setup_fills([] if fills is None else fills)
 
         if widths is not None:
             if not isinstance(widths, (list, tuple)):
@@ -52,6 +50,9 @@ class PDFTable:
 
         self.style = {'cell_margin': 5, 'cell_fill': None}
         self.style.update(process_style(style, self.pdf))
+        self.set_default_border()
+        self.setup_borders([] if borders is None else borders)
+        self.setup_fills([] if fills is None else fills)
 
     def setup(self, x=None, y=None, width=None, height=None):
         if x is not None:
@@ -62,6 +63,13 @@ class PDFTable:
             self.width = width
         if height is not None:
             self.height = height
+
+    def set_default_border(self):
+        self.default_border = {}
+        self.default_border['width'] = self.style.pop('border_width', 1)
+        color = self.style.pop('border_color', 0)
+        self.default_border['color'] = PDFColor(color, True)
+        self.default_border['style'] = self.style.pop('border_style', 'solid')
 
     def parse_style_string(self, pos, counts):
         range_strs = pos.split(';')
@@ -78,7 +86,7 @@ class PDFTable:
     def range_generator(self, list_str, count):
         for i in list_str.split(','):
             num = int(i)
-            yield num if num >= 0  else count + num
+            yield num if num >= 0 else count + num
 
     def parse_range_string(self, data, count):
         data = ':' if data == '' else data
@@ -87,7 +95,7 @@ class PDFTable:
             num = 0 if parts[0].strip() == '' else int(parts[0])
             parts[0] = num if num >= 0 else count + num
             if len(parts) > 1:
-                num = count - 1 if parts[1].strip() == '' else int(parts[1])
+                num = count if parts[1].strip() == '' else int(parts[1])
                 parts[1] = num if num >= 0 else count + num
             if len(parts) > 2:
                 parts[2] = 1 if parts[2].strip() == '' else int(parts[2])
@@ -98,21 +106,15 @@ class PDFTable:
     def setup_borders(self, borders):
         rows = len(self.content)
         cols = len(self.content[0])
-
-        self.default_border = {'width': 1, 'color': 'black', 'style': 'solid'}
         self.borders_h = {}
         self.borders_v = {}
-
-        for i, b in enumerate(borders):
+        for b in borders:
             border = deepcopy(deepcopy(self.default_border))
             border.update(b)
             border['color'] = PDFColor(border['color'], True)
             pos = border.pop('pos', None)
             if pos is None:
-                if i == 0:
-                    self.default_border.update(border)
                 continue
-
             is_vert = pos[0].lower() == 'v'
             counts = (rows, cols + 1) if is_vert else (rows + 1, cols)
             border_l = self.borders_v if is_vert else self.borders_h
@@ -130,27 +132,23 @@ class PDFTable:
     def setup_fills(self,  fills):
         v_count = len(self.content)
         h_count = len(self.content[0])
-
-        self.default_fill = None
         self.fills_defs = {}
-
-        for i, f in enumerate(fills):
+        for f in fills:
             fill = f['color']
             pos = f.get('pos', None)
             if pos is None:
-                if i == 0:
-                    self.default_fill = fill
                 continue
             for i, j in self.parse_style_string(pos, (v_count, h_count)):
                 first = self.fills_defs.setdefault(i, {})
                 first[j] = fill
 
-    def parse_style(self, style):
+    def get_cell_style(self, style):
         cell_style = {}
         attr = 'cell_margin'
         for side in ('top', 'right', 'bottom', 'left'):
-            cell_style[attr + '_' + side] = style.pop(attr + '_' + side,
-                                                      style.get(attr, None))
+            cell_style[attr + '_' + side] = style.pop(
+                attr + '_' + side, style.get(attr, None)
+            )
         style.pop(attr, None)
         cell_style['cell_fill'] = style.pop('cell_fill', None)
         return cell_style
@@ -171,7 +169,7 @@ class PDFTable:
                 horiz_correction = aux
 
         if not self.top_lines_interrupted:
-            self.top_lines[-1]['x2'] = self.x_abs + horiz_correction
+            self.top_lines[-1]['x2'] += horiz_correction
 
         if border_top.get('width', 0) > 0:
             x2 = self.x_abs + self.widths[col] * self.width
@@ -180,7 +178,7 @@ class PDFTable:
                 and self.top_lines[-1]['color'] == border_top['color']
                 and self.top_lines[-1]['style'] == border_top['style']
             ):
-                self.top_lines[-1]['x2'] = x2 + horiz_correction
+                self.top_lines[-1]['x2'] = x2
             else:
                 border_top.update(dict(
                     type='line', y1=self.y_abs, 
@@ -200,7 +198,7 @@ class PDFTable:
             ):
                 border_left.update(dict(
                     type='line', x1=self.x_abs,
-                    x2=self.x_abs, y1=self.y_abs - vert_correction
+                    x2=self.x_abs, y1=self.y_abs + vert_correction
                 ))
                 v_line['list'].append(border_left)
                 v_line['interrupted'] = False
@@ -232,12 +230,17 @@ class PDFTable:
         self.top_lines = []
         self.top_lines_interrupted = True
         self.y_abs = self.y - self.current_height
+        self.accum_width = 0
         for col in range(col_count):
-            self.x_abs = self.x + self.widths[col] * self.width
+            self.x_abs = self.x + self.accum_width
             border_top = self.get_border(self.current_row, col, False)
             self.process_borders(col, {}, border_top)
-
+            self.accum_width += self.widths[col] * self.width
+        
         self.process_borders(col_count, {}, {})
+        self.lines.extend(self.top_lines)
+
+        self.lines.extend(line for vert_line in self.vert_lines for line in vert_line['list'])
 
         if self.current_row == len(self.content) and len(self.delayed) == 0:
             self.finished = True
@@ -301,7 +304,7 @@ class PDFTable:
                     )
 
                 style.update(process_style(element.get('style'), self.pdf))
-                cell_style = self.parse_style(style)
+                cell_style = self.get_cell_style(style)
 
             element = deepcopy(element)
 
@@ -330,6 +333,8 @@ class PDFTable:
             width = full_width - padd_x - border_right.get('width', 0) / 2 - \
                 cell_style['cell_margin_right']
             height = self.row_max_height - padd_y
+
+            real_height = 0
 
             fill_color = cell_style.get('cell_fill',
                 self.fills_defs[(self.current_row, col)]
@@ -462,11 +467,15 @@ class PDFTable:
             if real_height > self.max_height:
                 self.max_height = real_height
 
+        self.x_abs = self.x + self.accum_width
         last_border = self.get_border(self.current_row, len(row), True)
         self.process_borders(len(row), last_border, {})
 
+        self.lines.extend(self.top_lines)
+
         for fill in self.row_fills:
             fill['height'] = self.max_height
+            fill['y'] -= self.max_height
             self.fills.append(fill)
 
         self.current_height += self.max_height
