@@ -143,7 +143,7 @@ def gen_table(rows=None, cols=None):
             else:
                 prob = random.random()
                 if prob < 0.4:
-                    element = gen_content(3)
+                    element = gen_content(1)
                 elif prob < 0.75:
                     element = gen_rich_text(200)
                 else:

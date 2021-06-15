@@ -205,6 +205,12 @@ class PDFTable:
         else:
             v_line['interrupted'] = True
 
+    def should_interrupt(self):
+        for col in self.delayed:
+            if not col in self.rowspan:
+                return True
+        return False
+
     def run(self, x=None, y=None, width=None, height=None):
         self.setup(x, y, width, height)
         self.parts_ = []
@@ -212,6 +218,8 @@ class PDFTable:
         self.fills = []
         col_count = len(self.content[0])
         self.rowspan = {}
+        self.fills_mem = {}
+        self.heights_mem = {}
         self.vert_lines = [
             {'list': [], 'interrupted': True}
             for i in range(col_count + 1)
@@ -220,26 +228,24 @@ class PDFTable:
 
         if len(self.delayed) > 0:
             self.add_row([self.delayed.get(i) for i in range(col_count)])
-        if len(self.delayed) == 0:
+        if not self.should_interrupt():
             while self.current_row < len(self.content):
                 self.add_row(self.content[self.current_row])
                 self.current_row += 1
-                if len(self.delayed) > 0:
+                if self.should_interrupt():
                     break
 
         self.top_lines = []
         self.top_lines_interrupted = True
         self.y_abs = self.y - self.current_height
-        self.accum_width = 0
         for col in range(col_count):
-            self.x_abs = self.x + self.accum_width
+            self.x_abs = self.x + sum(self.widths[0:col]) * self.width
             border_top = self.get_border(self.current_row, col, False)
             self.process_borders(col, {}, border_top)
-            self.accum_width += self.widths[col] * self.width
         
+        self.x_abs = self.x + self.width
         self.process_borders(col_count, {}, {})
         self.lines.extend(self.top_lines)
-
         self.lines.extend(line for vert_line in self.vert_lines for line in vert_line['list'])
 
         if self.current_row == len(self.content) and len(self.delayed) == 0:
@@ -247,17 +253,14 @@ class PDFTable:
 
     def add_row(self, row):
         self.max_height = 0
-        self.accum_width = 0
         self.row_max_height = self.height - self.current_height
         self.colspan = 0
         self.top_lines = []
         self.top_lines_interrupted = True
-        self.row_fills = []
         self.is_rowspan = False
         self.y_abs = self.y - self.current_height
         for col, element in enumerate(row):
-            self.x_abs = self.x + self.accum_width
-
+            self.x_abs = self.x + sum(self.widths[0:col]) * self.width
             rowspan_memory = self.rowspan.get(col, None)
             border_left = self.get_border(self.current_row, col, True)
             border_top = self.get_border(self.current_row, col, False)
@@ -279,6 +282,9 @@ class PDFTable:
 
                 if rowspan_memory['rows'] == 0:
                     self.rowspan.pop(col)
+                    self.fills_mem[col]['add_later'] = False
+                    if self.heights_mem[col] > self.max_height:
+                        self.max_height = self.heights_mem[col]
                 should_continue = True
 
             self.process_borders(col, border_left, border_top)
@@ -343,10 +349,12 @@ class PDFTable:
             )
 
             if fill_color is not None:
-                self.row_fills.append({ 'type': 'fill', 'x': self.x_abs,
-                    'y': self.y_abs, 'width': full_width,
+                self.fills_mem[col] = { 'type': 'fill', 'x': self.x_abs,
+                    'y': self.y_abs, 'width': full_width, 'height': 0,
                     'color': PDFColor(fill_color, stroke=False)
-                })
+                }
+                if rowspan > 0:
+                    self.fills_mem[col]['add_later'] = True
 
             keys = [key for key in element.keys() if key.startswith('.')]
             if (
@@ -463,20 +471,28 @@ class PDFTable:
                 else:
                     self.delayed.pop(col, None)
 
-            self.accum_width += full_width
+            if rowspan > 0:
+                self.heights_mem[col] = real_height
+                real_height = 0
+
             if real_height > self.max_height:
                 self.max_height = real_height
 
-        self.x_abs = self.x + self.accum_width
+        self.x_abs = self.x + self.width
         last_border = self.get_border(self.current_row, len(row), True)
         self.process_borders(len(row), last_border, {})
 
         self.lines.extend(self.top_lines)
 
-        for fill in self.row_fills:
-            fill['height'] = self.max_height
-            fill['y'] -= self.max_height
-            self.fills.append(fill)
+        for col in self.heights_mem:
+            self.heights_mem[col] -= self.max_height
+
+        for col, fill in list(self.fills_mem.items()):
+            fill['height'] += self.max_height
+            if not fill.get('add_later', False):
+                fill['y'] -= fill['height']
+                self.fills.append(fill)
+                self.fills_mem.pop(col)
 
         self.current_height += self.max_height
 
