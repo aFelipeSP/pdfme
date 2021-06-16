@@ -53,6 +53,10 @@ class PDFTable:
         self.set_default_border()
         self.setup_borders([] if borders is None else borders)
         self.setup_fills([] if fills is None else fills)
+        
+        self.rowspan = {}
+        self.fills_mem = {}
+        self.heights_mem = {}
 
     def setup(self, x=None, y=None, width=None, height=None):
         if x is not None:
@@ -206,6 +210,8 @@ class PDFTable:
             v_line['interrupted'] = True
 
     def should_interrupt(self):
+        if len(self.delayed) == len(self.content[0]):
+            return True
         for col in self.delayed:
             if not col in self.rowspan:
                 return True
@@ -217,9 +223,6 @@ class PDFTable:
         self.lines = []
         self.fills = []
         col_count = len(self.content[0])
-        self.rowspan = {}
-        self.fills_mem = {}
-        self.heights_mem = {}
         self.vert_lines = [
             {'list': [], 'interrupted': True}
             for i in range(col_count + 1)
@@ -314,7 +317,8 @@ class PDFTable:
 
             element = deepcopy(element)
 
-            self.colspan = element.pop('colspan', 1) - 1
+            colspan_original = element.pop('colspan', 1)
+            self.colspan = colspan_original - 1
             rowspan = element.pop('rowspan', 1) - 1
             if rowspan > 0:
                 self.rowspan[col] = {'rows': rowspan, 'cols': self.colspan}
@@ -383,7 +387,7 @@ class PDFTable:
                 if not pdf_text.finished:
                     self.delayed[col] = {
                         'delayed': pdf_text, 'type': 'text',
-                        'cell_style': cell_style
+                        'cell_style': cell_style, 'colspan': colspan_original
                     }
                 else:
                     self.delayed.pop(col, None)
@@ -408,7 +412,7 @@ class PDFTable:
                 else:
                     self.delayed[col] = {
                         'delayed': pdf_image, 'type': 'image',
-                        'cell_style': cell_style
+                        'cell_style': cell_style, 'colspan': colspan_original
                     }
             elif (
                 'content' in element or
@@ -434,7 +438,7 @@ class PDFTable:
                 if not pdf_content.finished:
                     self.delayed[col] = {
                         'delayed': pdf_content, 'type': 'content',
-                        'cell_style': cell_style
+                        'cell_style': cell_style, 'colspan': colspan_original
                     }
                 else:
                     self.delayed.pop(col, None)
@@ -466,7 +470,7 @@ class PDFTable:
                 if not pdf_table.finished:
                     self.delayed[col] = {
                         'delayed': pdf_table, 'type': 'table',
-                        'cell_style': cell_style
+                        'cell_style': cell_style, 'colspan': colspan_original
                     }
                 else:
                     self.delayed.pop(col, None)

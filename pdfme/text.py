@@ -695,4 +695,3 @@ class PDFText(PDFTextBase):
             self.content.remove(text_part)
 
         return False
-
