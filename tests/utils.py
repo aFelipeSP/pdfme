@@ -13,60 +13,67 @@ def gen_text(n):
 def maybe(n=0.5):
     return random.choices([True, False], [n, 1 - n])[0]
 
-def random_color():
+def color():
     return [random.uniform(0.5, 1) for _ in range(3)]
 
-def gen_rich_text(n):
+def gen_rich_text(n, size=10):
 
-    style_ = {'b': 1, 'i': 1, 's': random.randint(9, 17), 'c': random_color(),
-        'f': random.choice(['Helvetica', 'Times', 'Courier']),
-        'u': 1,
-        'bg': random_color(),
-        'r': random.choice([-0.4, 0.4] + [0]*10),
+    style_ = {
+        'b': 1, 'i': 1, 's': random.triangular(size/2, size, size),
+        'f': random.choices(['Helvetica', 'Times', 'Courier'], [3, 1, 1])[0],
+        'c': color(), 'bg': color(), 'r': random.triangular(-0.4, 0.4), 'u': 1
     }
 
     obj = {}
     key = '.'
 
-    if maybe(): obj['style'] = {k:v for k, v in style_.items() if maybe()}
+    if maybe():
+        obj['style'] = {k:v for k, v in style_.items() if maybe(.1)}
     else:
         style = []
         for k, v in style_.items():
             if maybe():
-                if k in ['b', 'i', 'u']: style.append(k)
-                elif k == 'r' and v != 0: style.append(k+':'+str(v))
-                elif k in ['bg', 'c']: style.append(k+':'+ (' '.join(str(t) for t in v)))
-                else: style.append(k+':'+str(v))
+                if k in ['b', 'i', 'u']:
+                    style.append(k)
+                elif k == 'r' and v != 0:
+                    style.append(k+':'+str(v))
+                elif k in ['bg', 'c']:
+                    style.append(k+':'+ (' '.join(str(t) for t in v)))
+                else:
+                    style.append(k+':'+str(v))
         key += ';'.join(style)
 
     obj[key] = []
     i = 1
     while n > 0:
-        words = min(int(n/3), random.randint(1, 40))
-        if words == 0: break
+        words = min(int(n / 3), random.randint(1, 40))
+        if words == 0:
+            break
         n -= words
-        if i%2 == 0 and words > 1:
-            ans = gen_rich_text(words)
+        if i % 2 == 0 and words > 1:
+            ans = gen_rich_text(words, size)
             if ans is not None:
                 obj[key].append(ans)
         else:
-            if len(obj[key]) and isinstance(obj[key][-1], str): obj[key][-1] += gen_text(words)
-            else: obj[key].append(gen_text(words))
+            if len(obj[key]) and isinstance(obj[key][-1], str):
+                obj[key][-1] += gen_text(words)
+            else:
+                obj[key].append(gen_text(words))
         i += 1
 
     return obj
 
-def gen_content(size, font_size=4, level=1):
+def gen_content(size, font_size=4, level=1, max_level=3):
     font_size = max(2.5, font_size)
     cols = random.randint(2,3)
     style = {}
     if maybe(0.1): style['b'] = 1
     if maybe(0.1): style['i'] = 1
     if maybe(0.1): style['u'] = 1
-    if maybe(0.1): style['c'] = random_color()
+    if maybe(0.1): style['c'] = color()
     if maybe(0.1):
         style['f'] = random.choices(['Helvetica', 'Times', 'Courier'], [3, 1, 1])[0]
-    if maybe(0.1): style['bg'] = random_color()
+    if maybe(0.1): style['bg'] = color()
     if level == 1 or maybe(0.1):
         style['s'] = -1.6 * level + font_size + 6 - cols
     if maybe(0.1): style['r'] = random.triangular(-0.4, 0.4)
@@ -84,19 +91,19 @@ def gen_content(size, font_size=4, level=1):
     n = int(random.triangular(3, (0.15 * (1 - level) + 1) * size))
     l = random.choice([0,1])
 
-    if level == 3:
+    if level == max_level:
         c.append(gen_text(random.randint(50, 300)))
         return obj
 
     for i in range(n):
         if i%2 == l:
-            ans = gen_content(size, font_size, level + 1)
+            ans = gen_content(size, font_size, level + 1, max_level)
             c.append(ans)
         else:
             if maybe(0.5):
                 c.append(gen_text(random.randint(50, 300)))
             else:
-                c.append({'image': 'tests/image_test.jpg', 'style': 
+                c.append({'image': 'tests/image_test.jpg', 'style':
                     {'image_place': 'flow' if maybe(0.7) else 'normal'}
                 })
 
@@ -109,10 +116,10 @@ def gen_table(rows=None, cols=None):
 
     obj = {'content': [], 'style': {}}
     obj['widths'] = [random.triangular(3, 6) for _ in range(cols)]
-    if maybe(0.1): obj['style']['cell_fill'] = random_color()
+    if maybe(0.1): obj['style']['cell_fill'] = color()
     if maybe(0.1): obj['style']['cell_margin'] = random.triangular(5, 20, 5)
     if maybe(0.1): obj['style']['border_width'] = random.triangular(1, 4)
-    if maybe(0.1): obj['style']['border_color'] = random_color()
+    if maybe(0.1): obj['style']['border_color'] = color()
     if maybe(0.1): obj['style']['border_style'] = random.choice(['solid', 'dotted', 'dashed'])
 
     obj['borders'] = [
@@ -142,9 +149,9 @@ def gen_table(rows=None, cols=None):
                 row.append(None)
             else:
                 prob = random.random()
-                if prob < 0.4:
-                    element = gen_content(1)
-                elif prob < 0.75:
+                if prob < 0.2:
+                    element = gen_content(1, max_level=2)
+                elif prob < 0.7:
                     element = gen_rich_text(200)
                 else:
                     element = {'image': 'tests/image_test.jpg', 'style': {
@@ -156,7 +163,7 @@ def gen_table(rows=None, cols=None):
                 element['rowspan'] = rowspan
                 element['colspan'] = colspan
                 style = {}
-                if maybe(0.1): style['cell_fill'] = random_color()
+                if maybe(0.1): style['cell_fill'] = color()
                 if maybe(0.1): style['cell_margin'] = random.triangular(5, 20, 5)
                 element['style'] = style
                 row_spans[j] = {'rows': rowspan - 1, 'cols': colspan - 1}
@@ -164,4 +171,3 @@ def gen_table(rows=None, cols=None):
         obj['content'].append(row)
 
     return obj
-    

@@ -97,7 +97,7 @@ class PDFContentPart:
                 'self.column_info must be a dict:'.format(self.column_info)
             )
         self.elements = content.get('content', [])
-        
+
         self.section_element_index = 0  # index when the last section jump occured
         self.section_delayed = []  # delayed elements when the last section jump occured
         self.children_indexes = []  # the last state of this element
@@ -276,7 +276,7 @@ class PDFContentPart:
                 self.minim_diff *= 2
             else:
                 return False
- 
+
         self.will_reset = False
         self.p.parts_ = self.p.parts_[:self.parts_index]
         self.go_to_beggining()
@@ -545,7 +545,7 @@ class PDFContentPart:
                 if pdf_content.cols_n == 1 else \
                 pdf_content.min_y - pdf_content.max_y
             self.y -= current_height
-            
+
             if current_height > 0:
                 self.add_top_margin(style)
             self.starting = False

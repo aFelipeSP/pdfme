@@ -266,7 +266,7 @@ class PDFTextBase:
         return dict(
             x=self.x, y=self.y, height=self.current_height, width=self.width,
             text_stream=self.text, graphics_stream=self.graphics,
-            used_fonts=self.used_fonts, ids=self.ids, 
+            used_fonts=self.used_fonts, ids=self.ids,
         )
 
     def move(self, x, y):
