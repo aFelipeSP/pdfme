@@ -39,21 +39,17 @@ class PDFContent:
         self.fills = []
         self.lines = []
         self.parts_ = []
-        if self.pdf_content_part is None:
-            self.pdf_content_part = PDFContentPart(self.content, self,
-                self.x, self.width, self.min_y, self.max_y, last=True
+        content_part = self.pdf_content_part
+        if content_part is None:
+            self.pdf_content_part = content_part = PDFContentPart(
+                self.content, self, self.x, self.width, self.min_y, self.max_y,
+                last=True
             )
         else:
-            self.pdf_content_part.init(
-                self.x, self.width, self.min_y, self.max_y
-            )
+            content_part.init(self.x, self.width, self.min_y, self.max_y)
 
-        ret = self.pdf_content_part.run()
-        self.current_height = (
-            self.pdf_content_part.y - self.pdf_content_part.min_y
-            if self.pdf_content_part.cols_n == 1
-            else self.pdf_content_part.max_y - self.pdf_content_part.min_y
-        )
+        ret = content_part.run()
+        self.current_height = content_part.min_y - content_part.max_y
         if ret == 'continue':
             self.finished = True
 
@@ -538,16 +534,15 @@ class PDFContentPart:
 
         action = pdf_content.run()
 
+        current_height = pdf_content.min_y - pdf_content.max_y
+        self.y -= current_height
+
+        if current_height > 0:
+            self.add_top_margin(style)
+
         if action in ['interrupt', 'break', 'partial_next']:
             return action
         else:
-            current_height = pdf_content.min_y - pdf_content.y \
-                if pdf_content.cols_n == 1 else \
-                pdf_content.min_y - pdf_content.max_y
-            self.y -= current_height
-
-            if current_height > 0:
-                self.add_top_margin(style)
             self.starting = False
             return {'delayed': None, 'next': False}
 

@@ -142,16 +142,8 @@ class PDFTable:
                 first = self.fills_defs.setdefault(i, {})
                 first[j] = fill
 
-    def get_cell_style(self, style):
-        cell_style = {}
-        attr = 'cell_margin'
-        for side in ('top', 'right', 'bottom', 'left'):
-            cell_style[attr + '_' + side] = style.pop(
-                attr + '_' + side, style.get(attr, None)
-            )
-        style.pop(attr, None)
-        cell_style['cell_fill'] = style.pop('cell_fill', None)
-        return cell_style
+    def compare_borders(self, a, b):
+        return all(a[attr] == b[attr] for attr in ['width', 'color', 'style'])
 
     def process_borders(self, col, border_left, border_top):
         vert_correction = border_top.get('width', 0)/2
@@ -173,10 +165,9 @@ class PDFTable:
 
         if border_top.get('width', 0) > 0:
             x2 = self.x_abs + self.widths[col] * self.width
-            if (not self.top_lines_interrupted
-                and self.top_lines[-1]['width'] == border_top['width']
-                and self.top_lines[-1]['color'] == border_top['color']
-                and self.top_lines[-1]['style'] == border_top['style']
+            if (
+                not self.top_lines_interrupted and
+                self.compare_borders(self.top_lines[-1], border_top)
             ):
                 self.top_lines[-1]['x2'] = x2
             else:
@@ -191,10 +182,8 @@ class PDFTable:
 
         if border_left.get('width', 0) > 0:
             if not (
-                not v_line['interrupted']
-                and v_line['list'][-1]['width'] == border_left['width']
-                and v_line['list'][-1]['color'] == border_left['color']
-                and v_line['list'][-1]['style'] == border_left['style']
+                not v_line['interrupted'] and
+                self.compare_borders(v_line['list'][-1], border_left)
             ):
                 border_left.update(dict(
                     type='line', x1=self.x_abs,
@@ -215,33 +204,6 @@ class PDFTable:
             if not col in self.rowspan:
                 return False
         return True
-
-    def get_cell_dimensions(
-        self, col, border_left, border_top, cell_style, rowspan, colspan
-    ):
-        border_right = self.get_border(
-            self.current_index, col + colspan + 1, True
-        )
-        border_bottom = self.get_border(
-            self.current_index + rowspan + 1, col, False
-        )
-
-        full_width = sum(self.widths[col:col + colspan + 1]) * self.width
-        padd_x_left = border_left.get('width', 0) / 2 + \
-            cell_style['cell_margin_left']
-        padd_x_right = border_right.get('width', 0) / 2 + \
-            cell_style['cell_margin_right']
-        padd_x = padd_x_left + padd_x_right
-        padd_y_top = border_top.get('width', 0) / 2 + \
-            cell_style['cell_margin_top']
-        padd_y_bottom = border_bottom.get('width', 0) / 2 + \
-            cell_style['cell_margin_bottom']
-        padd_y = padd_y_top + padd_y_bottom
-        x = self.x_abs + padd_x_left
-        y = self.y_abs - padd_y_top
-        width = full_width - padd_x
-        height = self.row_max_height - padd_y
-        return x, y, width, height, padd_x, padd_y
 
     def run(self, x=None, y=None, width=None, height=None):
         self.setup(x, y, width, height)
@@ -295,209 +257,10 @@ class PDFTable:
         self.is_rowspan = False
         self.y_abs = self.y - self.current_height
         for col, element in enumerate(row):
-            self.x_abs = self.x + sum(self.widths[0:col]) * self.width
-            rowspan_memory = self.rowspan.get(col, None)
-            border_left = self.get_border(self.current_index, col, True)
-            border_top = self.get_border(self.current_index, col, False)
-            should_continue = False
-            if rowspan_memory is None:
-                if self.colspan > 0:
-                    self.colspan -= 1
-                    border_left['width'] = 0
-                    if self.is_rowspan:
-                        border_top['width'] = 0
-                        if self.colspan == 0:
-                            self.is_rowspan = False
-                    should_continue = True
-            elif not is_delayed:
-                rowspan_memory['rows'] -= 1
-                self.colspan = rowspan_memory['cols']
-                self.is_rowspan = True
-                border_top['width'] = 0
-
-                if rowspan_memory['rows'] == 0:
-                    self.rowspan.pop(col)
-                    if col in self.fills_mem:
-                        self.fills_mem[col]['add_later'] = False
-                    if self.heights_mem.get(col, 0) > self.max_height:
-                        self.max_height = self.heights_mem[col]
-                should_continue = True
-
-            self.process_borders(col, border_left, border_top)
-            if should_continue:
+            move_next = self.add_cell(col, element, is_delayed)
+            if move_next:
                 continue
-
-            if isinstance(element, dict) and 'delayed' in element:
-                cell_style = element['cell_style']
-            else:
-                style = deepcopy(self.style)
-
-                if element is None:
-                    element = ''
-                if not isinstance(element, (dict, str, list, tuple)):
-                    element = str(element)
-                if isinstance(element, (str, list, tuple)):
-                    element = {'.': element}
-
-                if not isinstance(element, dict):
-                    raise TypeError(
-                        'Elements must be of type dict, str, list or tuple:'
-                        + str(element)
-                    )
-
-                style.update(process_style(element.get('style'), self.pdf))
-                cell_style = self.get_cell_style(style)
-
-            element = deepcopy(element)
-
-            colspan_original = element.get('colspan', 1)
-            self.colspan = colspan_original - 1
-            row_added = element.get('row', self.current_index)
-            rowspan = element.get('rowspan', 1) - 1 - self.current_index + \
-                row_added
-            if rowspan > 0:
-                self.rowspan[col] = {'rows': rowspan, 'cols': self.colspan}
-
-            x, y, width, height, padd_x, padd_y = self.get_cell_dimensions(
-                col, border_left, border_top, cell_style, rowspan, self.colspan
-            )
-
-            real_height = 0
-
-            delayed = {
-                'cell_style': cell_style, 'colspan': colspan_original,
-                'rowspan': element.get('rowspan', 1), 'row': row_added
-            }
-
-            fill_color = cell_style.get('cell_fill',
-                self.fills_defs[(self.current_index, col)]
-                if (self.current_index, col) in self.fills_defs
-                else None
-            )
-
-            if fill_color is not None:
-                self.fills_mem[col] = { 'type': 'fill', 'x': self.x_abs,
-                    'y': self.y_abs, 'width': width + padd_x, 'height': 0,
-                    'color': PDFColor(fill_color, stroke=False)
-                }
-                if rowspan > 0:
-                    self.fills_mem[col]['add_later'] = True
-
-            keys = [key for key in element.keys() if key.startswith('.')]
-            if (
-                len(keys) > 0 or
-                ('delayed' in element and element['type'] == 'text')
-            ):
-                if 'delayed' in element:
-                    pdf_text = element['delayed']
-                    pdf_text.setup(x, y, width, height)
-                else:
-                    par_style = {
-                        v: style.get(v) for v in PARAGRAPH_PROPS if v in style
-                    }
-                    key = keys[0]
-                    pdf_text = PDFText(
-                        {key: element[key], 'style': style},
-                        width, height, x, y,
-                        fonts=self.fonts, pdf=self.pdf, **par_style
-                    )
-
-                result = pdf_text.run()
-                result['type'] = 'paragraph'
-                self.parts_.append(result)
-                real_height = pdf_text.current_height + padd_y
-
-                if not pdf_text.finished:
-                    delayed.update({'delayed': pdf_text, 'type': 'text'})
-                    self.delayed[col] = delayed
-                else:
-                    self.delayed.pop(col, None)
-            elif (
-                'image' in element or
-                ('delayed' in element and element['type'] == 'image')
-            ):
-                if 'delayed' in element:
-                    pdf_image = element['delayed']
-                else:
-                    pdf_image = PDFImage(element['image'])
-                img_width = width
-                img_height = img_width * pdf_image.height / pdf_image.width
-
-                if img_height < height:
-                    real_height = img_height + padd_y
-                    self.parts_.append({
-                        'type': 'image', 'pdf_image': pdf_image,
-                        'x': x, 'y': y - img_height,
-                        'width': img_width, 'height': img_height
-                    })
-                    self.delayed.pop(col, None)
-                else:
-                    delayed.update({'delayed': pdf_image, 'type': 'image'})
-                    self.delayed[col] = delayed
-            elif (
-                'content' in element or
-                ('delayed' in element and element['type'] == 'content')
-            ):
-                if 'delayed' in element and element['type'] == 'content':
-                    pdf_content = element['delayed']
-                    pdf_content.setup(x, y, width, height)
-                else:
-                    element['style'] = style
-                    pdf_content = PDFContent(
-                        element, self.fonts, width, height, x, y, self.pdf
-                    )
-
-                pdf_content.run()
-
-                self.parts_.extend(pdf_content.parts_)
-                self.lines.extend(pdf_content.lines)
-                self.fills.extend(pdf_content.fills)
-
-                real_height = padd_y + pdf_content.current_height
-
-                if not pdf_content.finished:
-                    delayed.update({'delayed': pdf_content, 'type': 'content'})
-                    self.delayed[col] = delayed
-                else:
-                    self.delayed.pop(col, None)
-
-            elif (
-                'table' in element or
-                ('delayed' in element and element['type'] == 'table')
-            ):
-                if 'delayed' in element and element['type'] == 'table':
-                    pdf_table = element['delayed']
-                    pdf_table.setup(x, y, width, height)
-                else:
-                    table_props = {
-                        v: element.get(v) for v in TABLE_PROPS if v in element
-                    }
-                    pdf_table = PDFTable(
-                        element['table'], self.fonts, width, height, x, y,
-                        style=style, pdf=self.pdf, **table_props
-                    )
-
-                pdf_table.run()
-
-                self.parts_.extend(pdf_table.parts_)
-                self.lines.extend(pdf_table.lines)
-                self.fills.extend(pdf_table.fills)
-
-                real_height = pdf_table.current_height + padd_y
-
-                if not pdf_table.finished:
-                    delayed.update({'delayed': pdf_table, 'type': 'table'})
-                    self.delayed[col] = delayed
-                else:
-                    self.delayed.pop(col, None)
-
-            if rowspan > 0:
-                self.heights_mem[col] = real_height
-                real_height = 0
-
-            if real_height > self.max_height:
-                self.max_height = real_height
-
+        
         ret = self.can_continue()
 
         self.x_abs = self.x + self.width
@@ -519,5 +282,275 @@ class PDFTable:
         self.current_height += self.max_height
 
         return ret
+        
+    def get_cell_dimensions(
+        self, col, border_left, border_top, cell_style, rowspan, colspan
+    ):
+        border_right = self.get_border(
+            self.current_index, col + colspan + 1, True
+        )
+        border_bottom = self.get_border(
+            self.current_index + rowspan + 1, col, False
+        )
+
+        full_width = sum(self.widths[col:col + colspan + 1]) * self.width
+        padd_x_left = border_left.get('width', 0) / 2 + \
+            cell_style['cell_margin_left']
+        padd_x_right = border_right.get('width', 0) / 2 + \
+            cell_style['cell_margin_right']
+        padd_x = padd_x_left + padd_x_right
+        padd_y_top = border_top.get('width', 0) / 2 + \
+            cell_style['cell_margin_top']
+        padd_y_bottom = border_bottom.get('width', 0) / 2 + \
+            cell_style['cell_margin_bottom']
+        padd_y = padd_y_top + padd_y_bottom
+        x = self.x_abs + padd_x_left
+        y = self.y_abs - padd_y_top
+        width = full_width - padd_x
+        height = self.row_max_height - padd_y
+        return x, y, width, height, padd_x, padd_y
+
+    def is_span(self, col, border_left, border_top, is_delayed):
+        rowspan_memory = self.rowspan.get(col, None)
+        can_continue = False
+        if rowspan_memory is None:
+            if self.colspan > 0:
+                self.colspan -= 1
+                border_left['width'] = 0
+                if self.is_rowspan:
+                    border_top['width'] = 0
+                    if self.colspan == 0:
+                        self.is_rowspan = False
+                can_continue = True
+        elif not is_delayed:
+            rowspan_memory['rows'] -= 1
+            self.colspan = rowspan_memory['cols']
+            self.is_rowspan = True
+            border_top['width'] = 0
+
+            if rowspan_memory['rows'] == 0:
+                self.rowspan.pop(col)
+                if col in self.fills_mem:
+                    self.fills_mem[col]['add_later'] = False
+                if self.heights_mem.get(col, 0) > self.max_height:
+                    self.max_height = self.heights_mem[col]
+            can_continue = True
+        return can_continue
+
+    def get_cell_style(self, element):
+        if isinstance(element, dict) and 'delayed' in element:
+            cell_style = element['cell_style']
+            style = {}
+        else:
+            style = deepcopy(self.style)
+
+            if element is None:
+                element = ''
+            if not isinstance(element, (dict, str, list, tuple)):
+                element = str(element)
+            if isinstance(element, (str, list, tuple)):
+                element = {'.': element}
+
+            if not isinstance(element, dict):
+                raise TypeError(
+                    'Elements must be of type dict, str, list or tuple:'
+                    + str(element)
+                )
+
+            style.update(process_style(element.get('style'), self.pdf))
+            cell_style = {}
+            attr = 'cell_margin'
+            for side in ('top', 'right', 'bottom', 'left'):
+                cell_style[attr + '_' + side] = style.pop(
+                    attr + '_' + side, style.get(attr, None)
+                )
+            style.pop(attr, None)
+            cell_style['cell_fill'] = style.pop('cell_fill', None)
+        element = deepcopy(element)
+        return element, style, cell_style
+
+    def setup_cell_fill(self, col, cell_style, width, rowspan):
+        fill_color = cell_style.get('cell_fill',
+            self.fills_defs[(self.current_index, col)]
+            if (self.current_index, col) in self.fills_defs
+            else None
+        )
+
+        if fill_color is not None:
+            self.fills_mem[col] = { 'type': 'fill', 'x': self.x_abs,
+                'y': self.y_abs, 'width': width, 'height': 0,
+                'color': PDFColor(fill_color, stroke=False)
+            }
+            if rowspan > 0:
+                self.fills_mem[col]['add_later'] = True
+
+    def is_delayed_type(self, el, type_):
+        return 'delayed' in el and el['type'] == type_
+
+    def is_type(self, el, type_):
+        return type_ in el or self.is_delayed_type(el, type_)
+
+    def add_cell(self, col, element, is_delayed):
+        self.x_abs = self.x + sum(self.widths[0:col]) * self.width
+        border_left = self.get_border(self.current_index, col, True)
+        border_top = self.get_border(self.current_index, col, False)
+        can_continue = self.is_span(col, border_left, border_top, is_delayed)
+        self.process_borders(col, border_left, border_top)
+        if can_continue:
+            return True
+
+        element, style, cell_style = self.get_cell_style(element)
+
+        colspan_original = element.get('colspan', 1)
+        self.colspan = colspan_original - 1
+        row_added = element.get('row', self.current_index)
+        rowspan = element.get('rowspan', 1) - 1 - self.current_index + \
+            row_added
+        if rowspan > 0:
+            self.rowspan[col] = {'rows': rowspan, 'cols': self.colspan}
+
+        x, y, width, height, padd_x, padd_y = self.get_cell_dimensions(
+            col, border_left, border_top, cell_style, rowspan, self.colspan
+        )
+
+        delayed = {
+            'cell_style': cell_style, 'colspan': colspan_original,
+            'rowspan': element.get('rowspan', 1), 'row': row_added
+        }
+
+        self.setup_cell_fill(col, cell_style, width + padd_x, rowspan)
+
+        keys = [key for key in element.keys() if key.startswith('.')]
+
+        real_height = 0
+        if len(keys) > 0 or self.is_delayed_type(element, 'text'):
+            real_height = self.process_text(
+                col, element, x, y, width, height, style, keys, delayed
+            )
+        elif self.is_type(element, 'image'):
+            real_height = self.process_image(
+                col, element, x, y, width, height, delayed
+            )
+        elif self.is_type(element, 'content'):
+            real_height = self.process_content(
+                col, element, x, y, width, height, style, delayed
+            )
+
+        elif self.is_type(element, 'table'):
+            real_height = self.process_table(
+                col, element, x, y, width, height, style, delayed
+            )
+
+        real_height += padd_y if real_height > 0 else 4
+        if rowspan > 0:
+            self.heights_mem[col] = real_height
+            real_height = 0
+        if real_height > self.max_height:
+            self.max_height = real_height
+
+        return False
+
+    def process_text(
+        self, col, element, x, y, width, height, style, keys, delayed
+    ):
+        if 'delayed' in element:
+            pdf_text = element['delayed']
+            pdf_text.setup(x, y, width, height)
+        else:
+            par_style = {
+                v: style.get(v) for v in PARAGRAPH_PROPS if v in style
+            }
+            key = keys[0]
+            pdf_text = PDFText(
+                {key: element[key], 'style': style},
+                width, height, x, y,
+                fonts=self.fonts, pdf=self.pdf, **par_style
+            )
+
+        result = pdf_text.run()
+        result['type'] = 'paragraph'
+        self.parts_.append(result)
+
+        if not pdf_text.finished:
+            delayed.update({'delayed': pdf_text, 'type': 'text'})
+            self.delayed[col] = delayed
+        else:
+            self.delayed.pop(col, None)
+        return pdf_text.current_height
+    
+    def process_image(self, col, element, x, y, width, height, delayed):
+        if 'delayed' in element:
+            pdf_image = element['delayed']
+        else:
+            pdf_image = PDFImage(element['image'])
+        img_width = width
+        img_height = img_width * pdf_image.height / pdf_image.width
+
+        real_height = 0
+        if img_height < height:
+            real_height = img_height
+            self.parts_.append({
+                'type': 'image', 'pdf_image': pdf_image,
+                'x': x, 'y': y - img_height,
+                'width': img_width, 'height': img_height
+            })
+            self.delayed.pop(col, None)
+        else:
+            delayed.update({'delayed': pdf_image, 'type': 'image'})
+            self.delayed[col] = delayed
+        return real_height
+    
+    def process_content(
+        self, col, element, x, y, width, height, style, delayed
+    ):
+        if 'delayed' in element and element['type'] == 'content':
+            pdf_content = element['delayed']
+            pdf_content.setup(x, y, width, height)
+        else:
+            element['style'] = style
+            pdf_content = PDFContent(
+                element, self.fonts, width, height, x, y, self.pdf
+            )
+
+        pdf_content.run()
+
+        self.parts_.extend(pdf_content.parts_)
+        self.lines.extend(pdf_content.lines)
+        self.fills.extend(pdf_content.fills)
+
+        if not pdf_content.finished:
+            delayed.update({'delayed': pdf_content, 'type': 'content'})
+            self.delayed[col] = delayed
+        else:
+            self.delayed.pop(col, None)
+        
+        return pdf_content.current_height
+
+    def process_table(self, col, element, x, y, width, height, style, delayed):
+        if 'delayed' in element and element['type'] == 'table':
+            pdf_table = element['delayed']
+            pdf_table.setup(x, y, width, height)
+        else:
+            table_props = {
+                v: element.get(v) for v in TABLE_PROPS if v in element
+            }
+            pdf_table = PDFTable(
+                element['table'], self.fonts, width, height, x, y,
+                style=style, pdf=self.pdf, **table_props
+            )
+
+        pdf_table.run()
+
+        self.parts_.extend(pdf_table.parts_)
+        self.lines.extend(pdf_table.lines)
+        self.fills.extend(pdf_table.fills)
+
+        if not pdf_table.finished:
+            delayed.update({'delayed': pdf_table, 'type': 'table'})
+            self.delayed[col] = delayed
+        else:
+            self.delayed.pop(col, None)
+
+        return pdf_table.current_height
 
 from .content import PDFContent
