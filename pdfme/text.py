@@ -223,7 +223,7 @@ class PDFTextBase:
     def __init__(
         self, content, width, height, x=0, y=0, fonts=None, text_align=None,
         line_height=None, indent=0, list_text=None, list_indent=None,
-        list_style=None
+        list_style=None, pdf=None
     ):
         self.fonts = STANDARD_FONTS if fonts is None else fonts
         self.setup(x, y, width, height)
@@ -235,6 +235,7 @@ class PDFTextBase:
         self.list_text = list_text
         self.list_indent = list_indent
         self.list_style = list_style
+        self.pdf = pdf
 
         if isinstance(content, str):
             content = [{'style': TEXT_DEFAULTS.copy(), 'text': content}]
@@ -349,6 +350,9 @@ class PDFTextBase:
         return self.result
 
     def add_part(self, part, part_index):
+        if 'var' in part and self.pdf:
+            part['text'] = self.pdf.context.get(part['var'])
+
         words = part.get('text')
         if not isinstance(words, (str, list, tuple)):
             return 'continue'
@@ -600,13 +604,12 @@ class PDFText(PDFTextBase):
         line_height=None, indent=0, list_text=None, list_indent=None,
         list_style=None, pdf=None
     ):
-        self.pdf = pdf
         self.fonts = STANDARD_FONTS if fonts is None else fonts
         self.content = []
         self._recursive_content_parse(content, TEXT_DEFAULTS, [])
         super().__init__(
             self.content, width, height, x, y, fonts, text_align, line_height,
-            indent, list_text, list_indent, list_style
+            indent, list_text, list_indent, list_style, pdf
         )
 
     def _new_text_part(self, style, ids, last_part=None):
@@ -631,9 +634,6 @@ class PDFText(PDFTextBase):
                 .format(content)
             )
 
-        if len(content) == 1 and 'var' in content and self.pdf:
-            content = {'.': [str(self.pdf.context.get(content['var'], ''))]}
-
         elements = []
         for key, value in content.items():
             if key.startswith('.'):
@@ -651,6 +651,10 @@ class PDFText(PDFTextBase):
         style.update(process_style(content.get('style'), self.pdf))
 
         text_part = self._new_text_part(style, ids)
+
+        text_part['ids'].extend(content.get('ids', []))
+        if 'var' in content:
+            text_part['var'] = content['var']
 
         label = content.get('label', None)
         if label is not None:
