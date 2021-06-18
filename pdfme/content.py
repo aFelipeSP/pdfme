@@ -492,8 +492,8 @@ class PDFContentPart:
                 if v in element
             }
             pdf_table = PDFTable(
-                element['table'], self.width, self.max_height, self.x,
-                self.y, style=style, pdf=self.p.pdf, **table_props
+                element['table'], self.p.fonts, self.width, self.max_height,
+                self.x, self.y, style=style, pdf=self.p.pdf, **table_props
             )
             remaining = {'table_delayed': pdf_table, 'style': element_style}
 

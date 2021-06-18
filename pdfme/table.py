@@ -249,6 +249,10 @@ class PDFTable:
             self.finished = True
 
     def add_row(self, row, is_delayed=False):
+        if not len(row) == self.cols_count:
+            error = 'row {} should be of length {}.'
+            raise Exception(error.format(self.current_index+1, self.cols_count))
+
         self.max_height = 0
         self.row_max_height = self.height - self.current_height
         self.colspan = 0
