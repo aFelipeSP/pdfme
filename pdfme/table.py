@@ -53,6 +53,7 @@ class PDFTable:
         self.set_default_border()
         self.setup_borders([] if borders is None else borders)
         self.setup_fills([] if fills is None else fills)
+        self.first_row = True
 
     def setup(self, x=None, y=None, width=None, height=None):
         if x is not None:
@@ -221,16 +222,28 @@ class PDFTable:
 
         can_continue = True
         if len(self.delayed) > 0:
-            can_continue = self.add_row([self.delayed.get(i) for i in range(self.cols_count)], True)
-            if can_continue:
+            row = [self.delayed.get(i) for i in range(self.cols_count)]
+            action = self.add_row(row, True)
+            if action == 'continue':
                 self.current_index += 1
+
+        cancel = False
         if can_continue:
             while self.current_index < len(self.content):
-                can_continue = self.add_row(self.content[self.current_index])
-                if can_continue:
+                action = self.add_row(self.content[self.current_index])
+                if action == 'cancel':
+                    cancel = True
+                    break
+                elif action == 'continue':
                     self.current_index += 1
                 else:
                     break
+
+        if cancel:
+            self.parts_ = []
+            self.lines = []
+            self.fills = []
+            return
 
         self.top_lines = []
         self.top_lines_interrupted = True
@@ -243,7 +256,9 @@ class PDFTable:
         self.x_abs = self.x + self.width
         self.process_borders(self.cols_count, {}, {})
         self.lines.extend(self.top_lines)
-        self.lines.extend(line for vert_line in self.vert_lines for line in vert_line['list'])
+        self.lines.extend(
+            line for vert_line in self.vert_lines for line in vert_line['list']
+        )
 
         if self.current_index >= len(self.content) and len(self.delayed) == 0:
             self.finished = True
@@ -264,7 +279,12 @@ class PDFTable:
             move_next = self.add_cell(col, element, is_delayed)
             if move_next:
                 continue
-        
+
+        if self.first_row:
+            self.first_row = False
+            if self.max_height == 0:
+                return 'cancel'
+
         ret = self.can_continue()
 
         self.x_abs = self.x + self.width
@@ -285,7 +305,7 @@ class PDFTable:
 
         self.current_height += self.max_height
 
-        return ret
+        return 'continue' if ret else 'interrupt'
         
     def get_cell_dimensions(
         self, col, border_left, border_top, cell_style, rowspan, colspan
@@ -445,7 +465,7 @@ class PDFTable:
                 col, element, x, y, width, height, style, delayed
             )
 
-        real_height += padd_y if real_height > 0 else 4
+        real_height += padd_y if real_height>0 else (0 if self.first_row else 4)
         if rowspan > 0:
             self.heights_mem[col] = real_height
             real_height = 0
