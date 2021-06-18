@@ -436,7 +436,7 @@ class PDFTextBase:
         if self.list_style is None:
             self.list_style = {}
         elif isinstance(self.list_style, str):
-            self.list_style = parse_style_str(self.list_style, self.fonts)
+            self.list_style = process_style(self.list_style, self.pdf)
 
         if not isinstance(self.list_style, dict):
             raise TypeError(
@@ -604,6 +604,7 @@ class PDFText(PDFTextBase):
         line_height=None, indent=0, list_text=None, list_indent=None,
         list_style=None, pdf=None
     ):
+        self.pdf = pdf
         self.fonts = STANDARD_FONTS if fonts is None else fonts
         self.content = []
         self._recursive_content_parse(content, TEXT_DEFAULTS, [])
@@ -655,6 +656,7 @@ class PDFText(PDFTextBase):
         text_part['ids'].extend(content.get('ids', []))
         if 'var' in content:
             text_part['var'] = content['var']
+            elements = ['0']
 
         label = content.get('label', None)
         if label is not None:

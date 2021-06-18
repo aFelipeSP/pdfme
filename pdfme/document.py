@@ -10,6 +10,7 @@ PAGE_PROPS = ('page_size', 'portrait', 'margin')
 
 class PDFDocument:
     def __init__(self, document, context=None):
+        context = {} if context is None else context
         style = deepcopy(document.get('style', {}))
         style_args = {
             v: style.pop(k) for k, v in STYLE_PROPS.items() if k in style
@@ -20,7 +21,7 @@ class PDFDocument:
         self.pdf = PDF(**page_args, **style_args)
         self.pdf.formats = {}
         self.pdf.formats.setdefault('$footnote', {'r': 0.5, 's': 6})
-        self.pdf.formats.setdefault('$footnotes', {'s': 10, 'c': 1})
+        self.pdf.formats.setdefault('$footnotes', {'s': 10, 'c': 0})
         self.pdf.formats.update(document.get('formats', {}))
         self.pdf.context.update(context)
 
@@ -102,9 +103,9 @@ class PDFDocument:
 
         pdf = self.pdf
         self.width = pdf.page_width - pdf.margin['right'] - pdf.margin['left']
-        self.height = pdf.page_height - pdf.margin['top'] - pdf.margin['bottom']
+        self.y = pdf.page_height - pdf.margin['top']
+        self.height = self.y - pdf.margin['bottom']
         self.x = pdf.margin['left']
-        self.y = pdf.margin['top']
 
         if 'page_numbering_offset' in page_style:
             self.pdf.page_numbering_offset = page_style['page_numbering_offset']
@@ -144,7 +145,7 @@ class PDFDocument:
         if footnotes_obj is None:
             self.pdf._add_graphics([*self.section.fills,*self.section.lines])
             self.pdf._add_parts(self.section.parts_)
-            self.pdf.page.y += self.section.current_height
+            self.pdf.page._y -= self.section.current_height
         else:
             footnotes_height = footnotes_obj.current_height
             if footnotes_height >= self.height - self.footnotes_margin - 20:
@@ -160,17 +161,16 @@ class PDFDocument:
 
             self.pdf._content(self.section, height=new_height)
 
-            self.pdf.page._y = self.pdf.margin['bottom'] + \
-                footnotes_height + self.footnotes_margin
+            self.pdf.page._y = self.pdf.margin['bottom'] + footnotes_height
 
             x_line = round(self.pdf.page.x, 3)
             y_line = round(self.pdf.page._y + self.footnotes_margin/2, 3)
-            self.pdf.page.add(' q 1 G 1 w {} {} m {} {} l S Q'.format(
-                x_line, y_line, x_line + 100, y_line
+            self.pdf.page.add(' q 0 G 0.5 w {} {} m {} {} l S Q'.format(
+                x_line, y_line, x_line + 150, y_line
             ))
 
             footnotes_obj = self.process_footnotes()
-            self.pdf._content(footnotes_obj, height=footnotes_height)
+            self.pdf._content(footnotes_obj, height=self.height)
 
     def check_footnote(self, ids, page_footnotes):
         for id_, rects in ids.items():
@@ -196,9 +196,11 @@ class PDFDocument:
             ))
             content['content'].append(footnote)
 
-        return self.pdf._create_content(
+        footnote_obj = self.pdf._create_content(
             content, self.width, self.height, self.x, self.y
         )
+        footnote_obj.run()
+        return footnote_obj
     
     def process_footnotes(self):
         page_footnotes = []
@@ -211,4 +213,6 @@ class PDFDocument:
         self.pdf.output(buffer)
 
 def build_pdf(document, buffer, context=None):
-    PDFDocument(document, context).output(buffer)
+    doc = PDFDocument(document, context)
+    doc.run()
+    doc.output(buffer)

@@ -67,7 +67,7 @@ class PDFTable:
 
     def set_default_border(self):
         self.default_border = {}
-        self.default_border['width'] = self.style.pop('border_width', 1)
+        self.default_border['width'] = self.style.pop('border_width', 0.5)
         color = self.style.pop('border_color', 0)
         self.default_border['color'] = PDFColor(color, True)
         self.default_border['style'] = self.style.pop('border_style', 'solid')

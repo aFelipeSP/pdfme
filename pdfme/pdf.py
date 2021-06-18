@@ -230,7 +230,6 @@ class PDF:
         })
         content = self._init_text(content)
         pdf_text = PDFText(content, fonts=self.fonts, pdf=self, **par_style)
-        pdf_text.run()
         return pdf_text
 
     def _add_text(
@@ -298,6 +297,7 @@ class PDF:
                 content, width, height, text_align, line_height, indent,
                 list_text, list_indent, list_style
             )
+            pdf_text.run()
             pdf_text.move(x, y)
 
         self._add_text(move=move, **pdf_text.result)
@@ -335,7 +335,6 @@ class PDF:
             content, self.fonts, width, height, x, y,
             widths, style_, borders, fills, self
         )
-        pdf_table.run()
         return pdf_table
 
     def _table(
@@ -351,6 +350,7 @@ class PDF:
             pdf_table = self._create_table(
                 content, width, height, x, y, widths, style, borders, fills
             )
+            pdf_table.run()
 
         self._add_graphics([*pdf_table.fills, *pdf_table.lines])
         self._add_parts(pdf_table.parts_)
@@ -382,7 +382,6 @@ class PDF:
         style.update(process_style(content.get('style'), self))
         content['style'] = style
         pdf_content = PDFContent(content, self.fonts, width, height, x, y, self)
-        pdf_content.run()
         return pdf_content
 
     def _content(
@@ -395,6 +394,7 @@ class PDF:
             pdf_content.run(x, y, width, height)
         else:
             pdf_content = self._create_content(content, width, height, x, y)
+            pdf_content.run()
 
         self._add_graphics([*pdf_content.fills,*pdf_content.lines])
         self._add_parts(pdf_content.parts_)
@@ -502,6 +502,8 @@ class PDF:
         self._build_dests_tree(dests, [self.dests[k] for k in dests])
 
     def output(self, buffer):
+        if len(self.pages) == 0:
+            raise Exception("pdf doesn't have any pages")
         self._build_pages_tree(self.pages)
         self._build_dests()
         self.base.output(buffer)
