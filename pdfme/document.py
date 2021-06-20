@@ -71,24 +71,33 @@ class PDFDocument:
         self.pdf.running_sections = []
         for name in running_sections:
             section = deepcopy(self.defs[name])
-            if section.get('width') == 'left':
-                section['width'] = self.pdf.margin['left']
-            if section.get('width') == 'right':
-                section['width'] = self.pdf.margin['right']
-            if section.get('height') == 'top':
-                section['height'] = self.pdf.margin['top']
-            if section.get('height') == 'bottom':
-                section['height'] = self.pdf.margin['bottom']
+            margin = self.pdf.margin
+            if section.get('width') in ['left', 'right']:
+                section['width'] = margin[section.get('width')]
+            if section.get('width') == 'full':
+                section['width'] = self.pdf.page_width
+            if section.get('height') in ['top', 'bottom']:
+                section['height'] = margin[section.get('height')]
+            if section.get('height') == 'full':
+                section['height'] = self.pdf.page_height
             if section.get('x') == 'left':
-                section['x'] = self.pdf.margin['left']
+                section['x'] = margin['left']
             if section.get('x') == 'right':
-                section['x'] = self.pdf.page_width - self.pdf.margin['right']
+                section['x'] = self.pdf.page_width - margin['right']
             if section.get('y') == 'top':
-                section['y'] = self.pdf.margin['top']
+                section['y'] = margin['top']
             if section.get('y') == 'bottom':
-                section['y'] = self.pdf.page_height - self.pdf.margin['bottom']
+                section['y'] = self.pdf.page_height - margin['bottom']
 
-            self.pdf.running_sections.append(section)
+            width = section.get('width', (
+                self.pdf.page_width - margin['right'] - margin['left']
+            ))
+            height = section.get('height', (
+                self.pdf.page_height - margin['top'] - margin['bottom']
+            ))
+            x = section.get('x', 0)
+            y = section.get('y', 0)
+            self.pdf.add_running_section(section, width, height, x, y)
 
     def run(self):
         for section in self.sections:
@@ -161,16 +170,17 @@ class PDFDocument:
 
             self.pdf._content(self.section, height=new_height)
 
-            self.pdf.page._y = self.pdf.margin['bottom'] + footnotes_height
-
-            x_line = round(self.pdf.page.x, 3)
-            y_line = round(self.pdf.page._y + self.footnotes_margin/2, 3)
-            self.pdf.page.add(' q 0 G 0.5 w {} {} m {} {} l S Q'.format(
-                x_line, y_line, x_line + 150, y_line
-            ))
-
             footnotes_obj = self.process_footnotes()
-            self.pdf._content(footnotes_obj, height=self.height)
+            
+            if footnotes_obj is not None:
+                self.pdf.page._y = self.pdf.margin['bottom'] + footnotes_height
+
+                x_line = round(self.pdf.page.x, 3)
+                y_line = round(self.pdf.page._y + self.footnotes_margin/2, 3)
+                self.pdf.page.add(' q 0 G 0.5 w {} {} m {} {} l S Q'.format(
+                    x_line, y_line, x_line + 150, y_line
+                ))
+                self.pdf._content(footnotes_obj, height=self.height)
 
     def check_footnote(self, ids, page_footnotes):
         for id_, rects in ids.items():
@@ -191,9 +201,7 @@ class PDFDocument:
         for index, footnote in enumerate(page_footnotes):
             footnote = deepcopy(footnote)
             style = footnote.setdefault('style', {})
-            style.update(dict(
-                list_text=index + 1, list_indent=15, list_style='$footnote'
-            ))
+            style.update(dict(list_text=index + 1, list_style='$footnote'))
             content['content'].append(footnote)
 
         footnote_obj = self.pdf._create_content(

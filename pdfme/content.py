@@ -1,6 +1,6 @@
 import copy
 
-from .utils import process_style
+from .utils import parse_style_str, process_style
 from .text import PDFText
 from .image import PDFImage
 
@@ -104,7 +104,7 @@ class PDFContentPart:
     def init(self, min_x, width, min_y, max_y):
         self.min_x = min_x
         self.min_y = min_y
-        self.go_to_beggining()
+        self.go_to_beginning()
 
         self.full_width = width
         self.max_y = max_y
@@ -275,7 +275,7 @@ class PDFContentPart:
 
         self.will_reset = False
         self.p.parts_ = self.p.parts_[:self.parts_index]
-        self.go_to_beggining()
+        self.go_to_beginning()
 
         if self.minim_diff is None:
             self.minim_diff = (self.min_y - self.max_y) / 2
@@ -295,7 +295,7 @@ class PDFContentPart:
 
         return True
 
-    def go_to_beggining(self):
+    def go_to_beginning(self):
         self.y = self.min_y
         self.x = self.min_x
         self.column = 0
@@ -343,7 +343,7 @@ class PDFContentPart:
                 self.min_y = ret['min_y']
                 self.min_x = ret['min_x']
                 self.parts_index = len(self.p.parts_)
-                self.go_to_beggining()
+                self.go_to_beginning()
                 return 'retry' if children_indexes is None else ret
         else:
             self.column += 1
@@ -404,14 +404,18 @@ class PDFContentPart:
                 .format(element)
             )
 
+        keys = [key for key in element.keys() if key.startswith('.')]
+
         style = {}
         style.update(self.style)
+        if len(keys) > 0:
+            style.update(parse_style_str(keys[0][1:], self.p.fonts))
         element_style = process_style(element.get('style'), self.p.pdf)
         style.update(element_style)
 
         self.update_dimensions(style)
 
-        keys = [key for key in element.keys() if key.startswith('.')]
+        
 
         if len(keys) > 0 or 'paragraph' in element:
             return self.process_text(element, style, element_style, keys)

@@ -97,10 +97,10 @@ class PDF:
 
         for running_section in self.running_sections:
             self._content(**running_section)
+        
+        page.go_to_beginning()
 
-    def add_running_section(
-        self, content, width=None, height=None, x=None, y=None
-    ):
+    def add_running_section(self, content, width, height, x, y):
         self.running_sections.append(dict(
             content=content, width=width, height=height, x=x, y=y
         ))

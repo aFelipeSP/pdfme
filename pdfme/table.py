@@ -3,7 +3,7 @@ from copy import deepcopy
 from .color import PDFColor
 from .text import PDFText
 from .image import PDFImage
-from .utils import process_style
+from .utils import parse_style_str, process_style
 
 
 PARAGRAPH_PROPS = (
@@ -381,6 +381,9 @@ class PDFTable:
                     + str(element)
                 )
 
+            keys = [key for key in element.keys() if key.startswith('.')]
+            if len(keys) > 0:
+                style.update(parse_style_str(keys[0][1:], self.fonts))
             style.update(process_style(element.get('style'), self.pdf))
             cell_style = {}
             attr = 'cell_margin'

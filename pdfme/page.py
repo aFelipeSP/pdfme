@@ -10,11 +10,7 @@ class PDFPage:
 
         self.width = width
         self.height = height
-        self.content_width = self.width - self.margin_right - self.margin_left
-        self.content_height = self.height - self.margin_top - self.margin_bottom
-
-        self.x = self.margin_left
-        self._y = self.height - self.margin_top
+        self.go_to_beginning()
 
         self.stream = base.add({'__stream__': {}})
         self.page = base.add({
@@ -30,6 +26,13 @@ class PDFPage:
     @y.setter
     def y(self, value):
         self._y = self.height - value
+
+    def go_to_beginning(self):
+        self.content_width = self.width - self.margin_right - self.margin_left
+        self.content_height = self.height - self.margin_top - self.margin_bottom
+
+        self.x = self.margin_left
+        self._y = self.height - self.margin_top
 
     def add(self, content):
         if isinstance(content, str):

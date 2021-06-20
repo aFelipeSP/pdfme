@@ -351,7 +351,7 @@ class PDFTextBase:
 
     def add_part(self, part, part_index):
         if 'var' in part and self.pdf:
-            part['text'] = self.pdf.context.get(part['var'])
+            part['text'] = str(self.pdf.context.get(part['var'], ''))
 
         words = part.get('text')
         if not isinstance(words, (str, list, tuple)):
@@ -452,7 +452,7 @@ class PDFTextBase:
         )
 
         if self.list_indent is None:
-            self.list_indent = line_part.get_word_width(self.list_text)
+            self.list_indent = line_part.get_word_width(str(self.list_text))
         elif not isinstance(self.list_indent, (float, int)):
             raise TypeError(
                 'list_indent must be int or float. Value: {}'
@@ -613,10 +613,12 @@ class PDFText(PDFTextBase):
             indent, list_text, list_indent, list_style, pdf
         )
 
-    def _new_text_part(self, style, ids, last_part=None):
+    def _new_text_part(self, style, ids, part_var, last_part=None):
         if last_part is not None and last_part['text'] == '':
             self.content.remove(last_part)
         text_part = {'style': style, 'text': '', 'ids': ids}
+        if part_var is not None:
+            text_part['var'] = part_var
         self.content.append(text_part)
         return text_part
 
@@ -650,12 +652,11 @@ class PDFText(PDFTextBase):
                 break
 
         style.update(process_style(content.get('style'), self.pdf))
-
-        text_part = self._new_text_part(style, ids)
-
+        part_var = content.get('var')
+        text_part = self._new_text_part(style, ids, part_var)
         text_part['ids'].extend(content.get('ids', []))
-        if 'var' in content:
-            text_part['var'] = content['var']
+
+        if part_var is not None:
             elements = ['0']
 
         label = content.get('label', None)
@@ -677,13 +678,13 @@ class PDFText(PDFTextBase):
                 lines = element.split('\n')
                 if not is_last_string:
                     text_part = self._new_text_part(
-                        style, text_part['ids'], text_part
+                        style, text_part['ids'], part_var, text_part
                     )
                 text_part['text'] += lines[0]
                 for line in lines[1:]:
                     self.content.append({'type': 'br'})
                     text_part = self._new_text_part(
-                        style, text_part['ids'], text_part
+                        style, text_part['ids'], part_var, text_part
                     )
                     text_part['text'] += line
                 is_last_string = True

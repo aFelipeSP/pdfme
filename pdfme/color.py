@@ -175,9 +175,14 @@ class PDFColor:
         if self.color is None:
             return ''
         if len(self.color) == 1:
-            return '{} {}'.format(self.color[0], 'G' if self.stroke else 'g')
+            return '{} {}'.format(
+                round(self.color[0], 3), 'G' if self.stroke else 'g'
+            )
         if len(self.color) == 3:
-            return '{} {} {} {}'.format(*self.color[0:3], 'RG' if self.stroke else 'rg')
+            return '{} {} {} {}'.format(
+                *[round(color, 3) for color in self.color[0:3]],
+                'RG' if self.stroke else 'rg'
+            )
 
 def parse_color(color):
     if color is None:
