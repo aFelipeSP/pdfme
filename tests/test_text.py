@@ -5,7 +5,7 @@ from .utils import gen_rich_text
 from pdfme import PDF
 
 def page_rect(pdf):
-    pdf.page.add('q 0.9 0.9 0.9 rg {} {} {} {} re F Q'.format(
+    pdf.page.add('q 0.9 g {} {} {} {} re F Q'.format(
         pdf.margin['left'], pdf.margin['bottom'],
         pdf.page.content_width, pdf.page.content_height
     ))

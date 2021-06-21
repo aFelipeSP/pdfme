@@ -5,11 +5,11 @@ from .encoders import encode_stream
 from .utils import subs
 
 class PDFObject:
-    def __init__(self, id_=None, obj={}):
+    def __init__(self, id_=None, obj=None):
         if not isinstance(id_, PDFRef):
             raise TypeError('id_ argument must be of type PDFRef')
         self.id = id_
-        self.value = obj
+        self.value = {} if obj is None else obj
 
     def __getitem__(self, name):
         return self.value[name]
