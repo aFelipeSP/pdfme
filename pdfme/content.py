@@ -238,10 +238,12 @@ class PDFContentPart:
                     self.reset()
                 else:
                     return 'break'
-            else:
+            elif self.resetting:
                 self.minim_forward = False
                 if not self.reset():
                     break
+            else:
+                break
 
         return 'continue'
 
@@ -414,8 +416,6 @@ class PDFContentPart:
         style.update(element_style)
 
         self.update_dimensions(style)
-
-        
 
         if len(keys) > 0 or 'paragraph' in element:
             return self.process_text(element, style, element_style, keys)
