@@ -483,6 +483,7 @@ class PDFTable:
         if 'delayed' in element:
             pdf_text = element['delayed']
             pdf_text.setup(x, y, width, height)
+            pdf_text.pdf = self.pdf
         else:
             par_style = {
                 v: style.get(v) for v in PARAGRAPH_PROPS if v in style
@@ -533,6 +534,7 @@ class PDFTable:
         if 'delayed' in element and element['type'] == 'content':
             pdf_content = element['delayed']
             pdf_content.setup(x, y, width, height)
+            pdf_content.pdf = self.pdf
         else:
             element['style'] = style
             pdf_content = PDFContent(
@@ -557,6 +559,7 @@ class PDFTable:
         if 'delayed' in element and element['type'] == 'table':
             pdf_table = element['delayed']
             pdf_table.setup(x, y, width, height)
+            pdf_table.pdf = self.pdf
         else:
             table_props = {
                 v: element.get(v) for v in TABLE_PROPS if v in element

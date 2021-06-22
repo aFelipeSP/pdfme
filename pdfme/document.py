@@ -20,8 +20,8 @@ class PDFDocument:
 
         self.pdf = PDF(**page_args, **style_args)
         self.pdf.formats = {}
-        self.pdf.formats.setdefault('$footnote', {'r': 0.5, 's': 6})
-        self.pdf.formats.setdefault('$footnotes', {'s': 10, 'c': 0})
+        self.pdf.formats['$footnote'] = {'r': 0.5, 's': 6}
+        self.pdf.formats['$footnotes'] = {'s': 10, 'c': 0}
         self.pdf.formats.update(document.get('formats', {}))
         self.pdf.context.update(context)
 

@@ -49,7 +49,9 @@ class PDFContent:
             content_part.init(self.x, self.width, self.min_y, self.max_y)
 
         ret = content_part.run()
-        self.current_height = content_part.min_y - content_part.max_y
+        self.current_height = content_part.min_y - (
+            content_part.max_y if content_part.cols_n > 1 else content_part.y
+        )
         if ret == 'continue':
             self.finished = True
 
@@ -433,6 +435,7 @@ class PDFContentPart:
                 self.x, self.y, self.width, self.max_height,
                 element['last_part'], element['last_word']
             )
+            pdf_text.pdf = self.p.pdf
             remaining = copy.deepcopy(element)
         else:
             par_style = {
@@ -489,6 +492,7 @@ class PDFContentPart:
         if 'table_delayed' in element:
             pdf_table = element['table_delayed']
             pdf_table.setup(self.x, self.y, self.width, self.max_height)
+            pdf_table.pdf = self.p.pdf
             remaining = element
         else:
             table_props = {
@@ -538,7 +542,9 @@ class PDFContentPart:
 
         action = pdf_content.run()
 
-        current_height = pdf_content.min_y - pdf_content.max_y
+        current_height = pdf_content.min_y - (
+            pdf_content.max_y if pdf_content.cols_n > 1 else pdf_content.y
+        )
         self.y -= current_height
 
         if current_height > 0:
