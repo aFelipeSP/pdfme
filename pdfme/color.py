@@ -1,4 +1,6 @@
 import re
+from copy import deepcopy
+from typing import Union
 
 colors = {
     'aliceblue': [0.941, 0.973, 1.0],
@@ -151,10 +153,23 @@ colors = {
     'yellowgreen': [0.605, 0.805, 0.199]
 }
 
+color_type = Union[int, float, str, list, tuple]
 class PDFColor:
-    def __init__(self, color, stroke=False):
+    """Class that generates a PDF color string (with function ``str()``)
+    using the rules described in :py:func:`pdfme.color.parse_color`.
+
+    Args:
+        color (int, float, list, tuple, str, PDFColor): The color
+            specification.
+        stroke (bool, optional): Whether this is a color for stroke(True)
+            or for fill(False). Defaults to False.
+    """
+
+    def __init__(
+        self, color: Union[color_type, 'PDFColor'], stroke: bool=False
+    ) -> None:
         if isinstance(color, PDFColor):
-            self.color = color.color
+            self.color = deepcopy(color.color)
         else:
             self.color = parse_color(color)
         self.stroke = stroke
@@ -184,7 +199,31 @@ class PDFColor:
                 'RG' if self.stroke else 'rg'
             )
 
-def parse_color(color):
+def parse_color(color: color_type) -> list:
+    """Function to parse ``color`` into a list representing a PDF color. 
+    
+    The scale of the colors is between 0 and 1, instead of 0 and 256, so all the
+    numbers in ``color`` must be between 0 and 1.
+
+    ``color`` of type int or float represents a gray color between black (0) and
+    white (1).
+
+    ``color`` of type list or tuple is a gray color if its length is 1, a rgb
+    color if its length is 3, and a rgba color if its length is 4 (not yet 
+    supported).
+
+    ``color`` of type str can be a hex color of the form "#aabbcc" or the name
+    of a color in the variable ``colors`` in file `color.py`_.
+
+    Args:
+        color (int, float, list, tuple, str): The color specification.
+
+    Returns:
+        list: list representing the PDF color.
+
+    .. _color.py: https://github.com/aFelipeSP/pdfme/blob/main/pdfme/color.py
+    """
+
     if color is None:
         return None
     if isinstance(color, (int, float)):
@@ -224,9 +263,3 @@ def parse_color(color):
             return [float(c) for c in color[:4]]
         except:
             raise TypeError("Couldn't parse numeric color value: {}".format(color))
-
-def pdf_color(color, stroke=False):
-    if len(color) == 1:
-        return '{} {}'.format(color, 'G' if stroke else 'g')
-    if len(color) in [3]:
-        return '{} {} {} {}'.format(*color[0:3], 'RG' if stroke else 'rg')

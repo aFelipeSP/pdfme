@@ -1,16 +1,152 @@
 import copy
+from typing import Union
 
-from .utils import parse_style_str, process_style
-from .text import PDFText
 from .image import PDFImage
-
+from .text import PDFText
+from .utils import parse_style_str, process_style
 
 TABLE_PROPERTIES = ('widths', 'borders', 'fills')
-PARAGRAPH_PROPERTIES = ('text_align', 'line_height', 'indent',
-    'list_text', 'list_style', 'list_indent')
+PARAGRAPH_PROPERTIES = (
+    'text_align', 'line_height', 'indent',
+    'list_text', 'list_style', 'list_indent'
+)
 
+Number = Union[float, int]
 class PDFContent:
-    def __init__(self, content, fonts, width, height, x=0, y=0, pdf=None):
+    """This class represents a group of elements (paragraphs, images, tables)
+    to be added to a :py:class:`PDF` instance.
+
+    This class receives as the first argument a dict representing the
+    layout of the elements that are going to be added to the PDF.
+    This dict must have a ``content`` key with a tuple or a list as its
+    value, containing the elements to be added.
+
+    The elements are arranged by using method ``run`` from top to bottom, and
+    from left to right in order, in the rectangle defined by args ``x``, ``y``,
+    ``width`` and ``height``. The elements are added to this rectangle, until
+    they are all inside of it, or until all of the vertical space is used and
+    the rest of the elements can not be added. In these two cases method ``run``
+    finishes, and you can check if it's the first case if property ``finished``
+    from this class is True, or it's the second case otherwise.
+    If ``finished`` is False, you can set a new rectangle (on a new page for
+    example) and use method ``run`` again (passing the parameters of the new
+    rectangle) to add the remaining elements that couldn't be added in
+    the last rectangle. You can keep doing this until all of the elements are
+    added and therefore property ``finished`` is True.
+
+    By using method ``run`` the elements are not really added to the PDF object.
+    After calling ``run``, the properties ``fills`` and ``lines`` will be
+    populated with the fills and lines of the tables that fitted inside the
+    rectangle, and ``parts`` will be filled with the paragraphs and images that
+    fitted inside the rectangle too, and you have to add by yourself those to
+    the PDF object before using method ``run`` again (in case ``finished`` is
+    False), because they will be redefined for the next rectangle after calling
+    it again. You can check the `content method`_ in PDF module to see how this
+    process is done.
+
+    A ``cols`` key with a dict as a value can be included to arrange the
+    elements in more than one column. For example, to use 2 columns, and to set
+    a gap space between the 2 columns of 20 points, a dict like this one can be
+    used:
+
+    .. code-block:: python
+        {
+            'cols': {'count': 2, 'gap': 20},
+            'content': ['This is a lot of text ...'],
+        }
+
+    The elements in the ``content`` list can be one of the following:
+
+    * A paragraph that can be a string, a list, a tuple or a dictionary with a
+      key starting with a ``.``. To know more about the meaning of these types
+      check :py:class:`pdfme.text.PDFText`. Additional to the keys
+      that can be included inside ``style`` key of a paragraph dict like the one
+      you pass to :py:class:`pdfme.text.PDFText`, you can include the following
+      too: ``text_align``, ``line_height``, ``indent``, ``list_text``,
+      ``list_style`` and ``list_indent``. For information about these attributes
+      check :py:class:`pdfme.text.PDFText`. Here is an example of a paragraph
+      dict:
+
+      .. code-block:: python
+
+        {
+            'style': {
+                'text_align': 'j',
+                'line_height': 1.5,
+                'list_text': '1. ',
+            },
+            '.b': 'This is a bold text.'
+        }
+
+      This paragraph dict yields a justified paragraph with a line height of 1.5
+      times the original line height and with a **1** on the left of the
+      paragraph.
+      
+    * An image that should be a dict with a ``image`` key, holding the path of
+      the image, or the bytes of the image. In case ``image`` is of type bytes
+      two more keys should be added to this dict: ``image_name`` and
+      ``extension``, being the first a unique name for the image and the second
+      the extension or format of the image (ex. "jpg"). This dict can have a
+      ``style`` dict, to tell this class what should it do when an image don't
+      fit a column through the key ``image_place``. This attribute can be 
+      "normal" or "flow"(default) and both of them will take the image to the
+      next column or rectangle, but the second one will try to accommodate the
+      elements coming after the image to fiil the space left by the image.
+      Here is an example of an image dict:
+
+      .. code-block:: python
+
+        {
+            'style': { 'image_place': 'flow' },
+            'image': '/path/to/an/image.jpg'
+        }
+
+    * A table that should be a dict with a ``table`` key with the table data,
+      and optionally any or all of the following keys: ``widths``, ``borders``
+      and ``fills``. To know more about these keys check their meaning in
+      :py:class:`pdfme.table.PDFTable`.
+      Here is an example of table dict:
+
+      .. code-block:: python
+
+        {
+            'table': [['col1', 'col2', 'col3'], ['value1', 'value2', 'value3']],
+            'widths': [1,2,3],
+            'borders': [{'pos': 'h0,1,3;:', 'width': 2, 'color': 0}]
+        }
+
+    * A content that can be a dict like the one explained before, and can
+      contain other elements inside it recursively. This can be used 
+
+    Each element in content can have margins to keep it separated from the other
+    elements, and these margins can be set inside the ``style`` dict with the
+    following keys: ``margin_top``, ``margin_left``, ``margin_bottom`` and
+    ``margin_right``. Default value for all of them is 0, except for
+    ``margin_bottom`` that have a default value of 5.
+
+    Finally, a content dict can have a ``style`` dict, thay will be passed to
+    the elements inside of it. The children elements will only use the content
+    ``style`` properties not included in their own ``style`` dicts.
+
+    Args:
+        content (dict): A content dict.
+        fonts (dict): A dict 
+        width (int, float): [description]
+        height (int, float): [description]
+        x (int, float, optional): [description]. Defaults to 0.
+        y (int, float, optional): [description]. Defaults to 0.
+        pdf (PDF, optional): [description]. Defaults to None.
+
+    Raises:
+        Exception: [description]
+
+    .. _content method: https://github.com/aFelipeSP/pdfme/blob/main/pdfme/pdf.py#L387
+    """
+
+    def __init__(
+        self, content: dict, fonts: dict, width: Number, height: Number,
+        x: Number=0, y: Number=0, pdf: 'PDF'=None
+    ):
         if not isinstance(content, dict):
             raise Exception('content must be a dict')
 
@@ -38,7 +174,7 @@ class PDFContent:
         self.setup(x, y, width, height)
         self.fills = []
         self.lines = []
-        self.parts_ = []
+        self.parts = []
         content_part = self.pdf_content_part
         if content_part is None:
             self.pdf_content_part = content_part = PDFContentPart(
@@ -88,7 +224,7 @@ class PDFContentPart:
         self.style.update(inherited_style)
         self.style.update(process_style(content.get('style'), self.p.pdf))
 
-        self.column_info = content.get('cols', {'count': 1, 'gap': 10})
+        self.column_info = content.get('cols', {})
 
         if not isinstance(self.column_info, dict):
             raise TypeError(
@@ -122,7 +258,7 @@ class PDFContentPart:
         self.delayed = copy.deepcopy(self.section_delayed) # current delayed elements
         self.will_reset = False
         self.resetting = False
-        self.parts_index = len(self.p.parts_)
+        self.parts_index = len(self.p.parts)
 
         self.minim_diff_last = None
         self.minim_diff = None
@@ -278,7 +414,7 @@ class PDFContentPart:
                 return False
 
         self.will_reset = False
-        self.p.parts_ = self.p.parts_[:self.parts_index]
+        self.p.parts = self.p.parts[:self.parts_index]
         self.go_to_beginning()
 
         if self.minim_diff is None:
@@ -346,7 +482,7 @@ class PDFContentPart:
                     return ret
                 self.min_y = ret['min_y']
                 self.min_x = ret['min_x']
-                self.parts_index = len(self.p.parts_)
+                self.parts_index = len(self.p.parts)
                 self.go_to_beginning()
                 return 'retry' if children_indexes is None else ret
         else:
@@ -453,7 +589,7 @@ class PDFContentPart:
         remaining['last_part'] = pdf_text.last_part
         remaining['last_word'] = pdf_text.last_word
         result['type'] = 'paragraph'
-        self.p.parts_.append(result)
+        self.p.parts.append(result)
         self.y -= pdf_text.current_height
 
         if pdf_text.current_height > 0:
@@ -473,7 +609,7 @@ class PDFContentPart:
         height = self.width * pdf_image.height / pdf_image.width
 
         if height < self.max_height:
-            self.p.parts_.append({
+            self.p.parts.append({
                 'pdf_image': pdf_image, 'type': 'image', 'x': self.x,
                 'y': self.y - height, 'width': self.width, 'height': height
             })
@@ -506,7 +642,7 @@ class PDFContentPart:
             remaining = {'table_delayed': pdf_table, 'style': element_style}
 
         pdf_table.run()
-        self.p.parts_.extend(pdf_table.parts_)
+        self.p.parts.extend(pdf_table.parts)
         self.p.lines.extend(pdf_table.lines)
         self.p.fills.extend(pdf_table.fills)
 
@@ -557,3 +693,4 @@ class PDFContentPart:
             return {'delayed': None, 'next': False}
 
 from .table import PDFTable
+from .pdf import PDF

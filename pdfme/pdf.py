@@ -7,10 +7,7 @@ from .utils import (
 from .standard_fonts import STANDARD_FONTS
 from .base import PDFBase
 from .image import PDFImage
-from .text import PDFText
 from .page import PDFPage
-from .content import PDFContent
-from .table import PDFTable
 
 class PDF:
     def __init__(
@@ -353,7 +350,7 @@ class PDF:
             pdf_table.run()
 
         self._add_graphics([*pdf_table.fills, *pdf_table.lines])
-        self._add_parts(pdf_table.parts_)
+        self._add_parts(pdf_table.parts)
 
         if move == 'bottom':
             self.page.y += pdf_table.current_height
@@ -397,7 +394,7 @@ class PDF:
             pdf_content.run()
 
         self._add_graphics([*pdf_content.fills,*pdf_content.lines])
-        self._add_parts(pdf_content.parts_)
+        self._add_parts(pdf_content.parts)
 
         if move == 'bottom':
             self.page.y += pdf_content.current_height
@@ -507,3 +504,7 @@ class PDF:
         self._build_pages_tree(self.pages)
         self._build_dests()
         self.base.output(buffer)
+
+from .text import PDFText
+from .content import PDFContent
+from .table import PDFTable

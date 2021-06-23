@@ -1,15 +1,14 @@
 import zlib
 
 def encode_stream(stream, filter, parameters = {}):
-
-	if filter == b'/ASCIIHexDecode':
+	if filter == b'/FlateDecode':
+		return flate_encode(stream)
+	elif filter == b'/ASCIIHexDecode':
 		raise NotImplementedError('/ASCIIHexDecode')
 	elif filter == b'/ASCII85Decode':
 		raise NotImplementedError('/ASCII85Decode')
 	elif filter == b'/LZWDecode':
 		raise NotImplementedError('/LZWDecode')
-	elif filter == b'/FlateDecode':
-		return flate_encode(stream)
 	elif filter == b'/RunLengthDecode':
 		raise NotImplementedError('/RunLengthDecode')
 	elif filter == b'/CCITTFaxDecode':

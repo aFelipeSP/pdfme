@@ -153,7 +153,7 @@ class PDFDocument:
 
         if footnotes_obj is None:
             self.pdf._add_graphics([*self.section.fills,*self.section.lines])
-            self.pdf._add_parts(self.section.parts_)
+            self.pdf._add_parts(self.section.parts)
             self.pdf.page._y -= self.section.current_height
         else:
             footnotes_height = footnotes_obj.current_height
@@ -192,7 +192,7 @@ class PDFDocument:
                 self.pdf.context[id_] = len(page_footnotes)
 
     def check_footnotes(self, page_footnotes):
-        for part in self.section.parts_:
+        for part in self.section.parts:
             if part['type'] == 'paragraph':
                 self.check_footnote(part['ids'], page_footnotes)
         

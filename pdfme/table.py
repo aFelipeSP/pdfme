@@ -208,7 +208,7 @@ class PDFTable:
 
     def run(self, x=None, y=None, width=None, height=None):
         self.setup(x, y, width, height)
-        self.parts_ = []
+        self.parts = []
         self.lines = []
         self.fills = []
         self.fills_mem = {}
@@ -240,7 +240,7 @@ class PDFTable:
                     break
 
         if cancel:
-            self.parts_ = []
+            self.parts = []
             self.lines = []
             self.fills = []
             return
@@ -497,7 +497,7 @@ class PDFTable:
 
         result = pdf_text.run()
         result['type'] = 'paragraph'
-        self.parts_.append(result)
+        self.parts.append(result)
 
         if not pdf_text.finished:
             delayed.update({'delayed': pdf_text, 'type': 'text'})
@@ -517,7 +517,7 @@ class PDFTable:
         real_height = 0
         if img_height < height:
             real_height = img_height
-            self.parts_.append({
+            self.parts.append({
                 'type': 'image', 'pdf_image': pdf_image,
                 'x': x, 'y': y - img_height,
                 'width': img_width, 'height': img_height
@@ -543,7 +543,7 @@ class PDFTable:
 
         pdf_content.run()
 
-        self.parts_.extend(pdf_content.parts_)
+        self.parts.extend(pdf_content.parts)
         self.lines.extend(pdf_content.lines)
         self.fills.extend(pdf_content.fills)
 
@@ -571,7 +571,7 @@ class PDFTable:
 
         pdf_table.run()
 
-        self.parts_.extend(pdf_table.parts_)
+        self.parts.extend(pdf_table.parts)
         self.lines.extend(pdf_table.lines)
         self.fills.extend(pdf_table.fills)
 

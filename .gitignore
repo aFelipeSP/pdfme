@@ -7,3 +7,4 @@ dist/
 .vscode/
 test_*.json
 test_*.pdf
+docs/_build/

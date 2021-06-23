@@ -73,18 +73,19 @@ def parse_list(obj):
 
 def parse_stream(obj):
     stream_ = obj.pop('__stream__')
-    stream_copy = deepcopy(stream_)
     skip_filter = obj.pop('__skip_filter__', False)
 
-    if isinstance(stream_copy, bytes):
-        stream_str = stream_copy
-    elif isinstance(stream_copy, dict):
-        stream_str = b''.join(stream_copy.values())
-
-    if 'Filter' in obj and not skip_filter:
-        stream = encode_stream(stream_str, obj['Filter'])
+    if isinstance(stream_, bytes):
+        stream_str = stream_
+    elif isinstance(stream_, dict):
+        stream_str = b''.join(stream_.values())
     else:
-        stream = stream_str
+        raise Exception(
+            'streams must be bytes or a dict of bytes: ' + str(stream_)
+        )
+
+    stream = encode_stream(stream_str, obj['Filter']) \
+        if 'Filter' in obj and not skip_filter else stream_str
 
     obj['Length'] = len(stream)
     ret = parse_dict(obj) + b'stream\n' + stream + b'\nendstream'
