@@ -98,7 +98,7 @@ class PDFStandardFont(PDFFont):
             font['Encoding'] = b'/WinAnsiEncoding'
         return font
 
-class PDFTrueTypeFont:
+class PDFTrueTypeFont(PDFFont):
     def __init__(self, ref: str, filename:str=None) -> None:
         super().__init__(ref)
         self._base_font = None
@@ -108,6 +108,21 @@ class PDFTrueTypeFont:
     @property
     def base_font(self):
         return self._base_font
+
+    def _get_char_width(self, char: str) -> float:
+        index = ord(char)
+        if index in self.cmap:
+            glyph = self.cmap[index]
+            if glyph in self.glyph_set:
+                return self.glyph_set[self.cmap[ord(char)]].width
+
+        return self.glyph_set['.notdef'].width
+
+    def get_char_width(self, char: str) -> float:
+        return self._get_char_width(char) / self.units_per_em
+
+    def get_text_width(self, text) -> float:
+        return sum(self._get_char_width(c) for c in text) / self.units_per_em
 
     def load_font(self, filename: str):
         try:
@@ -120,10 +135,16 @@ class PDFTrueTypeFont:
         self.filename = str(Path(filename))
         self.font = ttLib.TTFont(self.filename)
 
+        # TODO: cmap needs to be modifiedfor this to work
+        self.cmap = self.font['cmap'].getcmap(3,1).cmap
+        self.glyph_set = self.font.getGlyphSet()
+
+        self.font_descriptor = self.get_font_descriptor()
+
     def get_font_descriptor(self):
         self._base_font = self.font['name'].names[6].toStr()
         head = self.font["head"]
-        self.units_per_em = head.self.units_per_em
+        self.units_per_em = head.unitsPerEm
         scale = 1000 / self.units_per_em
         xMax = head.xMax * scale
         xMin = head.xMin * scale
@@ -192,7 +213,7 @@ class PDFTrueTypeFont:
             'Length1': len(font_file_bytes)
         })
 
-        font_descriptor = base.add(self.get_font_descriptor())
+        font_descriptor = base.add(self.font_descriptor)
         font_descriptor['FontFile2'] = font_file_stream.id
 
         font_cid = base.add({
