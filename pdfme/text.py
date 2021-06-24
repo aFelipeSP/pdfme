@@ -2,16 +2,13 @@ from copy import deepcopy
 import re
 from .color import PDFColor
 from .utils import parse_style_str, default, process_style, get_paragraph_stream
-from .standard_fonts import STANDARD_FONTS
 
 PARAGRAPH_DEFAULTS = {'text_align': 'l', 'line_height': 1.1, 'indent': 0}
 TEXT_DEFAULTS = {'f': 'Helvetica', 'c': 0.1, 's': 11, 'r': 0, 'bg': None}
 
 
 class PDFState:
-    def __init__(self, style, fonts=None):
-
-        self.fonts = STANDARD_FONTS if fonts is None else fonts
+    def __init__(self, style, fonts):
 
         self.font_family = style['f']
 
@@ -22,7 +19,9 @@ class PDFState:
             f_mode += 'i'
         if f_mode == '':
             f_mode = 'n'
-        self.font_mode = 'n' if not f_mode in fonts[style['f']] else f_mode
+        self.font_mode = 'n' if not f_mode in fonts.fonts[style['f']] else f_mode
+
+        self.font = fonts.get_font(self.font_family, self.font_mode)
 
         self.size = style['s']
         self.color = PDFColor(style['c'])
@@ -34,10 +33,7 @@ class PDFState:
             other is None or self.font_family != other.font_family or
             self.font_mode != other.font_mode or self.size != other.size
         ):
-            ret_value += ' /{} {} Tf'.format(
-                self.fonts[self.font_family][self.font_mode]['ref'],
-                round(self.size, 3)
-            )
+            ret_value += ' /{} {} Tf'.format(self.font.ref, round(self.size, 3))
         if other is None or self.color != other.color:
             ret_value += ' ' + str(self.color)
         if other is None or self.rise != other.rise:
@@ -45,11 +41,10 @@ class PDFState:
 
         return ret_value
 
-
 class PDFTextLinePart:
-    def __init__(self, style, fonts=None, ids=None):
+    def __init__(self, style, fonts, ids=None):
 
-        self.fonts = STANDARD_FONTS if fonts is None else fonts
+        self.fonts = fonts
 
         self.style = style
         self.state = PDFState(style, fonts)
@@ -87,18 +82,17 @@ class PDFTextLinePart:
         return self.current_width(factor) + word_width
 
     def get_char_width(self, char):
-        ws = self.fonts[self.state.font_family][self.state.font_mode]['widths']
-        return self.state.size * ws[char] / 1000
+        return self.state.size * self.state.font.get_char_width(char)
 
     def get_word_width(self, word):
-        return sum(self.get_char_width(char) for char in word)
+        return self.state.size * self.state.font.get_text_width(word)
 
 class PDFTextLine:
     def __init__(
-        self, fonts=None, max_width=0, text_align=None, line_height=None,
+        self, fonts, max_width=0, text_align=None, line_height=None,
         top_margin=0
     ):
-        self.fonts = STANDARD_FONTS if fonts is None else fonts
+        self.fonts = fonts
         self.max_width = max_width
         self.line_parts = []
 
@@ -225,7 +219,7 @@ class PDFTextBase:
         line_height=None, indent=0, list_text=None, list_indent=None,
         list_style=None, pdf=None
     ):
-        self.fonts = STANDARD_FONTS if fonts is None else fonts
+        self.fonts = fonts
         self.setup(x, y, width, height)
         self.indent = indent
         self.text_align = default(text_align, PARAGRAPH_DEFAULTS['text_align'])
@@ -563,6 +557,7 @@ class PDFTextBase:
             self.last_factor = tw
 
         if text != '':
+            # TODO: How can we add unicode to PDF string
             stream += ' ({})Tj'.format(text)
         return stream
 
@@ -605,7 +600,7 @@ class PDFText(PDFTextBase):
         list_style=None, pdf=None
     ):
         self.pdf = pdf
-        self.fonts = STANDARD_FONTS if fonts is None else fonts
+        self.fonts = fonts
         self.content = []
         self._recursive_content_parse(content, TEXT_DEFAULTS, [])
         super().__init__(

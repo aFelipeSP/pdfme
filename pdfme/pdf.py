@@ -1,13 +1,15 @@
 import copy
 
-from .utils import (
-    get_page_size, subs, parse_margin, parse_style_str, create_graphics,
-    to_roman, process_style, get_paragraph_stream
-)
-from .standard_fonts import STANDARD_FONTS
+from pdfme.fonts import PDFFonts
+
 from .base import PDFBase
 from .image import PDFImage
 from .page import PDFPage
+from .utils import (
+    create_graphics, get_page_size, get_paragraph_stream,
+    parse_margin, parse_style_str, process_style, to_roman
+)
+
 
 class PDF:
     def __init__(
@@ -39,10 +41,10 @@ class PDF:
         self.root = self.base.add({ 'Type': b'/Catalog'})
         self.base.trailer['Root'] = self.root.id
 
-        self.fonts = copy.deepcopy(STANDARD_FONTS)
+        self.fonts = PDFFonts()
         self.used_fonts = {}
         self.images = {}
-        self._add_font('Helvetica', 'n')
+        self._add_or_get_font('Helvetica', 'n')
 
     @property
     def page(self):
@@ -141,34 +143,22 @@ class PDF:
         pdf_image = self.create_image(image)
         self.add_image(pdf_image, width=width, height=height, move=move)
 
-    def add_font(self, font_family, font_files):
-        raise NotImplementedError()
+    def add_font(self, fontfile, font_family, mode='n'):
+        self.fonts.load_font(fontfile, font_family, mode)
 
-    def _font_or_default(self, font_family, mode):
-        return self.fonts[font_family]['n'] \
-            if mode not in self.fonts[font_family] \
-            else self.fonts[font_family][mode]
-
-    def _add_font(self, font_family, mode):
-        font = self._font_or_default(font_family, mode)
-
-        font_obj = self.base.add({
-            'Type': b'/Font',
-            'Subtype': b'/Type1',
-            'BaseFont': subs('/{}', font['base_font']),
-            'Encoding': b'/WinAnsiEncoding'
-        })
-        self.used_fonts[(font_family, mode)] = font_obj
-        return font_obj
+    def _add_or_get_font(self, font_family, mode):
+        f = (font_family, mode) 
+        if f in self.used_fonts:
+            return self.used_fonts[f]
+        font = self.fonts.get_font(*f)
+        font_obj = font.add_font(self.base)
+        self.used_fonts[(font_family, mode)] = (font.ref, font_obj.id)
+        return font.ref, font_obj.id
 
     def _used_font(self, font_family, mode):
-        font = self._font_or_default(font_family, mode)
-
-        font_obj = self.used_fonts[(font_family, mode)] \
-            if (font_family, mode) in self.used_fonts \
-            else self._add_font(font_family, mode)
-
-        self.page.add_font(font['ref'], font_obj.id)
+        f = (font_family, mode)
+        font_args = self._add_or_get_font(*f)
+        self.page.add_font(*font_args)
 
     def _default_paragraph_style(
         self, width=None, height=None, text_align=None, line_height=None,
@@ -505,6 +495,6 @@ class PDF:
         self._build_dests()
         self.base.output(buffer)
 
-from .text import PDFText
 from .content import PDFContent
 from .table import PDFTable
+from .text import PDFText
