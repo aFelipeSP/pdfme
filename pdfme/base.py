@@ -49,7 +49,7 @@ class PDFBase:
     by including the ``__skip_filter__`` key.
 
     This class behaves like a ``list``, and you can get a ``PDFObject`` by
-    index (you can get the index from a ``PDFObject`` ``id`` attribute), set
+    index (you can get the index from a ``PDFObject.id`` attribute), set
     by index, iterate through the PDF PDFObjects and use ``len`` to get the
     amount of objects in this list-like class.
 

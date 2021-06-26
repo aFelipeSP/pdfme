@@ -1,4 +1,5 @@
 import copy
+from pdfme.fonts import PDFFonts
 from typing import Union
 
 from .image import PDFImage
@@ -12,9 +13,11 @@ PARAGRAPH_PROPERTIES = (
 )
 
 Number = Union[float, int]
+StrOrDict = Union[str, dict]
+ProcessElement = Union[str, list, tuple, dict]
 class PDFContent:
     """This class represents a group of elements (paragraphs, images, tables)
-    to be added to a :py:class:`PDF` instance.
+    to be added to a :py:class:`pdfme.pdf.PDF` instance.
 
     This class receives as the first argument a dict representing the
     layout of the elements that are going to be added to the PDF.
@@ -50,6 +53,7 @@ class PDFContent:
     used:
 
     .. code-block:: python
+
         {
             'cols': {'count': 2, 'gap': 20},
             'content': ['This is a lot of text ...'],
@@ -81,17 +85,17 @@ class PDFContent:
       This paragraph dict yields a justified paragraph with a line height of 1.5
       times the original line height and with a **1** on the left of the
       paragraph.
-      
+
     * An image that should be a dict with a ``image`` key, holding the path of
       the image, or the bytes of the image. In case ``image`` is of type bytes
       two more keys should be added to this dict: ``image_name`` and
       ``extension``, being the first a unique name for the image and the second
       the extension or format of the image (ex. "jpg"). This dict can have a
       ``style`` dict, to tell this class what should it do when an image don't
-      fit a column through the key ``image_place``. This attribute can be 
+      fit a column through the key ``image_place``. This attribute can be
       "normal" or "flow"(default) and both of them will take the image to the
       next column or rectangle, but the second one will try to accommodate the
-      elements coming after the image to fiil the space left by the image.
+      elements coming after the image to fiil the space left by it.
       Here is an example of an image dict:
 
       .. code-block:: python
@@ -105,7 +109,7 @@ class PDFContent:
       and optionally any or all of the following keys: ``widths``, ``borders``
       and ``fills``. To know more about these keys check their meaning in
       :py:class:`pdfme.table.PDFTable`.
-      Here is an example of table dict:
+      Here is an example of a table dict:
 
       .. code-block:: python
 
@@ -116,7 +120,9 @@ class PDFContent:
         }
 
     * A content that can be a dict like the one explained before, and can
-      contain other elements inside it recursively. This can be used 
+      contain other elements inside it recursively. This can be used to insert
+      a new section with more columns (for example a 2 columns section, inside
+      another 2 columns section).
 
     Each element in content can have margins to keep it separated from the other
     elements, and these margins can be set inside the ``style`` dict with the
@@ -130,25 +136,28 @@ class PDFContent:
 
     Args:
         content (dict): A content dict.
-        fonts (dict): A dict 
-        width (int, float): [description]
-        height (int, float): [description]
-        x (int, float, optional): [description]. Defaults to 0.
-        y (int, float, optional): [description]. Defaults to 0.
-        pdf (PDF, optional): [description]. Defaults to None.
+        fonts (PDFFonts): A PDFFonts object used to build paragraphs.
+        x (int, float): The x position of the left of the rectangle.
+        y (int, float): The y position of the top of the rectangle.
+        width (int, float): The width of the rectangle where the contents will
+            be arranged.
+        height (int, float): The height of the rectangle where the contents will
+            be arranged.
+        pdf (PDF, optional): A PDF object used to get string styles inside the
+            elements. Defaults to None.
 
     Raises:
-        Exception: [description]
+        TypeError: if ``content`` is not a dict
 
     .. _content method: https://github.com/aFelipeSP/pdfme/blob/main/pdfme/pdf.py#L387
     """
 
     def __init__(
-        self, content: dict, fonts: dict, width: Number, height: Number,
-        x: Number=0, y: Number=0, pdf: 'PDF'=None
-    ):
+        self, content: dict, fonts: PDFFonts, x: Number, y: Number,
+        width: Number, height: Number, pdf: 'PDF'=None
+    ) -> None:
         if not isinstance(content, dict):
-            raise Exception('content must be a dict')
+            raise TypeError('content must be a dict: {}'.format(content))
 
         self.content = content
         self.finished = False
@@ -158,7 +167,23 @@ class PDFContent:
         self.current_height = 0
         self.pdf = pdf
 
-    def setup(self, x=None, y=None, width=None, height=None):
+    def setup(
+        self, x: Number=None, y: Number=None, width: Number=None,
+        height: Number=None
+    ) -> None:
+        """Function to change any or all of the parameters of the rectangle of
+        the content.
+
+        Args:
+            x (int, float, optional): The x coordinate of the left of the
+                rectangle. Defaults to None.
+            y (int, float, optional): The y coordinate of the top of the
+                rectangle. Defaults to None.
+            width (int, float, optional): The width of the rectangle where the
+                contents will be arranged. Defaults to None.
+            height (int, float, optional): The height of the rectangle where the
+                contents will be arranged. Defaults to None.
+        """
         if x is not None:
             self.x = x
         if y is not None:
@@ -170,7 +195,36 @@ class PDFContent:
 
         self.max_y = self.min_y - self.height
 
-    def run(self, x=None, y=None, width=None, height=None):
+    def run(
+        self, x: Number=None, y: Number=None, width: Number=None,
+        height: Number=None
+    ) -> None:
+        """Function to arrange this object elements in the rectangle defined by
+        x, y, width and height.
+
+        The elements are arranged from top to bottom, and from left to right in
+        order, in the rectangle defined by attributes ``x``, ``y``, ``width``
+        and ``height``. The elements are added to this rectangle, until they are
+        all inside of it, or until all of the vertical space is used and the
+        rest of the elements can not be added. In these two cases method ``run``
+        finishes, and you can check if it's the first case if attribute
+        ``finished`` from this class is True, or it's the second case otherwise.
+        If ``finished`` is False, you can set a new rectangle (on a new page for
+        example) and use method ``run`` again (passing the parameters of the new
+        rectangle) to add the remaining elements that couldn't be added in the
+        last rectangle. You can keep doing this until all of the elements are
+        added and therefore attribute ``finished`` is True.
+
+        Args:
+            x (int, float, optional): The x position of the left of the
+                rectangle.
+            y (int, float, optional): The y position of the top of the
+                rectangle.
+            width (int, float, optional): The width of the rectangle where the
+                contents will be arranged.
+            height (int, float, optional): The height of the rectangle where the
+                contents will be arranged.
+        """
         self.setup(x, y, width, height)
         self.fills = []
         self.lines = []
@@ -182,7 +236,7 @@ class PDFContent:
                 last=True
             )
         else:
-            content_part.init(self.x, self.width, self.min_y, self.max_y)
+            content_part.setup(self.x, self.width, self.min_y, self.max_y)
 
         ret = content_part.run()
         self.current_height = content_part.min_y - (
@@ -192,32 +246,53 @@ class PDFContent:
             self.finished = True
 
 class PDFContentPart:
+    """Class that represent a content element.
+
+    This class has all the logic to arrange the content elements in the
+    rectangle defined by ``min_x`` (left), ``min_y`` (top), ``width`` and
+    ``max_y`` (bottom). This class needs a reference to a
+    :py:class:`pdfme.content.PDFContent` that will store the information
+    of the ``lines``, ``fills`` and ``parts`` of the elements arranged by
+    this class, and all of the children ``PDFContentPart`` 's of this object.
+    The description of the ``content`` argument is the same that the one
+    from :py:class:`pdfme.content.PDFContent`.
+
+    Args:
+        content (dict): A content dict.
+        pdf_content (PDFContent): To store the ``fills``, ``lines`` and
+            ``parts`` of the elements of the content.
+        min_x (int, float): The x position of the left of the rectangle.
+        width (int, float): The width of the rectangle where the
+            contents will be arranged.
+        min_y (int, float): The y position of the top of the rectangle.
+        max_y (int, float): The y position of the bottom of the rectangle.
+        parent (PDFContentPart, optional): If not None, this is the parent
+            of the current object, and it's needed because the arranging process
+            made by this object affects the parent arranging process and
+            viceversa. Defaults to None.
+        last (bool, optional): This tells whether this is the last element
+            of the list of elements of the parent. Defaults to False.
+        inherited_style (dict, optional): The accumulated styles of all of
+            the ancestors of the current object. Defaults to None.
+
+    Raises:
+        TypeError: If content is not a dict
+    """
     def __init__(
-            self, content, pdf_content, min_x, width, min_y, max_y, parent=None,
-            last=False, inherited_style=None
-        ):
-        '''
-        content: list of elements (dict) that will be added to the pdf. There are
-        currently 3 types of elements, defined by key 'type' in the element dict:
-        - '.*' for paragraph element. It can have a 'style' key for a dict
-            specifying any of the following paragraph properties: 'text_align',
-            'line_height', 'indent', 'list_text', 'list_indent', 'list_style'.
-        - 'image' for image element. The string in the 'image' key should contain the
-            path of the image to be added.
-        - 'content' for content element. The list in the key 'content' can contain any of the
-            other types of elements. It can have a 'style' key for a dict
-            specifying any properties that can be passed down to its children.
-
-        All of the elements can have a 'style' key holding a dict with any of the
-        following keys to change the margin of the elements (or the children, in
-        the case of 'content' type): 'margin_left', 'margin_top', 'margin_right',
-        'margin_bottom',
-        '''
-
+            self, content: dict, pdf_content: PDFContent, min_x: Number,
+            width: Number, min_y: Number, max_y: Number,
+            parent: 'PDFContentPart'=None, last: bool=False,
+            inherited_style: dict=None
+        ) -> None:
         self.p = pdf_content
         self.parent = parent
         self.is_root = parent is None
         self.last = last
+
+        if not isinstance(content, dict):
+            raise TypeError(
+                '"content" arg must be a dict:'.format(content)
+            )
 
         self.style = {'margin_bottom': 5}
         inherited_style = {} if inherited_style is None else inherited_style
@@ -228,18 +303,29 @@ class PDFContentPart:
 
         if not isinstance(self.column_info, dict):
             raise TypeError(
-                'self.column_info must be a dict:'.format(self.column_info)
+                '"cols" in content dict must be a dict:'.format(self.column_info)
             )
         self.elements = content.get('content', [])
 
         self.section_element_index = 0  # index when the last section jump occured
         self.section_delayed = []  # delayed elements when the last section jump occured
-        self.children_indexes = []  # the last state of this element
-        self.other_children_indexes = None
+        self.children_memory = []  # the last state of this element
+        self.partial_children_memory = None
 
-        self.init(min_x, width, min_y, max_y)
+        self.setup(min_x, width, min_y, max_y)
 
-    def init(self, min_x, width, min_y, max_y):
+    def setup(
+        self, min_x: Number, width: Number, min_y: Number, max_y: Number
+    ) -> None:
+        """Function to update the rectangle of this element.
+
+        Args:
+            min_x (int, float): The x position of the left of the rectangle.
+            width (int, float): The width of the rectangle where the
+                contents will be arranged.
+            min_y (int, float): The y position of the top of the rectangle.
+            max_y (int, float): The y position of the bottom of the rectangle.
+        """
         self.min_x = min_x
         self.min_y = min_y
         self.go_to_beginning()
@@ -264,16 +350,17 @@ class PDFContentPart:
         self.minim_diff = None
         self.minim_forward = None
 
-    def add_delayed(self):
-        '''Function to add delayed elements to pdf.
+    def add_delayed(self) -> str:
+        '''Function to add the delayed elements to the rectangle.
 
-        This function will try to add the delayed elements to the pdf, and it
-        can return any of these strings:
+        This function will try to add the delayed elements to the rectangle
+        and it will return a string telling what the main loop should do,
+        depending on what happened with the elements when they were being added
+        to the rectangle.
 
-        - 'continue' means caller could add all the delayed elements
-        - 'break' means a parent element is reseting, and this instance must
-          stop
-        - 'next' means we need to move to the next section.
+        Returns:
+            any of the strings mentioned in
+            :py:meth:`pdfme.content.PDFContentPart.add_elements`.
         '''
         n = 0
         while n < len(self.delayed):
@@ -300,16 +387,39 @@ class PDFContentPart:
 
         return 'continue'
 
-    def add_elements(self):
-        '''Function to add elements to pdf.
+    def add_elements(self) -> str:
+        '''Function to add the elements in content to the rectangle.
 
-        This function will try to add the elements to the pdf, and it can
-        return any of these strings:
+        This function will try to add the elements to the rectangle
+        and it will return a string telling what the main loop should do,
+        depending on what happened with the elements when they were being added
+        to the rectangle.
 
-        - 'continue' means caller could add all the elements
-        - 'break' means a parent element is reseting, and this instance must
-          stop
-        - 'next' means we need to move to the next section
+        Returns:
+            * ``'interrupt'`` means this element or one of its children reached
+              the end of the rectangle of this element's root ancestor, or what
+              is the same, this element's :py:class:`pdfme.content.PDFContent`
+              instance (the one saved in ``pdf_content`` attribute). This
+              message will propagate to the ancestors until it reach the root
+              ancestor and make the ``pdf_content`` to end running. After that
+              the user should set a new rectangle, maybe in a new page, and call
+              the :py:meth:`pdfme.content.PDFContent.run` function again to
+              keep adding the remaining elements that couldn't be added before.
+
+            * ``'break'`` means an ancestor is resetting and this element should
+              stop adding elements.
+
+            * ``'partial_next'`` means an ancestor has some remaining elements
+              that need to be added and this element should stop.
+
+            * ``'next'`` means that this element needs to move to the next
+              section, to continue adding elements to the rectangle. The next
+              section could be the next column of this element, or the next
+              section of the parent.
+
+            * ``'continue'`` means this element is done adding all of the
+              elements (there could be delayed elements still).
+
         '''
         len_elems = len(self.elements) - 1
         while self.element_index <= len_elems:
@@ -327,18 +437,36 @@ class PDFContentPart:
 
         return 'continue'
 
-    def is_element_resetting(self):
+    def is_element_resetting(self) -> str:
+        """Function that returns a string depending on whether this element
+        is resetting or not.
+
+        Returns:
+            A string telling the main loop what should do next.
+        """
+
         if self.will_reset or self.resetting:
             continue_reset = self.reset()
             return 'retry' if continue_reset else 'continue'
         else:
             return 'break'
 
-    def process_add_ans(self, ans):
+    def process_add_ans(self, ans: str) -> str:
+        """Function that process the answers from methods
+        :py:meth:`pdfme.content.PDFContentPart.add_delayed` and
+        :py:meth:`pdfme.content.PDFContentPart.add_elements`.
+
+        Args:
+            ans (str): Any of the strings described in
+                :py:meth:`pdfme.content.PDFContentPart.add_elements`.
+
+        Returns:
+            A string telling the main loop what should do next.
+        """
         if ans == 'interrupt':
             return ans
         elif ans == 'partial_next':
-            if self.other_children_indexes is None:
+            if self.partial_children_memory is None:
                 return ans
             else:
                 return 'retry'
@@ -351,7 +479,14 @@ class PDFContentPart:
             else:
                 return next_section_ret
 
-    def run(self):
+    def run(self) -> str:
+        """Function to run the main loop that will add the content elements to
+        the rectangle.
+
+        Returns:
+            A string telling the parent what should it do afterwards.
+        """
+
         while True:
             action = self.process_add_ans(self.add_delayed())
             if action == 'retry':
@@ -385,7 +520,15 @@ class PDFContentPart:
 
         return 'continue'
 
-    def last_child_of_resetting(self):
+    def last_child_of_resetting(self) -> bool:
+        """Function that recursively, towards the ancestors, checks if this
+        element is the last element of the last element of one ancestor that
+        is resetting.
+
+        Returns:
+            True if this element is the las element of an ancestor that is
+            resetting.
+        """
         parent = self.parent
         if parent:
             if self.last:
@@ -393,20 +536,30 @@ class PDFContentPart:
                     parent.mimim_forward = False
                     return True
                 else:
-                # elif len(parent.delayed) == 0:
                     return parent.last_child_of_resetting()
         return False
 
-    def start_resetting(self):
+    def start_resetting(self) -> None:
+        """Function that sets the attribute ``will_reset`` of this element or
+        one of its ancestors to True.
+        """
+
         parent = self.parent
         if parent and self.last  and parent.cols_n > 1:
-            # and len(parent.delayed) == 0
             parent.start_resetting()
             return
 
         self.will_reset = True
 
-    def reset(self):
+    def reset(self) -> None:
+        """Function that first checks if resetting process is over, and if not
+        calculates a new value for attribute ``max_y`` and resets all of the
+        elements added to the rectangle so far to repeat the arranging process
+
+        Returns:
+            True if resetting process should continue or False if this process
+            is done.
+        """
         if self.minim_diff_last and self.minim_diff_last - self.minim_diff < 1:
             if self.minim_forward:
                 self.minim_diff *= 2
@@ -435,24 +588,34 @@ class PDFContentPart:
 
         return True
 
-    def go_to_beginning(self):
+    def go_to_beginning(self) -> None:
+        """Function that takes the x and y coordinates of this element to the
+        ``min_x`` and ``min_y`` coordinates.
+        """
         self.y = self.min_y
         self.x = self.min_x
         self.column = 0
         self.starting = True
 
-    def next_section(self, children_indexes=None):
-        """Goes to the new section of the pdf document.
+    def next_section(self, children_memory: list=None) -> StrOrDict:
+        """Function that sets the x and y position of this element in the next
+        section.
 
-        It can be called by current node or by a child node.
-        When called by current node it returns:
-        - True if it's safe to continue.
-        - False if it should break because a parent is resetting, and this
-          child should end its processing.
-        When called by child node it returns the new min_x and min_y in a dict or
-        None if a parent has said original caller should initiate a chain reaction
-        to break all the elements upwards until it get to the parent (the one that
-        has the attribute current_element_ended) that should reset.
+        The next section could be the next column of this element or the next
+        section of one of the ancestors. If some ancestor is resetting, or the
+        end of the rectangle of the root element is reached, a string with a
+        instruction for the caller will propagate this message towards the
+        ancestors to act according to it.
+
+        Args:
+            children_memory (list, optional): This is a list containing the
+                children's indexes and delayed elements, that is accumulated
+                towards the ancestors.
+
+        Returns:
+            str, dict: A string containing a message to the main loop, or a dict
+            containing the new x and y coordinates that the children are
+            going to have from now on.
         """
 
         if self.column == self.cols_n - 1:
@@ -466,41 +629,54 @@ class PDFContentPart:
                     'index': self.element_index,
                     'delayed': copy.deepcopy(self.delayed)
                 }
-                if children_indexes is None:
-                    self.children_indexes = []
-                    new_children_indexes = [new_index]
+                if children_memory is None:
+                    self.children_memory = []
+                    new_children_memory = [new_index]
                 else:
-                    self.children_indexes = copy.deepcopy(children_indexes)
-                    new_children_indexes = copy.deepcopy(children_indexes)
-                    new_children_indexes.append(new_index)
+                    self.children_memory = copy.deepcopy(children_memory)
+                    new_children_memory = copy.deepcopy(children_memory)
+                    new_children_memory.append(new_index)
 
                 if self.is_root:
                     return 'interrupt'
 
-                ret = self.parent.next_section(new_children_indexes)
+                ret = self.parent.next_section(new_children_memory)
                 if ret in ['interrupt', 'break', 'partial_next']:
                     return ret
                 self.min_y = ret['min_y']
                 self.min_x = ret['min_x']
                 self.parts_index = len(self.p.parts)
                 self.go_to_beginning()
-                return 'retry' if children_indexes is None else ret
+                return 'retry' if children_memory is None else ret
         else:
             self.column += 1
             self.starting = True
             self.y = self.min_y
 
-            if len(self.delayed) > 0 and children_indexes is not None:
-                self.other_children_indexes = copy.deepcopy(children_indexes)
+            if len(self.delayed) > 0 and children_memory is not None:
+                self.partial_children_memory = copy.deepcopy(children_memory)
                 return 'partial_next'
 
-            return 'retry' if children_indexes is None else \
+            return 'retry' if children_memory is None else \
                 {'min_x': self.get_min_x(), 'min_y': self.min_y}
 
-    def get_min_x(self):
+    def get_min_x(self) -> Number:
+        """Function to get the x coordinate of the rectangle depending on the
+        current column.
+
+        Returns:
+            int, float: The x coordinate.
+        """
         return self.min_x + self.column * (self.col_width + self.cols_gap)
 
-    def update_dimensions(self, style):
+    def update_dimensions(self, style: dict) -> None:
+        """Function that updates the rectangle dimensions of the child element
+        that is going to be added to the rectangle of this element.
+
+        Args:
+            style (dict): The style dict that contains the margin information
+                needed to calculate the child element rectangle dimensions.
+        """
         s = style
         self.x = self.get_min_x() + s.get('margin_left', 0)
         self.width = self.col_width - \
@@ -512,26 +688,33 @@ class PDFContentPart:
         self.max_height = max(0, self.y - self.max_y)
         self.last_bottom = s.get('margin_bottom', 0)
 
-    def add_top_margin(self, style):
+    def add_top_margin(self, style: dict) -> None:
+        """Function that adds the top margin of the current child element.
+
+        Args:
+            style (dict): The style dict that contains the margin information
+                needed to calculate the child element top margin.
+        """
         if self.starting:
             self.starting = False
         else:
             self.y -=  style.get('margin_top', 0)
 
-    def process(self, element, last=False):
-        '''Function to add a single element to the pdf
+    def process(self, element: ProcessElement, last: bool=False) -> StrOrDict:
+        '''Function to add a single child element to the rectangle.
 
-        This function will add an element to the pdf, using the method
-        corresponding to the type of the object (text, image, or another content).
-        If some parent element is resetting, it will return None. Else,
-        a dict with 2 keys:
+        This function will add an element to the rectangle, using the method
+        corresponding to the type of the object (text, image, table or another
+        content). Depending on what happens with the element (if it was added or
+        delayed) this return a string with a message for the main loop, or a
+        dict with information to tell the caller function what should be done
+        afterwards.
 
-        - delayed: if not None, it will contain an element that should be added
-        by the caller function in the next section, because it didn't fit in
-        the current section.
-
-        - next: if True, the caller function should go to the next section of
-        the pdf.
+        Args:
+            element (dict, str, list, tuple): The object representing the
+                element to be added.
+            last (bool): Wheter or not this is the last child element of the
+                list of child elements of this element.
         '''
         if not isinstance(element, (dict, str, list, tuple)):
             element = str(element)
@@ -564,7 +747,23 @@ class PDFContentPart:
         elif 'content' in element:
             return self.process_child(element, style, last)
 
-    def process_text(self, element, style, element_style, paragraph_keys):
+    def process_text(
+        self, element: dict, style: dict, element_style: dict,
+        paragraph_keys: list
+    ) -> dict:
+        """Function that tries to add a paragraph to the current column
+        rectangle, and add the remainder to the delayed list
+
+        Args:
+            element (dict): The paragraph to be added
+            style (dict): The style of the paragraph, combined with the style
+                of this element.
+            element_style (dict): The style of the paragraph.
+            paragraph_keys (list): The keys of the paragraph dict.
+
+        Returns:
+            dict: Containing instructions to the caller.
+        """
         if 'paragraph' in element:
             pdf_text = element['paragraph']
             pdf_text.setup(
@@ -600,7 +799,17 @@ class PDFContentPart:
         else:
             return {'delayed': remaining, 'next': True}
 
-    def process_image(self, element, style):
+    def process_image(self, element: dict, style: dict) -> dict:
+        """Function that tries to add an image to the current column rectangle,
+        and add it to the delayed list if it can't add it.
+
+        Args:
+            element (dict): The image to be added
+            style (dict): The style of the image.
+
+        Returns:
+            dict: Containing instructions to the caller.
+        """
         ret = {'delayed': None, 'next': False}
         pdf_image = PDFImage(
             element['image'], element.get('extension'),
@@ -624,7 +833,21 @@ class PDFContentPart:
                 ret['image_flow'] = True
         return ret
 
-    def process_table(self, element, style, element_style):
+    def process_table(
+        self, element: dict, style: dict, element_style: dict
+    ) -> dict:
+        """Function that tries to add a table to the current column rectangle,
+        and add the remainder to the delayed list.
+
+        Args:
+            element (dict): The table to be added.
+            style (dict): The style of the table, combined with the style
+                of this element.
+            element_style (dict): The style of the table.
+
+        Returns:
+            dict: Containing instructions to the caller.
+        """
         if 'table_delayed' in element:
             pdf_table = element['table_delayed']
             pdf_table.setup(self.x, self.y, self.width, self.max_height)
@@ -655,26 +878,38 @@ class PDFContentPart:
         else:
             return {'delayed': None, 'next': False}
 
-    def process_child(self, element, style, last):
+    def process_child(self, element: dict, style: dict, last: bool) -> StrOrDict:
+        """Function that tries to add a child content to the current column
+        rectangle.
+
+        Args:
+            element (dict): The child to be added
+            style (dict): The style of the child, combined with the style
+                of this element.
+            last (bool): whether or not this is the last child of this element.
+
+        Returns:
+            str, dict: Containing instructions to the caller.
+        """
         pdf_content = PDFContentPart(
             element, self.p, self.get_min_x(), self.col_width, self.y,
             self.max_y, self, last, copy.deepcopy(style)
         )
-        down_condition1 = len(self.children_indexes) > 0 and \
+        down_condition1 = len(self.children_memory) > 0 and \
             self.element_index == self.section_element_index
-        down_condition2 = self.other_children_indexes is not None
+        down_condition2 = self.partial_children_memory is not None
 
         if down_condition1 or down_condition2:
-            child = self.children_indexes[-1] if down_condition1 else \
-                self.other_children_indexes[-1]
+            child = self.children_memory[-1] if down_condition1 else \
+                self.partial_children_memory[-1]
             pdf_content.section_element_index = child['index']
             pdf_content.section_delayed = copy.deepcopy(child['delayed'])
             pdf_content.element_index = child['index']
             pdf_content.delayed = copy.deepcopy(child['delayed'])
-            pdf_content.children_indexes = self.children_indexes[:-1] \
-                if down_condition1 else self.other_children_indexes[:-1]
+            pdf_content.children_memory = self.children_memory[:-1] \
+                if down_condition1 else self.partial_children_memory[:-1]
 
-            self.other_children_indexes = None
+            self.partial_children_memory = None
 
         action = pdf_content.run()
 

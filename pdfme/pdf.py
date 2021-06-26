@@ -368,7 +368,7 @@ class PDF:
         content = content.copy()
         style.update(process_style(content.get('style'), self))
         content['style'] = style
-        pdf_content = PDFContent(content, self.fonts, width, height, x, y, self)
+        pdf_content = PDFContent(content, self.fonts, x, y, width, height, self)
         return pdf_content
 
     def _content(

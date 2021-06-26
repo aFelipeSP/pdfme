@@ -538,7 +538,7 @@ class PDFTable:
         else:
             element['style'] = style
             pdf_content = PDFContent(
-                element, self.fonts, width, height, x, y, self.pdf
+                element, self.fonts, x, y, width, height, self.pdf
             )
 
         pdf_content.run()
