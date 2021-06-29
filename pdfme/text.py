@@ -94,20 +94,35 @@ class PDFTextLinePart:
         return self.state.size * self.state.font.get_text_width(word)
 
 class PDFTextLine:
+    """Class that represents a line of a paragraph.
+
+    This class has the logic to add paragraph parts, and inside them add their
+    words one by one, until all of the horizontal space of the paragraph has
+    been used. For more information about this mechanism check the method
+    :py:meth:`pdfme.text.PDFTextLine.add_word`.
+
+    Args:
+        fonts (PDFFonts):  to extract information about the fonts
+            being used in the paragraph.
+        max_width (int, float, optional): the maximum horizontal space that this
+            line can use.
+        text_align (str, optional): ``'l'`` for left (default), ``'c'`` for
+            center, ``'r'`` for right and ``'j'`` for justified text.
+        top_margin (Number, optional): if not None, this is the top margin of
+            the line, added to the actual line height.
+    """
     def __init__(
-        self, fonts, max_width=0, text_align=None, line_height=None,
-        top_margin=0
-    ):
+        self, fonts: PDFFonts, max_width: Number=0, text_align: str=None,
+        top_margin: Number=0
+    ) -> None:
         self.fonts = fonts
         self.max_width = max_width
         self.line_parts = []
 
         self.justify_min_factor = 0.7
-
         self.text_align = default(text_align, PARAGRAPH_DEFAULTS['text_align'])
-        self.line_height = default(
-            line_height, PARAGRAPH_DEFAULTS['line_height']
-        )
+
+        self.factor = 1 if self.text_align != 'j' else self.justify_min_factor
 
         self.top_margin = top_margin
         self.next_line = None
@@ -116,7 +131,13 @@ class PDFTextLine:
         self.started = False
 
     @property
-    def height(self):
+    def height(self) -> float:
+        """Property that returns the line height, calculated from the vertical
+        space of each part of the line.
+
+        Returns:
+            float: the line height.
+        """
         top = 0
         height_ = 0
         for part in self.line_parts:
@@ -128,13 +149,16 @@ class PDFTextLine:
         return height_ + self.top_margin + top
 
     @property
-    def min_width(self):
+    def min_width(self) -> float:
+        """Property that returns the width of the line, calculated using the
+        minimum value for attribute ``factor``. This attribute is used to
+        increase or decrease the space character width inside a line to 
+
+        Returns:
+            float: [description]
+        """
         ws = self.get_widths()
         return ws[0] + ws[1] * self.factor
-
-    @property
-    def factor(self):
-        return 1 if self.text_align != 'j' else self.justify_min_factor
 
     @property
     def bottom(self):
@@ -155,7 +179,7 @@ class PDFTextLine:
     def add_line_part(self, style=None, ids=None):
         if self.next_line is None:
             self.next_line = PDFTextLine(
-                self.fonts, self.max_width, self.text_align, self.line_height
+                self.fonts, self.max_width, self.text_align
             )
 
         line_part = PDFTextLinePart(style, self.fonts, ids)
@@ -209,8 +233,7 @@ class PDFTextLine:
                     self.next_line.firstWordAdded = True
                     self.next_line.top_margin = self.bottom
                     self.next_line.next_line = PDFTextLine(
-                        self.fonts, self.max_width, self.text_align,
-                        self.line_height
+                        self.fonts, self.max_width, self.text_align
                     )
                     line_parts = self.next_line.line_parts
                     self.next_line.next_line.line_parts = line_parts
@@ -226,11 +249,16 @@ class PDFTextBase:
     You should use :py:class:`pdfme.text.PDFText` instead of this class, because
     it has more functionalities.
 
-    To get the information needed to add this paragraph to the PDF document,
+    To create the data needed to add this paragraph to the PDF document,
     you have to call the method :py:meth:`pdfme.text.PDFTextBase.run`, which
     will try to add all of the dict parts in ``content`` argument list (or
     tuple) to the rectangle defined by args ``x``, ``y``, ``width`` and
-    ``height``. The parts are added to this rectangle, until they are all
+    ``height``.
+
+    Each part represents a part of the paragraph with a different style or with
+    a ``var`` or a specific ``id``.
+    
+    The parts are added to this rectangle, until they are all
     inside of it, or until all of the vertical space is used and the rest of
     the parts can not be added. In these two cases method ``run`` 
     finishes, and the property ``finished`` will be True if all the parts
@@ -272,18 +300,7 @@ class PDFTextBase:
 
             * ``'var'``: see :py:class:`pdfme.text.PDFText` definition.
 
-        width (int, float): see :py:class:`pdfme.text.PDFText` definition
-        height (int, float): see :py:class:`pdfme.text.PDFText` definition
-        x (int, float, optional): see :py:class:`pdfme.text.PDFText` definition
-        y (int, float, optional): see :py:class:`pdfme.text.PDFText` definition
-        fonts (PDFFonts, optional): see :py:class:`pdfme.text.PDFText` definition
-        text_align (str, optional): see :py:class:`pdfme.text.PDFText` definition
-        line_height (int, float, optional): see :py:class:`pdfme.text.PDFText` definition
-        indent (int, float, optional): see :py:class:`pdfme.text.PDFText` definition
-        list_text (str, optional): see :py:class:`pdfme.text.PDFText` definition
-        list_indent (int, float, optional): see :py:class:`pdfme.text.PDFText` definition
-        list_style (dict, optional): see :py:class:`pdfme.text.PDFText` definition
-        pdf (PDF, optional): see :py:class:`pdfme.text.PDFText` definition
+        the other args are explained in :py:class:`pdfme.text.PDFText`.
 
     Raises:
         TypeError: if ``content`` is not a str, list or tuple.
@@ -361,10 +378,6 @@ class PDFTextBase:
             used_fonts=self.used_fonts, ids=self.ids,
         )
 
-    def move(self, x: Number, y: Number) -> None:
-        self.x = x
-        self.y = y
-
     def setup(
         self, x: Number=None, y:Number=None, width: Number=None,
         height: Number=None, last_part: int=None, last_word: int=None
@@ -374,15 +387,19 @@ class PDFTextBase:
 
         Args:
             x (int, float, optional): The x coordinate of the left of the
-                rectangle. Defaults to None.
+                rectangle.
             y (int, float, optional): The y coordinate of the top of the
-                rectangle. Defaults to None.
+                rectangle.
             width (int, float, optional): The width of the rectangle where the
-                contents will be arranged. Defaults to None.
+                contents will be arranged.
             height (int, float, optional): The height of the rectangle where the
-                contents will be arranged. Defaults to None.
-            last_part (int, optional): [description]. Defaults to None.
-            last_word (int, optional): [description]. Defaults to None.
+                contents will be arranged.
+            last_part (int, optional): If not None, this is the index of the
+                part that was being processed the last time method ``run`` was
+                called.
+            last_word (int, optional): If not None, this is the index of the
+                word of the last part that was added the last time method
+                ``run`` was called.
         """
         if x is not None:
             self.x = x
@@ -397,7 +414,12 @@ class PDFTextBase:
         if last_word is not None:
             self.last_word = last_word
 
-    def init(self):
+    def init(self) -> None:
+        """Function to reset all of the instance properties that have to be
+        resetted before running the arranging process in a new rectangle.
+
+        This function is called by method ``run``.
+        """
         self.started = False
         self.lines = []
         self.text = ''
@@ -422,9 +444,22 @@ class PDFTextBase:
         self.y_ = 0
 
     def run(
-        self, x=None, y=None, width=None, height=None, last_part=None,
-        last_word=None
-    ):
+        self, x: Number=None, y: Number=None, width: Number=None,
+        height: Number=None, last_part: Number=None, last_word: Number=None
+    ) -> dict:
+        """Function to create the data needed to add this paragraph to the PDF
+        document.
+        
+        This function will try to add all of the dict parts in ``content``
+        argument list (or tuple) to this paragraph rectangle. Check this class
+        documentation for more information about this method.
+
+        This function args are the same as
+        :py:meth:`pdfme.text.PDFTextBase.setup`.
+
+        Returns:
+            dict: The dict from the property ``result``.
+        """
         self.setup(x, y, width, height, last_part, last_word)
         self.init()
         for part_index in range(self.last_part, len(self.content)):
@@ -455,7 +490,18 @@ class PDFTextBase:
             self.finished = True
         return self.result
 
-    def add_part(self, part, part_index):
+    def add_part(self, part: dict, part_index: int) -> bool:
+        """Function used by methodm ``run`` to add one paragraph part at a time. 
+
+        Args:
+            part (dict): part to be added.
+            part_index (int): index of the part to be added.
+
+        Returns:
+            bool: whether it was able to add all of the parts (True) or the
+                vertical space ran out.
+        """
+
         if 'var' in part and self.pdf:
             part['text'] = str(self.pdf.context.get(part['var'], ''))
 
@@ -507,7 +553,16 @@ class PDFTextBase:
         self.last_word = 0
         return True
 
-    def add_current_line(self, is_last=False):
+    def add_current_line(self, is_last: bool=False) -> bool:
+        """Function to add the current line to the list of already added lines.
+
+        Args:
+            is_last (bool, optional): whether this is the last line of this
+                paragraph (True) or not (False).
+
+        Returns:
+            bool: whether this line was successfully added (True) or not (False)
+        """
         if is_last and self.current_line.next_line is not None:
             self.current_line.line_parts.extend(
                 self.current_line.next_line.line_parts
@@ -536,7 +591,17 @@ class PDFTextBase:
 
             return True
 
-    def setup_list(self):
+    def setup_list(self) -> None:
+        """This function is called when the first part of the paragraph is going
+        to be added, and if this is a list paragraph, i.e. a paragraph with a
+        something on its left (a bullet, a number, etc), this function will
+        setup everything needed to display the text of the list paragraph, and
+        will adjust its width to make space for the list text. 
+
+        Raises:
+            TypeError: if list_style or list_indent passed to this instance
+                are not a dict and an number respectively.
+        """
         style = self.current_line.next_line.line_parts[0].style.copy()
 
         if self.list_style is None:
@@ -562,13 +627,21 @@ class PDFTextBase:
         elif not isinstance(self.list_indent, (float, int)):
             raise TypeError(
                 'list_indent must be int or float. Value: {}'
-                .format(self.list_style)
+                .format(self.list_indent)
             )
 
         self.list_state = line_part.state
         self.current_line.max_width -= self.list_indent
 
-    def add_line_to_stream(self, line, is_last=False):
+    def add_line_to_stream(self, line: PDFTextLine, is_last:bool=False) -> None:
+        """Function to add a PDFTextLine representing a paragraph line to the
+        already added lines stream.
+
+        Args:
+            line (PDFTextLine): The line to be added to the stream.
+            is_last (bool, optional): whether this is the last line of this
+                paragraph (True) or not (False).
+        """
         words_width, spaces_width = line.get_widths()
         x = self.list_indent if self.list_text else 0
         line_height = line.height
@@ -651,13 +724,37 @@ class PDFTextBase:
                 self.graphics += part_graphics
             x += part_width
 
-    def clean_words(self, words):
+    def clean_words(self, words: list) -> str:
+        """This function joins a list of words (spaces included) and makes the
+        resulting string compatible with a PDF string.
+
+        Args:
+            words (list): a list of strings, where each string is a word.
+
+        Returns:
+            str: A string with all of the words passed.
+        """
+
         text = ''.join(word for word in words)
         if text != '':
             text = text.replace('\\',r'\\').replace('(','\(').replace(')','\)')
         return text
 
-    def output_text(self, part, text, factor=1):
+    def output_text(self, part: PDFTextLinePart, text, factor: Number=1) -> str:
+        """Function that creates a piece of PDF stream (only the text), from
+        the PDFTextLinePart and the ``text`` arguments.
+
+        Args:
+            part (PDFTextLinePart): the part to be transformed into a string
+                representing a PDF stream piece.
+            text ([type]): the text to be transformed into a string
+                representing a PDF stream piece.
+            factor (Number, optional): factor of the line needed to create
+                center, right and justified aligned paragraphs.
+
+        Returns:
+            str: representing the PDF stream
+        """
         stream = part.state.compare(self.last_state)
         self.last_state = part.state
 
@@ -673,7 +770,22 @@ class PDFTextBase:
             stream += ' ({})Tj'.format(text)
         return stream
 
-    def output_graphics(self, part, x, y, part_width):
+    def output_graphics(
+        self, part: PDFTextLinePart, x: Number, y: Number, part_width: Number
+    ) -> str:
+        """Function that creates a piece of PDF stream (only the graphics),
+        from the PDFTextLinePart argument.
+
+        Args:
+            part (PDFTextLinePart): the part to be transformed into a string
+                representing a PDF stream piece.
+            x (int, float): the x origin coordinate of the graphics being added.
+            y (int, float): the y origin coordinate of the graphics being added.
+            width (int, float): the width of the part being added
+
+        Returns:
+            str: representing the PDF stream
+        """
         graphics = ''
         if part.background is not None and not part.background.color is None:
             if part.background != self.last_fill:

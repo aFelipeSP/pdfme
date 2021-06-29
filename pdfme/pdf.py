@@ -283,8 +283,7 @@ class PDF:
                 content, width, height, text_align, line_height, indent,
                 list_text, list_indent, list_style
             )
-            pdf_text.run()
-            pdf_text.move(x, y)
+            pdf_text.run(x, y)
 
         self._add_text(move=move, **pdf_text.result)
         return pdf_text
