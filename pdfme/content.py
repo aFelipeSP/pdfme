@@ -1,7 +1,7 @@
 import copy
-from pdfme.fonts import PDFFonts
 from typing import Union
 
+from .fonts import PDFFonts
 from .image import PDFImage
 from .text import PDFText
 from .utils import parse_style_str, process_style
@@ -29,8 +29,8 @@ class PDFContent:
     ``width`` and ``height``. The elements are added to this rectangle, until
     they are all inside of it, or until all of the vertical space is used and
     the rest of the elements can not be added. In these two cases method ``run``
-    finishes, and you can check if it's the first case if property ``finished``
-    from this class is True, or it's the second case otherwise.
+    finishes,  and the property ``finished`` will be True if all the elements
+    were added, and False if the vertical space ran out.
     If ``finished`` is False, you can set a new rectangle (on a new page for
     example) and use method ``run`` again (passing the parameters of the new
     rectangle) to add the remaining elements that couldn't be added in
@@ -41,11 +41,11 @@ class PDFContent:
     After calling ``run``, the properties ``fills`` and ``lines`` will be
     populated with the fills and lines of the tables that fitted inside the
     rectangle, and ``parts`` will be filled with the paragraphs and images that
-    fitted inside the rectangle too, and you have to add by yourself those to
+    fitted inside the rectangle too, and you have to add them by yourself to
     the PDF object before using method ``run`` again (in case ``finished`` is
     False), because they will be redefined for the next rectangle after calling
-    it again. You can check the `content method`_ in PDF module to see how this
-    process is done.
+    it again. You can check the ``content`` method in `PDF`_ module to see how
+    this process is done.
 
     A ``cols`` key with a dict as a value can be included to arrange the
     elements in more than one column. For example, to use 2 columns, and to set
@@ -130,8 +130,8 @@ class PDFContent:
     ``margin_right``. Default value for all of them is 0, except for
     ``margin_bottom`` that have a default value of 5.
 
-    Finally, a content dict can have a ``style`` dict, thay will be passed to
-    the elements inside of it. The children elements will only use the content
+    A content dict itself can have a ``style`` dict, and all of the content
+    children will inherit this style. They will only use the content
     ``style`` properties not included in their own ``style`` dicts.
 
     Args:
@@ -149,7 +149,7 @@ class PDFContent:
     Raises:
         TypeError: if ``content`` is not a dict
 
-    .. _content method: https://github.com/aFelipeSP/pdfme/blob/main/pdfme/pdf.py#L387
+    .. _PDF: https://github.com/aFelipeSP/pdfme/blob/main/pdfme/pdf.py
     """
 
     def __init__(
@@ -202,18 +202,7 @@ class PDFContent:
         """Function to arrange this object elements in the rectangle defined by
         x, y, width and height.
 
-        The elements are arranged from top to bottom, and from left to right in
-        order, in the rectangle defined by attributes ``x``, ``y``, ``width``
-        and ``height``. The elements are added to this rectangle, until they are
-        all inside of it, or until all of the vertical space is used and the
-        rest of the elements can not be added. In these two cases method ``run``
-        finishes, and you can check if it's the first case if attribute
-        ``finished`` from this class is True, or it's the second case otherwise.
-        If ``finished`` is False, you can set a new rectangle (on a new page for
-        example) and use method ``run`` again (passing the parameters of the new
-        rectangle) to add the remaining elements that couldn't be added in the
-        last rectangle. You can keep doing this until all of the elements are
-        added and therefore attribute ``finished`` is True.
+        More information about this method in this class definition.
 
         Args:
             x (int, float, optional): The x position of the left of the

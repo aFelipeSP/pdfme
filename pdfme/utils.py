@@ -1,6 +1,5 @@
 from copy import deepcopy
 import re
-from .color import PDFColor
 
 page_sizes = {
     'a5': (419.528, 595.276),
@@ -74,25 +73,52 @@ def parse_margin(margin):
         raise TypeError('margin property must be of type str, int, list or dict')
 
 
-def parse_style_str(style_str, fonts):
+def parse_style_str(style_str: str, fonts: 'PDFFonts') -> dict:
+    """Function to parse a style string into a style dict.
+
+    It parses a string with a semi-colon separeted list of the style attributes
+    you want to apply. For the ones that are of type bool, you just have to
+    include the name, and for the rest you need to include the name, a colon,
+    and the value of the attribute. In case the value is a color, it can be any
+    of the possible string inputs to function
+    :py:func:`pdfme.color.parse_color`.
+
+    Args:
+        style_str (str): The string representing the text style.
+        fonts (PDFFonts): If a font family is included, this is needed to check
+            if is is among the fonts already added to the PDFFonts instance
+            passed.
+
+    Raises:
+        ValueError: If the string format is no the one defined in this docs.
+
+    Returns:
+        dict: A style dict like the one described in
+            :py:meth:`pdfme.text.PDFText`.
+    """
+
     style = {}
     for attrs_str in style_str.split(';'):
         attrs = attrs_str.split(':')
-        if len(attrs) == 0 or attrs == ['']: continue
-        elif len(attrs) == 1:
+        if len(attrs) == 1:
+            if attrs[0] == '':
+                continue
             attr = attrs[0].strip()
             if not attr in ['b', 'i', 'u']:
-                raise ValueError('Style elements with no paramter must '
-                    'be whether "b" for bold, "i" for italics(Oblique) or '
-                    '"u" for underline.')
+                raise ValueError(
+                    'Style elements with no paramter must be whether "b" for '
+                    'bold, "i" for italics(Oblique) or "u" for underline.'
+                )
             style[attr] = True
         elif len(attrs) == 2:
             attr = attrs[0].strip()
             value = attrs[1].strip()
             if attr == "f":
                 if value not in fonts.fonts:
-                    raise ValueError('Style element "f" must have the name '
-                        'of a font family already added.')
+                    raise ValueError(
+                        'Style element "f" must have the name of a font family'
+                        ' already added.'
+                    )
                 
                 style['f'] = value
             elif attr == "c":
@@ -106,20 +132,26 @@ def parse_style_str(style_str, fonts):
                         v = int(v)
                     style['s'] = v
                 except:
-                    raise ValueError('Style element value for "s" is wrong:'
-                        ' {}'.format(value))
+                    raise ValueError(
+                        'Style element value for "s" is wrong:'
+                        ' {}'.format(value)
+                    )
             elif attrs[0] == 'r':
                 try: style['r'] = float(value)
                 except:
-                    raise ValueError('Style element value for "r" is wrong:'
-                        ' {}'.format(value))
+                    raise ValueError(
+                        'Style element value for "r" is wrong:'
+                        ' {}'.format(value)
+                    )
             else:
-                raise ValueError('Style elements with arguments must be "f", '
-                    '"s", "c", "r"')
+                raise ValueError(
+                    'Style elements with arguments must be "f", "s", "c", "r"'
+                )
 
         else:
-            raise ValueError('Style elements must be "b", "u", "i", "f", '
-                    '"s", "c", "r"')
+            raise ValueError(
+                'Style elements must be "b", "u", "i", "f", "s", "c", "r"'
+            )
 
     return style
 
@@ -202,3 +234,6 @@ def get_paragraph_stream(x, y, text_stream, graphics_stream):
     if text_stream != '':
         stream += ' BT 1 0 0 1 {} {} Tm{} ET'.format(x, y, text_stream)
     return stream
+
+from .color import PDFColor
+from .fonts import PDFFonts

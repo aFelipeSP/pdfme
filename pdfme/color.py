@@ -212,8 +212,10 @@ def parse_color(color: color_type) -> list:
     color if its length is 3, and a rgba color if its length is 4 (not yet 
     supported).
 
-    ``color`` of type str can be a hex color of the form "#aabbcc" or the name
-    of a color in the variable ``colors`` in file `color.py`_.
+    ``color`` of type str can be a hex color of the form "#aabbcc", the name
+    of a color in the variable ``colors`` in file `color.py`_, or a space
+    separated list of numbers, that is parsed as an rgb color, like
+    the one described before in the list ``color`` type.
 
     Args:
         color (int, float, list, tuple, str): The color specification.

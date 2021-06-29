@@ -1,10 +1,6 @@
 from typing import Any, Union
 from uuid import uuid4
 
-from .parser import PDFObject, PDFRef, parse_obj
-from .utils import subs
-
-
 class PDFBase:
     """This class represents a PDF file, and deals with parsing python
     objects you add to it (with method ``add``) to PDF indirect objects.
@@ -75,9 +71,9 @@ class PDFBase:
 
     def add(
         self, py_obj: Union[
-            dict, list, tuple, set, bytes, bool, int, float, str, PDFObject
+            dict, list, tuple, set, bytes, bool, int, float, str, 'PDFObject'
         ]
-    ) -> PDFObject:
+    ) -> 'PDFObject':
         """Add a new object to the PDF file
 
         Args:
@@ -101,11 +97,11 @@ class PDFBase:
         self.count += 1
         return obj
 
-    def __getitem__(self, i: int) -> PDFObject:
+    def __getitem__(self, i: int) -> 'PDFObject':
         if i == 0: return None
         return self.content[i - 1]
 
-    def __setitem__(self, i: int, value: PDFObject) -> None:
+    def __setitem__(self, i: int, value: 'PDFObject') -> None:
         if i > 0:
             self.content[i - 1] = value
 
@@ -157,3 +153,6 @@ class PDFBase:
             (xref + 'trailer\n').encode('latin') + trailer +
             footer.encode('latin')
         )
+
+from .parser import PDFObject, PDFRef, parse_obj
+from .utils import subs

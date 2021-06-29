@@ -1,12 +1,18 @@
-from copy import deepcopy
 import re
+from copy import deepcopy
+from typing import Union
+
 from .color import PDFColor
-from .utils import parse_style_str, default, process_style, get_paragraph_stream
+from .fonts import PDFFonts
+from .utils import (
+    default, get_paragraph_stream, parse_style_str, process_style
+)
 
 PARAGRAPH_DEFAULTS = {'text_align': 'l', 'line_height': 1.1, 'indent': 0}
 TEXT_DEFAULTS = {'f': 'Helvetica', 'c': 0.1, 's': 11, 'r': 0, 'bg': None}
 
-
+ContentType = Union[str, list, tuple, dict]
+Number = Union[int, float]
 class PDFState:
     def __init__(self, style, fonts):
 
@@ -214,11 +220,82 @@ class PDFTextLine:
                     }
 
 class PDFTextBase:
+    """Class that represents a rich text paragraph to be added to a
+    :py:class:`pdfme.pdf.PDF` instance.
+
+    You should use :py:class:`pdfme.text.PDFText` instead of this class, because
+    it has more functionalities.
+
+    To get the information needed to add this paragraph to the PDF document,
+    you have to call the method :py:meth:`pdfme.text.PDFTextBase.run`, which
+    will try to add all of the dict parts in ``content`` argument list (or
+    tuple) to the rectangle defined by args ``x``, ``y``, ``width`` and
+    ``height``. The parts are added to this rectangle, until they are all
+    inside of it, or until all of the vertical space is used and the rest of
+    the parts can not be added. In these two cases method ``run`` 
+    finishes, and the property ``finished`` will be True if all the parts
+    were added, and False if the vertical space ran out.
+    If ``finished`` is False, you can set a new rectangle (on a new page for
+    example) and use method ``run`` again (passing the parameters of the new
+    rectangle) to add the remaining parts that couldn't be added in the
+    last rectangle. You can keep doing this until all of the parts are
+    added and therefore property ``finished`` is True.
+
+    By using method ``run`` the paragraph is not really added to the PDF
+    object. After calling ``run``, the property ``result`` will be
+    available with the information needed to be added to the PDF, at least
+    the parts that fitted inside the rectangle. You have to use the
+    property ``result`` to add the paragraph to the PDF object before
+    using method ``run`` again (in case ``finished`` is False), because
+    it will be redefined for the next rectangle after calling ``run`` again.
+    You can check the ``text`` method in `PDF`_ module to see how this
+    process is done.
+
+    Args:
+        content (str, list, tuple): If this is a string, it will
+            become the following:
+
+            .. code-block:: python
+
+                [{'style': <DEFAULT_STYLE>, 'text': <STRING>}]
+
+            If this is a list or a tuple, its elements should be dicts with the
+            following keys:
+
+            * ``'text'``: this is the text that will be displayed with the style
+              defined in ``style`` key.
+
+            * ``'style'``: this is a style dict like the one described in
+              :py:class:`pdfme.text.PDFText`.
+
+            * ``'ids'``: see :py:class:`pdfme.text.PDFText` definition.
+
+            * ``'var'``: see :py:class:`pdfme.text.PDFText` definition.
+
+        width (int, float): see :py:class:`pdfme.text.PDFText` definition
+        height (int, float): see :py:class:`pdfme.text.PDFText` definition
+        x (int, float, optional): see :py:class:`pdfme.text.PDFText` definition
+        y (int, float, optional): see :py:class:`pdfme.text.PDFText` definition
+        fonts (PDFFonts, optional): see :py:class:`pdfme.text.PDFText` definition
+        text_align (str, optional): see :py:class:`pdfme.text.PDFText` definition
+        line_height (int, float, optional): see :py:class:`pdfme.text.PDFText` definition
+        indent (int, float, optional): see :py:class:`pdfme.text.PDFText` definition
+        list_text (str, optional): see :py:class:`pdfme.text.PDFText` definition
+        list_indent (int, float, optional): see :py:class:`pdfme.text.PDFText` definition
+        list_style (dict, optional): see :py:class:`pdfme.text.PDFText` definition
+        pdf (PDF, optional): see :py:class:`pdfme.text.PDFText` definition
+
+    Raises:
+        TypeError: if ``content`` is not a str, list or tuple.
+
+    .. _PDF: https://github.com/aFelipeSP/pdfme/blob/main/pdfme/pdf.py
+    """
     def __init__(
-        self, content, width, height, x=0, y=0, fonts=None, text_align=None,
-        line_height=None, indent=0, list_text=None, list_indent=None,
-        list_style=None, pdf=None
-    ):
+        self, content: Union[str, list, tuple], width: Number, height: Number,
+        x: Number=0, y: Number=0, fonts: PDFFonts=None, text_align: str=None,
+        line_height: Number=None, indent: Number=0, list_text: str=None,
+        list_indent: Number=None, list_style: dict=None, pdf: 'PDF'=None
+    ) -> None:
         self.fonts = fonts
         self.setup(x, y, width, height)
         self.indent = indent
@@ -253,25 +330,60 @@ class PDFTextBase:
         self.list_setup_done = False
 
     @property
-    def stream(self):
+    def stream(self) -> str:
+        """Property that returns the PDF stream generated by the method ``run``,
+        with all of the graphics and the text, ready to be added to a PDF page
+        stream.
+
+        Returns:
+            str: the stream.
+        """
         return get_paragraph_stream(self.x, self.y, self.text, self.graphics)
 
     @property
-    def result(self):
+    def result(self) -> dict:
+        """Property that returns a dict with the result of calling method
+        ``run``, and can be passed to method
+        :py:meth:`pdfme.pdf.PDF._add_text`, to add this paragraph to that
+        PDF document's page. Check method ``_add_parts`` from
+        :py:class:`pdfme.pdf.PDF` to see how a dict like the one returned by
+        this method (a paragraph part) is added to a PDF instance.
+
+        Returns:
+            dict: information about the paragraph.
+
+        .. _PDF: https://github.com/aFelipeSP/pdfme/blob/main/pdfme/pdf.py
+        """
+        
         return dict(
             x=self.x, y=self.y, height=self.current_height, width=self.width,
             text_stream=self.text, graphics_stream=self.graphics,
             used_fonts=self.used_fonts, ids=self.ids,
         )
 
-    def move(self, x, y):
+    def move(self, x: Number, y: Number) -> None:
         self.x = x
         self.y = y
 
     def setup(
-        self, x=None, y=None, width=None, height=None, last_part=None,
-        last_word=None
+        self, x: Number=None, y:Number=None, width: Number=None,
+        height: Number=None, last_part: int=None, last_word: int=None
     ):
+        """Function to change any or all of the parameters of the rectangle of
+        the content.
+
+        Args:
+            x (int, float, optional): The x coordinate of the left of the
+                rectangle. Defaults to None.
+            y (int, float, optional): The y coordinate of the top of the
+                rectangle. Defaults to None.
+            width (int, float, optional): The width of the rectangle where the
+                contents will be arranged. Defaults to None.
+            height (int, float, optional): The height of the rectangle where the
+                contents will be arranged. Defaults to None.
+            last_part (int, optional): [description]. Defaults to None.
+            last_word (int, optional): [description]. Defaults to None.
+        """
         if x is not None:
             self.x = x
         if y is not None:
@@ -594,11 +706,157 @@ class PDFTextBase:
         return graphics
 
 class PDFText(PDFTextBase):
+    """Class that represents a rich text paragraph to be added to a
+    :py:class:`pdfme.pdf.PDF` instance.
+
+    This is a subclass of :py:class:`pdfme.text.PDFTextBase` and adds the logic
+    to let the user of this class pass content in a nested cascading "jsonish"
+    format (something like HTML), i.e. if you pass a dict to ``content``,
+    and this dict has a ``style`` key, all of its children will inherit this
+    style and will be able to overwrite some or all of the style parameters
+    coming from it. The children will be able to pass their own
+    style parameters to their children too, and so on.
+
+    This is done by transforming the nested structure passed to this class, to
+    a list of parts with the structure that can be passed to
+    :py:class:`pdfme.text.PDFTextBase`.
+
+    Args:
+        content (str, list, tuple, dict): If this is a string, it will
+            become the following:
+
+            .. code-block:: python
+
+                { '.': [ <STRING>, ] }
+
+            If this is a list or a tuple, it will become the following:
+
+            .. code-block:: python
+
+                { '.': <LIST_OR_TUPLE> }
+
+            If this is a dict, it should have one and only one key starting
+            with a dot, that contains a tuple or a list with the parts of
+            the paragraph, that can be in turn a string, list, tuple or a
+            new paragraph dict like the one we are describing here.
+
+            Other keys in this dict can be:
+
+            * ``'label'``: this is a string with a unique name (there should be
+              only one label with this name in the whole document) representing
+              a destination that can be referenced in other parts of the
+              document. This is suited for titles, figures, tables, etc.
+
+            * ``'ref'``: this is a string with the name of a label, that will
+              become a link to the position of the label referenced.
+
+            * ``'uri'``: this is a string with a reference to a web resource,
+              that will turn this text part in a link to that web page.
+
+            * ``'ids'``: when method ``run`` is called, dict attr ``result`` is
+              available with information to add the paragraph to the PDF, and
+              within that information you'll find a key ``ids``, a dict with
+              the position and size of the rectangle for each of the ids you
+              include in this argument. This way you can "tag" a part of a
+              paragraph, call ``run``, and get the position of it afterwards.
+
+            * ``'var'``: this is a string with the name of a global variable,
+              previously set in the containing :py:class:`pdfme.pdf.PDF`
+              instance, by adding a new key to its dict attribute ``context``.
+              This way you can reuse a repetitive string throughout the PDF
+              document.
+
+            Style of the paragraph dicts can be described in the dot key
+            itself (a semi-colon separeted list of the attributes explained in
+            :py:func:`pdfme.utils.parse_style_str`) or in a ``style`` key too.
+            This ``style`` key must be in turn a dict containing any of the
+            following keys:
+
+            * ``'b'`` (bool) to make text inside this part bold. Default is
+              False.
+
+            * ``'i'`` (bool) to make text inside this part cursive (italics,
+              oblique). Default is False.
+
+            * ``'s'`` (int, float) to set the size of the text inside this
+              part. Default is 11.
+
+            * ``'f'`` (str) to set the font family of the text inside this
+              part. Default is ``'Helvetica'``.
+
+            * ``'u'`` (bool) to make the text inside this part underlined.
+              Default is False.
+
+            * ``'c'`` (int, float, list, tuple, str) to set the color of
+              the text inside this part. See :py:func:`pdfme.utils.parse_color`
+              for information about this attribute. Default is black.
+
+            * ``'bg'`` (int, float, list, tuple, str) to set the background
+              color of the text inside this part. See
+              :py:func:`pdfme.utils.parse_color` for information about this
+              attribute. Default is None.
+
+            * ``'r'`` (int, float) to set the baseline of the text, relative
+              to the normal baseline. This is a fraction of the current size of
+              the text, i.e. it will move the baseline the text size times this
+              number in points, upwards if positive, and downwards if negative.
+              Default is 0.
+
+            Here is an example of this argument:
+
+            .. code-block:: python
+
+                {
+                    '.': ['text to be displayed'],
+                    'style': {
+                        'b': True,
+                        'i': True,
+                        'u': True,
+                        's': 10.2,
+                        'f': 'Courier',
+                        'c': 0.9,
+                        'bg': 'red',
+                        'r': 0.5
+                    },
+                    'label': 'a_important_paragraph',
+                    'uri': 'https://github.com/aFelipeSP/pdfme'
+                }
+
+        width (int, float): The width of the paragraph.
+        height (int, float): The height of the paragraph.
+        x (int, float, optional): The x coordinate of the paragraph.
+        y (int, float, optional): The y coordinate of the paragraph
+        fonts (PDFFonts, optional): To extract information about the fonts
+            being used in the paragraph.
+        text_align (str, optional): ``'l'`` for left (default), ``'c'`` for
+            center, ``'r'`` for right and ``'j'`` for justified text.
+        line_height (int, float, optional): How much space between the
+            lines of the paragraph. This is a fraction of each line's
+            height, so the real distance between lines can vary depending on
+            the text size of each part of the paragraph.
+        indent (int, float, optional): The indentation of the first line of
+            the paragraph.
+        list_text (str, optional): Needed if you want to turn this paragraph
+            into a list paragraph. This text will be displayed before the
+            paragraph and will be aligned with the first line.
+        list_indent (int, float, optional): Needed if you want to turn this
+            paragraph into a list paragraph. The space between the start of
+            the left side of the rectangle and the left side of the
+            paragraph itself. If omitted, this space will be the width of
+            the ``list_text``.
+        list_style (dict, optional): Needed if you want to turn this
+            paragraph into a list paragraph. The style of ``list_text``.
+            If omitted, the style of the first part of the first line will
+            be used.
+        pdf (PDF, optional): To grab global information of the PDF being
+            used.
+    """
     def __init__(
-        self, content, width, height, x=0, y=0, fonts=None, text_align=None,
-        line_height=None, indent=0, list_text=None, list_indent=None,
-        list_style=None, pdf=None
-    ):
+        self, content: ContentType, width: Number, height: Number,
+        x: Number=0, y: Number=0, fonts: PDFFonts=None, text_align: str=None,
+        line_height: Number=None, indent: Number=0, list_text: str=None,
+        list_indent: Number=None, list_style: dict=None, pdf: 'PDF'=None
+    ) -> None:
         self.pdf = pdf
         self.fonts = fonts
         self.content = []
@@ -608,7 +866,24 @@ class PDFText(PDFTextBase):
             indent, list_text, list_indent, list_style, pdf
         )
 
-    def _new_text_part(self, style, ids, part_var, last_part=None):
+    def _new_text_part(
+        self, style: dict, ids: list, part_var: str=None, last_part: dict=None
+    ) -> dict:
+        """Creates a new text part compatible with
+        :py:class:`pdfme.text.PDFTextBase`.
+
+        Args:
+            style (dict): The style of this new part.
+            ids (list): The ids of this new part.
+            part_var (str, optional): The name of the 'var' (None if there's no
+                var for this part).
+            last_part (dict, optional): the part before the one that is going to
+                be created with this function.
+
+        Returns:
+            dict: representing a part compatible with
+                :py:class:`pdfme.text.PDFTextBase`.
+        """
         if last_part is not None and last_part['text'] == '':
             self.content.remove(last_part)
         text_part = {'style': style, 'text': '', 'ids': ids}
@@ -617,7 +892,25 @@ class PDFText(PDFTextBase):
         self.content.append(text_part)
         return text_part
 
-    def _recursive_content_parse(self, content, parent_style, ids):
+    def _recursive_content_parse(
+        self, content: ContentType, parent_style: dict, ids: list
+    ) -> None:
+        """Function to be called recursively by this class, to transform the
+        content passed to this instance into a list of parts compatible with
+        :py:class:`pdfme.text.PDFTextBase`.
+
+        Args:
+            content (str, list, tuple, dict): An object like the one explained
+                in the documentation of this class.
+            parent_style (dict): A dict with the style of the parent of the
+                current part being parsed.
+            ids (list): A list of the ids of the parent of the current part
+                being parsed.
+
+        Raises:
+            TypeError: If the content part passed doesn't have the format
+                described in the documentation of this class.
+        """
         style = deepcopy(parent_style)
         ids = deepcopy(ids)
 
@@ -694,4 +987,4 @@ class PDFText(PDFTextBase):
         if text_part is not None and text_part['text'] == '':
             self.content.remove(text_part)
 
-        return False
+from .pdf import PDF

@@ -1,8 +1,7 @@
 import copy
 
-from pdfme.fonts import PDFFonts
-
 from .base import PDFBase
+from .fonts import PDFFonts
 from .image import PDFImage
 from .page import PDFPage
 from .utils import (
