@@ -1,6 +1,6 @@
 import re
 from copy import deepcopy
-from typing import Union
+from typing import Optional, Union
 
 from .color import PDFColor
 from .fonts import PDFFonts
@@ -14,8 +14,17 @@ TEXT_DEFAULTS = {'f': 'Helvetica', 'c': 0.1, 's': 11, 'r': 0, 'bg': None}
 ContentType = Union[str, list, tuple, dict]
 Number = Union[int, float]
 class PDFState:
-    def __init__(self, style, fonts):
+    """Class that represents the state of a paragraph line part.
 
+    The state is a lower level version of the style, and is used by the other
+    paragraph classes to make calculations and yield the paragraph PDF stream.
+
+    Args:
+        style (dict): the paragraph line part style.
+        fonts (PDFFonts): the fonts instance with the information about
+            the fonts already added to the PDF document.
+    """
+    def __init__(self, style: dict, fonts: PDFFonts) -> None:
         self.font_family = style['f']
 
         f_mode = ''
@@ -33,7 +42,16 @@ class PDFState:
         self.color = PDFColor(style['c'])
         self.rise = style.get('r', 0) * self.size
 
-    def compare(self, other):
+    def compare(self, other: Optional['PDFState']) -> str:
+        """Compares this state, with state ``other`` and returns a PDF stream
+        with the differences between both states.
+
+        Args:
+            other (PDFState): the state to compare.
+
+        Returns:
+            str: a PDF stream with the differences between both states.
+        """
         ret_value = ''
         if (
             other is None or self.font_family != other.font_family or
@@ -48,8 +66,15 @@ class PDFState:
         return ret_value
 
 class PDFTextLinePart:
-    def __init__(self, style, fonts, ids=None):
+    """This class represents a part of a paragraph line, with its own style.
 
+    Args:
+        style (dict): the style of this line part.
+        fonts (PDFFonts): the fonts instance with the information about
+            the fonts already added to the PDF document.
+        ids (list, optional): the ids of this part.
+    """
+    def __init__(self, style: dict, fonts: PDFFonts, ids: list=None) -> None:
         self.fonts = fonts
 
         self.style = style
@@ -63,7 +88,17 @@ class PDFTextLinePart:
         self.space_width = self.get_char_width(' ')
         self.spaces_width = 0
 
-    def pop_word(self, index=None):
+    def pop_word(self, index: int=None) -> Optional[str]:
+        """Function to delete the last word of this part if ``index`` is None,
+        and the word in the position ``index`` if it's not None.
+
+        Args:
+            index (int, optional): word index.
+
+        Returns:
+            str: if word in ``index`` could be deleted, the deleted word is
+                returned, if not None is returned.
+        """
         if len(self.words) > 0:
             word = self.words.pop() if index is None else self.words.pop(index)
             if word == ' ':
@@ -72,25 +107,68 @@ class PDFTextLinePart:
                 self.width -= self.get_word_width(word)
             return word
 
-    def add_word(self, word):
+    def add_word(self, word: str) -> None:
+        """Function to add a word to this part.
+
+        Args:
+            word (str): the word.
+        """
         self.words.append(word)
         if word == ' ':
             self.spaces_width += self.space_width
         else:
             self.width += self.get_word_width(word)
 
-    def current_width(self, factor=1):
+    def current_width(self, factor: Number=1) -> float:
+        """Return the width of this part, according to the words added to this
+        part, using ``factor`` to calculate this width of the spaces in this
+        part.
+
+        Args:
+            factor (int, float, optional): to calculate this width of the spaces
+                in this part.
+
+        Returns:
+            float: width of this part.
+        """
         return self.width + self.spaces_width*factor
 
-    def tentative_width(self, word, factor=1):
+    def tentative_width(self, word: str, factor: Number=1) -> float:
+        """The same as method ``current_width``, but adding the width of
+        ``word``.
+
+        Args:
+            word (str): the word that could be added to this part.
+            factor (int, float, optional): to calculate this width of the spaces
+                in this part.
+
+        Returns:
+            float: the width of this part + the width of the word passed.
+        """
         word_width = self.space_width * factor if word == ' ' else \
             self.get_word_width(word)
         return self.current_width(factor) + word_width
 
-    def get_char_width(self, char):
+    def get_char_width(self, char: str) -> float:
+        """The width of the character passed.
+
+        Args:
+            char (str): the character string.
+
+        Returns:
+            float: the width of the character passed.
+        """
         return self.state.size * self.state.font.get_char_width(char)
 
-    def get_word_width(self, word):
+    def get_word_width(self, word: str) -> float:
+        """The width of the word passed.
+
+        Args:
+            char (str): the word string.
+
+        Returns:
+            float: the width of the word passed.
+        """
         return self.state.size * self.state.font.get_text_width(word)
 
 class PDFTextLine:
@@ -155,20 +233,32 @@ class PDFTextLine:
         increase or decrease the space character width inside a line to 
 
         Returns:
-            float: [description]
+            float: the line width.
         """
         ws = self.get_widths()
         return ws[0] + ws[1] * self.factor
 
     @property
-    def bottom(self):
+    def bottom(self) -> float:
+        """Property that returns the line bottom, calculated from the vertical
+        space of each part of the line.
+
+        Returns:
+            float: the line bottom.
+        """
         bottom = 0
         for part in self.line_parts:
             if part.state.rise < 0 and -part.state.rise > bottom:
                 bottom = -part.state.rise
         return bottom
 
-    def get_widths(self):
+    def get_widths(self) -> tuple:
+        """This function returns the widths of the line. 
+
+        Returns:
+            tuple: of 2 elements, the width on the words as the first, and the
+                width of the spaces as the second.
+        """
         words_width = 0
         spaces_width = 0
         for part in self.line_parts:
@@ -176,7 +266,16 @@ class PDFTextLine:
             spaces_width += part.spaces_width
         return words_width, spaces_width
 
-    def add_line_part(self, style=None, ids=None):
+    def add_line_part(self, style:dict=None, ids:list=None) -> PDFTextLinePart:
+        """Add a new line part to this line.
+
+        Args:
+            style (dict, optional): the style of the new part.
+            ids (list, optional): the ids of the new part.
+
+        Returns:
+            PDFTextLinePart: The new line part that was added.
+        """
         if self.next_line is None:
             self.next_line = PDFTextLine(
                 self.fonts, self.max_width, self.text_align
@@ -186,7 +285,10 @@ class PDFTextLine:
         self.next_line.line_parts.append(line_part)
         return line_part
 
-    def add_accumulated(self):
+    def add_accumulated(self) -> None:
+        """Function to add the parts accumulated in the auxiliar line (
+        ``next_line`` attribute) to this line.
+        """
         if len(self.line_parts):
             for word in self.next_line.line_parts[0].words:
                 self.line_parts[-1].add_word(word)
@@ -199,7 +301,29 @@ class PDFTextLine:
             PDFTextLinePart(last_part.style, self.fonts, last_part.ids)
         ]
 
-    def add_word(self, word):
+    def add_word(self, word:str) -> dict:
+        """Function to add a word to this line.
+
+        Args:
+            word (str): The word to be added.
+
+        Returns:
+            dict: containing a ``status`` key, with one of the following values:
+
+            * ``'added'``: The word passed was added to the auxiliar line, or
+              if the word is a space the accumulated words in the auxiliar line,
+              to the current line.
+
+            * ``'ignored'``: The word passed (a space) was ignored.
+
+            * ``'preadded'``: The word passed was added to the auxiliar line.
+
+            * ``'finished'``: The word didn't fit in the current line, and this
+              means this line is full. Because of this, a new line is created
+              to put this word, and this new line is returned in the key
+              ``'new_line'``.
+
+        """
         if not self.started:
             if word.isspace():
                 if self.firstWordAdded:
@@ -279,6 +403,9 @@ class PDFTextBase:
     You can check the ``text`` method in `PDF`_ module to see how this
     process is done.
 
+    The other args not defined here, are explained in
+    :py:class:`pdfme.text.PDFText`.
+
     Args:
         content (str, list, tuple): If this is a string, it will
             become the following:
@@ -299,8 +426,6 @@ class PDFTextBase:
             * ``'ids'``: see :py:class:`pdfme.text.PDFText` definition.
 
             * ``'var'``: see :py:class:`pdfme.text.PDFText` definition.
-
-        the other args are explained in :py:class:`pdfme.text.PDFText`.
 
     Raises:
         TypeError: if ``content`` is not a str, list or tuple.
@@ -833,107 +958,106 @@ class PDFText(PDFTextBase):
     a list of parts with the structure that can be passed to
     :py:class:`pdfme.text.PDFTextBase`.
 
+    If ``content`` argument is a string, it will become the following:
+
+    .. code-block:: python
+
+        { '.': [ <STRING>, ] }
+
+    If ``content`` argument is a list or a tuple, it will become the following:
+
+    .. code-block:: python
+
+        { '.': <LIST_OR_TUPLE> }
+
+    If ``content`` argument is a dict, it should have one and only one key
+    starting with a dot, that contains a tuple or a list with the parts of
+    the paragraph, that can be in turn a string, list, tuple or a
+    new paragraph dict like the one we are describing here.
+
+    Other keys in this dict can be:
+
+    * ``'label'``: this is a string with a unique name (there should be
+      only one label with this name in the whole document) representing
+      a destination that can be referenced in other parts of the
+      document. This is suited for titles, figures, tables, etc.
+
+    * ``'ref'``: this is a string with the name of a label, that will
+      become a link to the position of the label referenced.
+
+    * ``'uri'``: this is a string with a reference to a web resource,
+      that will turn this text part in a link to that web page.
+
+    * ``'ids'``: when method ``run`` is called, dict attr ``result`` is
+      available with information to add the paragraph to the PDF, and
+      within that information you'll find a key ``ids``, a dict with
+      the position and size of the rectangle for each of the ids you
+      include in this argument. This way you can "tag" a part of a
+      paragraph, call ``run``, and get the position of it afterwards.
+
+    * ``'var'``: this is a string with the name of a global variable,
+      previously set in the containing :py:class:`pdfme.pdf.PDF`
+      instance, by adding a new key to its dict attribute ``context``.
+      This way you can reuse a repetitive string throughout the PDF
+      document.
+
+    Style of the paragraph dicts can be described in the dot key
+    itself (a semi-colon separeted list of the attributes explained in
+    :py:func:`pdfme.utils.parse_style_str`) or in a ``style`` key too.
+    This ``style`` key must be in turn a dict containing any of the
+    following keys:
+
+    * ``'b'`` (bool) to make text inside this part bold. Default is False.
+
+    * ``'i'`` (bool) to make text inside this part cursive (italics,
+      oblique). Default is False.
+
+    * ``'s'`` (int, float) to set the size of the text inside this
+      part. Default is 11.
+
+    * ``'f'`` (str) to set the font family of the text inside this
+      part. Default is ``'Helvetica'``.
+
+    * ``'u'`` (bool) to make the text inside this part underlined.
+      Default is False.
+
+    * ``'c'`` (int, float, list, tuple, str) to set the color of
+      the text inside this part. See :py:func:`pdfme.utils.parse_color`
+      for information about this attribute. Default is black.
+
+    * ``'bg'`` (int, float, list, tuple, str) to set the background
+      color of the text inside this part. See
+      :py:func:`pdfme.utils.parse_color` for information about this
+      attribute. Default is None.
+
+    * ``'r'`` (int, float) to set the baseline of the text, relative
+      to the normal baseline. This is a fraction of the current size of
+      the text, i.e. it will move the baseline the text size times this
+      number in points, upwards if positive, and downwards if negative.
+      Default is 0.
+
+    Here is an example of ``content`` argument:
+
+    .. code-block:: python
+
+        {
+            '.': ['text to be displayed'],
+            'style': {
+                'b': True,
+                'i': True,
+                'u': True,
+                's': 10.2,
+                'f': 'Courier',
+                'c': 0.9,
+                'bg': 'red',
+                'r': 0.5
+            },
+            'label': 'a_important_paragraph',
+            'uri': 'https://github.com/aFelipeSP/pdfme'
+        }
+
     Args:
-        content (str, list, tuple, dict): If this is a string, it will
-            become the following:
-
-            .. code-block:: python
-
-                { '.': [ <STRING>, ] }
-
-            If this is a list or a tuple, it will become the following:
-
-            .. code-block:: python
-
-                { '.': <LIST_OR_TUPLE> }
-
-            If this is a dict, it should have one and only one key starting
-            with a dot, that contains a tuple or a list with the parts of
-            the paragraph, that can be in turn a string, list, tuple or a
-            new paragraph dict like the one we are describing here.
-
-            Other keys in this dict can be:
-
-            * ``'label'``: this is a string with a unique name (there should be
-              only one label with this name in the whole document) representing
-              a destination that can be referenced in other parts of the
-              document. This is suited for titles, figures, tables, etc.
-
-            * ``'ref'``: this is a string with the name of a label, that will
-              become a link to the position of the label referenced.
-
-            * ``'uri'``: this is a string with a reference to a web resource,
-              that will turn this text part in a link to that web page.
-
-            * ``'ids'``: when method ``run`` is called, dict attr ``result`` is
-              available with information to add the paragraph to the PDF, and
-              within that information you'll find a key ``ids``, a dict with
-              the position and size of the rectangle for each of the ids you
-              include in this argument. This way you can "tag" a part of a
-              paragraph, call ``run``, and get the position of it afterwards.
-
-            * ``'var'``: this is a string with the name of a global variable,
-              previously set in the containing :py:class:`pdfme.pdf.PDF`
-              instance, by adding a new key to its dict attribute ``context``.
-              This way you can reuse a repetitive string throughout the PDF
-              document.
-
-            Style of the paragraph dicts can be described in the dot key
-            itself (a semi-colon separeted list of the attributes explained in
-            :py:func:`pdfme.utils.parse_style_str`) or in a ``style`` key too.
-            This ``style`` key must be in turn a dict containing any of the
-            following keys:
-
-            * ``'b'`` (bool) to make text inside this part bold. Default is
-              False.
-
-            * ``'i'`` (bool) to make text inside this part cursive (italics,
-              oblique). Default is False.
-
-            * ``'s'`` (int, float) to set the size of the text inside this
-              part. Default is 11.
-
-            * ``'f'`` (str) to set the font family of the text inside this
-              part. Default is ``'Helvetica'``.
-
-            * ``'u'`` (bool) to make the text inside this part underlined.
-              Default is False.
-
-            * ``'c'`` (int, float, list, tuple, str) to set the color of
-              the text inside this part. See :py:func:`pdfme.utils.parse_color`
-              for information about this attribute. Default is black.
-
-            * ``'bg'`` (int, float, list, tuple, str) to set the background
-              color of the text inside this part. See
-              :py:func:`pdfme.utils.parse_color` for information about this
-              attribute. Default is None.
-
-            * ``'r'`` (int, float) to set the baseline of the text, relative
-              to the normal baseline. This is a fraction of the current size of
-              the text, i.e. it will move the baseline the text size times this
-              number in points, upwards if positive, and downwards if negative.
-              Default is 0.
-
-            Here is an example of this argument:
-
-            .. code-block:: python
-
-                {
-                    '.': ['text to be displayed'],
-                    'style': {
-                        'b': True,
-                        'i': True,
-                        'u': True,
-                        's': 10.2,
-                        'f': 'Courier',
-                        'c': 0.9,
-                        'bg': 'red',
-                        'r': 0.5
-                    },
-                    'label': 'a_important_paragraph',
-                    'uri': 'https://github.com/aFelipeSP/pdfme'
-                }
-
+        content (str, list, tuple, dict): the one just described.
         width (int, float): The width of the paragraph.
         height (int, float): The height of the paragraph.
         x (int, float, optional): The x coordinate of the paragraph.
