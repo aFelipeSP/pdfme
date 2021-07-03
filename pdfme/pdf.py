@@ -1,4 +1,5 @@
 import copy
+from typing import Iterable, Union
 
 from .base import PDFBase
 from .fonts import PDFFonts
@@ -9,13 +10,15 @@ from .utils import (
     parse_margin, parse_style_str, process_style, to_roman
 )
 
-
+Number = Union[int, float]
+MarginType = Union[int, float, Iterable, dict]
 class PDF:
     def __init__(
-        self, page_size='a4', portrait=True, margin=56.693,
-        page_numbering_offset=0, page_numbering_style='arabic',
-        font_family='Helvetica', font_size=11, font_color=0.1,
-        text_align='l', line_height=1.1
+        self, page_size: Union[str, Iterable[Number]]='a4',
+        portrait: bool=True, margin: MarginType=56.693,
+        page_numbering_offset: Number=0, page_numbering_style: str='arabic',
+        font_family: str='Helvetica', font_size: Number=11,
+        font_color: Number=0.1, text_align: str='l', line_height: Number=1.1
     ):
 
         self.setup_page(page_size, portrait, margin)
@@ -493,6 +496,6 @@ class PDF:
         self._build_dests()
         self.base.output(buffer)
 
-from .content import PDFContent
+from .content import Number, PDFContent
 from .table import PDFTable
 from .text import PDFText

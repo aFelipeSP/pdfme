@@ -140,11 +140,11 @@ class PDFDocument:
         if first_page:
             section_element_index = 0
             section_delayed = []
-            children_indexes = []
+            children_memory = []
         else:
             section_element_index = deepcopy(content_part.section_element_index)
             section_delayed = deepcopy(content_part.section_delayed)
-            children_indexes = deepcopy(content_part.children_indexes)
+            children_memory = deepcopy(content_part.children_memory)
         
         self.section.run(height=self.height)
         if first_page:
@@ -166,7 +166,7 @@ class PDFDocument:
             
             content_part.section_element_index = section_element_index
             content_part.section_delayed = section_delayed
-            content_part.children_indexes = children_indexes
+            content_part.children_memory = children_memory
 
             self.pdf._content(self.section, height=new_height)
 
