@@ -81,7 +81,7 @@ def parse_style_str(style_str: str, fonts: 'PDFFonts') -> dict:
     include the name, and for the rest you need to include the name, a colon,
     and the value of the attribute. In case the value is a color, it can be any
     of the possible string inputs to function
-    :py:func:`pdfme.color.parse_color`.
+    :func:`pdfme.color.parse_color`.
 
     Args:
         style_str (str): The string representing the text style.
@@ -94,7 +94,7 @@ def parse_style_str(style_str: str, fonts: 'PDFFonts') -> dict:
 
     Returns:
         dict: A style dict like the one described in
-            :py:meth:`pdfme.text.PDFText`.
+            :meth:`pdfme.text.PDFText`.
     """
 
     style = {}

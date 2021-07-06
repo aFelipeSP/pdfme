@@ -17,7 +17,7 @@ StrOrDict = Union[str, dict]
 ProcessElement = Union[str, list, tuple, dict]
 class PDFContent:
     """This class represents a group of elements (paragraphs, images, tables)
-    to be added to a :py:class:`pdfme.pdf.PDF` instance.
+    to be added to a :class:`pdfme.pdf.PDF` instance.
 
     This class receives as the first argument a dict representing the
     layout of the elements that are going to be added to the PDF.
@@ -63,12 +63,12 @@ class PDFContent:
 
     * A paragraph that can be a string, a list, a tuple or a dictionary with a
       key starting with a ``.``. To know more about the meaning of these types
-      check :py:class:`pdfme.text.PDFText`. Additional to the keys
+      check :class:`pdfme.text.PDFText`. Additional to the keys
       that can be included inside ``style`` key of a paragraph dict like the one
-      you pass to :py:class:`pdfme.text.PDFText`, you can include the following
+      you pass to :class:`pdfme.text.PDFText`, you can include the following
       too: ``text_align``, ``line_height``, ``indent``, ``list_text``,
       ``list_style`` and ``list_indent``. For information about these attributes
-      check :py:class:`pdfme.text.PDFText`. Here is an example of a paragraph
+      check :class:`pdfme.text.PDFText`. Here is an example of a paragraph
       dict:
 
       .. code-block:: python
@@ -108,7 +108,7 @@ class PDFContent:
     * A table that should be a dict with a ``table`` key with the table data,
       and optionally any or all of the following keys: ``widths``, ``borders``
       and ``fills``. To know more about these keys check their meaning in
-      :py:class:`pdfme.table.PDFTable`.
+      :class:`pdfme.table.PDFTable`.
       Here is an example of a table dict:
 
       .. code-block:: python
@@ -240,11 +240,11 @@ class PDFContentPart:
     This class has all the logic to arrange the content elements in the
     rectangle defined by ``min_x`` (left), ``min_y`` (top), ``width`` and
     ``max_y`` (bottom). This class needs a reference to a
-    :py:class:`pdfme.content.PDFContent` that will store the information
+    :class:`pdfme.content.PDFContent` that will store the information
     of the ``lines``, ``fills`` and ``parts`` of the elements arranged by
     this class, and all of the children ``PDFContentPart`` 's of this object.
     The description of the ``content`` argument is the same that the one
-    from :py:class:`pdfme.content.PDFContent`.
+    from :class:`pdfme.content.PDFContent`.
 
     Args:
         content (dict): A content dict.
@@ -349,7 +349,7 @@ class PDFContentPart:
 
         Returns:
             any of the strings mentioned in
-            :py:meth:`pdfme.content.PDFContentPart.add_elements`.
+            :meth:`pdfme.content.PDFContentPart.add_elements`.
         '''
         n = 0
         while n < len(self.delayed):
@@ -387,12 +387,12 @@ class PDFContentPart:
         Returns:
             * ``'interrupt'`` means this element or one of its children reached
               the end of the rectangle of this element's root ancestor, or what
-              is the same, this element's :py:class:`pdfme.content.PDFContent`
+              is the same, this element's :class:`pdfme.content.PDFContent`
               instance (the one saved in ``pdf_content`` attribute). This
               message will propagate to the ancestors until it reach the root
               ancestor and make the ``pdf_content`` to end running. After that
               the user should set a new rectangle, maybe in a new page, and call
-              the :py:meth:`pdfme.content.PDFContent.run` function again to
+              the :meth:`pdfme.content.PDFContent.run` function again to
               keep adding the remaining elements that couldn't be added before.
 
             * ``'break'`` means an ancestor is resetting and this element should
@@ -442,12 +442,12 @@ class PDFContentPart:
 
     def process_add_ans(self, ans: str) -> str:
         """Function that process the answers from methods
-        :py:meth:`pdfme.content.PDFContentPart.add_delayed` and
-        :py:meth:`pdfme.content.PDFContentPart.add_elements`.
+        :meth:`pdfme.content.PDFContentPart.add_delayed` and
+        :meth:`pdfme.content.PDFContentPart.add_elements`.
 
         Args:
             ans (str): Any of the strings described in
-                :py:meth:`pdfme.content.PDFContentPart.add_elements`.
+                :meth:`pdfme.content.PDFContentPart.add_elements`.
 
         Returns:
             A string telling the main loop what should do next.

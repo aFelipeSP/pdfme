@@ -6,7 +6,7 @@ STYLE_PROPS = dict(
     text_align='text_align', line_height='line_height'
 )
 
-PAGE_PROPS = ('page_size', 'portrait', 'margin')
+PAGE_PROPS = ('page_size', 'rotate_page', 'margin')
 
 class PDFDocument:
     def __init__(self, document, context=None):

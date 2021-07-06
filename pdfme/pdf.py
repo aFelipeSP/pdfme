@@ -1,4 +1,6 @@
 import copy
+from io import BytesIO
+from pathlib import Path
 from typing import Iterable, Union
 
 from .base import PDFBase
@@ -11,17 +13,149 @@ from .utils import (
 )
 
 Number = Union[int, float]
-MarginType = Union[int, float, Iterable, dict]
+PageType = Union[Number, str, Iterable[Number]]
+MarginType = Union[int, float, Iterable[Number], dict]
+ColorType = Union[int, float, str, list, tuple]
+ImageType = Union[str, Path, BytesIO]
+TextType = Union[str, list, tuple, dict]
 class PDF:
-    def __init__(
-        self, page_size: Union[str, Iterable[Number]]='a4',
-        portrait: bool=True, margin: MarginType=56.693,
-        page_numbering_offset: Number=0, page_numbering_style: str='arabic',
-        font_family: str='Helvetica', font_size: Number=11,
-        font_color: Number=0.1, text_align: str='l', line_height: Number=1.1
-    ):
+    """Class that represents a PDF document, and has methods to add pages,
+    and to add paragraphs, images, tables and a mix of this, a content box,
+    to them.
 
-        self.setup_page(page_size, portrait, margin)
+    You can use this class to create a PDF file, by adding one page at a
+    time, and adding stuff to each page you add, like this:
+
+    .. code-block:: python
+
+        from pdfme import PDF
+
+        pdf = PDF()
+        pdf.add_page()
+        pdf.text('This is a paragraph')
+
+        with open('document.pdf', 'wb') as f:
+            pdf.output(f)
+
+    Through the constructor arguments you can modify the default features
+    of the PDF document, like the size of the pages, the orientation of them
+    the page numbering options, and the appearance of the text. These are
+    used everytime you create a new page, or a new paragraph, but you
+    can replace these for each case.
+
+    You can change the default values for the pages by calling
+    :meth:`pdfme.pdf.PDF.setup_page`, and change the default values for text
+    by changing attributes ``font_family``, ``font_size``, ``font_color``,
+    ``text_align`` and ``line_height``.
+
+    Methods :meth:`pdfme.pdf.PDF.text`, :meth:`pdfme.pdf.PDF.image`, 
+    :meth:`pdfme.pdf.PDF.table` and :meth:`pdfme.pdf.PDF.content` are the main
+    functions to add paragraphs, images, tables and content boxes respectively,
+    and all of them, except the image method, take into account the margins of
+    the current page you are working on, and create new pages automatically if
+    the stuff you are adding needs more than one page. If you want to be
+    specific about the position and the size of the paragraphs, tables and
+    content boxes you are inserting, you can use methods
+    :meth:`pdfme.pdf.PDF._text`, :meth:`pdfme.pdf.PDF._table` and
+    :meth:`pdfme.pdf.PDF._content` instead, but these don't handle the creation
+    of new pages like the first ones.
+
+    Each page has attributes ``x`` and ``y`` that are used to place elements
+    inside them, and for the methods that receive ``x`` and ``y`` arguments,
+    if they are None, the page's ``x`` and ``y`` attributes are used instead.
+
+    For more information about paragraphs see :class:`pdfme.text.PDFText`, and
+    about tables :class:`pdfme.table.PDFTable`.
+
+    Although you can add all of the elements explained before, we recommend
+    using content boxes only, because all of the additional funcionalities they
+    have, including its ability to embed other elements. For more information
+    about content boxes see :class:`pdfme.content.PDFContent`.
+
+    Paragraphs, tables and content boxes use styles to give format to the
+    content inside of them, and sometimes styling can get repetitive. This is
+    why there's a dict attribute called ``formats`` where you can add named
+    style dicts and used them everywhere inside this document, like this:
+
+    
+    .. code-block:: python
+
+        from pdfme import PDF
+
+        pdf = PDF()
+        pdf.formats['link'] = {
+            'c': 'blue',
+            'u': True
+        }
+        pdf.add_page()
+        pdf.text({
+            '.': 'this is a link',
+            'style': 'link',
+            'uri': 'https://some.domain.com'
+        })
+
+    If you find yourself using a piece of text often in the document, you can
+    add it to the dict attribute ``context`` and include it in any paragraph in
+    the document by using the key you set in ``content``, like this:
+
+    .. code-block:: python
+
+        from pdfme import PDF
+
+        pdf = PDF()
+        pdf.context['arln'] = 'A Really Long Name' 
+        pdf.add_page()
+        pdf.text({
+            '.': ['The following name is ', {'var': 'arln'}, '.']
+        })
+
+    There are some special ``context`` variables that are used by us that start
+    with symbol ``$``, so it's adviced to name your own variables without this
+    symbol in the beginning. The only variable you should care about is
+    ``$page`` that contains the number of the current page.
+
+    You can add as much running sections as you want by using
+    :meth:`pdfme.pdf.PDF.add_running_section`. Running sections are
+    content boxes that are included on every page you create after adding them.
+    Through these you can add a header and a footer to the PDF.
+
+    If you want a simpler and more powerful interface, you should use 
+    :class:`pdfme.document.PDFDcoument`.
+
+    Args:
+        page_size (str, int, float, tuple, list, optional): this argument sets
+            the dimensions of the page. See :func:`pdfme.utils.get_page_size`.
+        rotate_page (bool, optional): whether the page dimensions should be
+            inverted (True), or not (False).
+        margin (str, int, float, tuple, list, dict, optional): the margins of
+            the pages. See :func:`pdfme.utils.parse_margin`.
+        page_numbering_offset (int, float, optional): if the number of the page
+            is included, this argument will set the offset of the page. For
+            example if the current page is the 4th one, and the offset is 3, the
+            page number displayed in the current page will be 1.
+        page_numbering_style (str, optional): the style of the page number.
+            Options are ``arabic`` (1,2,3,...) and ``roman`` (I, II, III, IV,
+            ...).
+        font_family (str, optional): The name of the font family. Options are
+            ``Helvetica``, ``Times``, ``Courier``, ``Symbol`` and
+            ``ZapfDingbats``. You will also be able to add new fonts in a future
+            release.
+        font_size (in, optional): The size of the font.
+        font_color (int, float, str, list, tuple, optional): The color of the
+            font. See :func:`pdfme.color.parse_color`.
+        text_align (str, optional):  ``'l'`` for left (default), ``'c'`` for
+            center, ``'r'`` for right and ``'j'`` for justified text.
+        line_height (int, float, optional): how much space between the
+            lines of the paragraph. See :class:`pdfme.text.PDFText`.
+    """
+    def __init__(
+        self, page_size: PageType='a4', rotate_page: bool=True,
+        margin: MarginType=56.693, page_numbering_offset: Number=0,
+        page_numbering_style: str='arabic', font_family: str='Helvetica',
+        font_size: Number=11, font_color: ColorType=0.1, text_align: str='l',
+        line_height: Number=1.1
+    ) -> None:
+        self.setup_page(page_size, rotate_page, margin)
         self.page_numbering_offset = page_numbering_offset
         self.page_numbering_style = page_numbering_style
 
@@ -49,40 +183,87 @@ class PDF:
         self._add_or_get_font('Helvetica', 'n')
 
     @property
-    def page(self):
+    def page(self) -> PDFPage:
+        """
+        Returns:
+            PDFPage: current page
+        """
         return self.pages[self._page_index]
 
     @property
-    def page_index(self):
+    def page_index(self) -> int:
+        """
+        Returns:
+            int: current page index.
+        """
         return self._page_index
+
     @page_index.setter
     def page_index(self, page_index):
         self._page_index = page_index
         self.context['$page'] = self.get_page_number()
 
     @property
-    def width(self):
+    def width(self) -> float:
+        """
+        Returns:
+            float: current page width
+        """
         return self.page.width
 
     @property
-    def height(self):
+    def height(self) -> float:
+        """
+        Returns:
+            float: current page height
+        """
         return self.page.height
 
-    def setup_page(self, page_size=None, portrait=None, margin=None):
+    def setup_page(
+        self, page_size: PageType=None, rotate_page: bool=None,
+        margin: MarginType=None
+    ) -> None:
+        """Method to set the page features defaults. These values will be used
+        from now on when adding new pages.
+
+        Args:
+            page_size (str, int, float, tuple, list, optional): this argument
+                sets the dimensions of the page.
+                See :func:`pdfme.utils.get_page_size`.
+            rotate_page (bool, optional): whether the page dimensions should be
+                inverted (True), or not (False).
+            margin (str, int, float, tuple, list, dict, optional): the margins
+                of the pages. See :func:`pdfme.utils.parse_margin`.
+        """
         if page_size is not None:
             self.page_width, self.page_height = get_page_size(page_size)
-        if portrait is not None:
-            self.portrait = portrait
+        if rotate_page is not None:
+            self.rotate_page = rotate_page
         if margin is not None:
             self.margin = parse_margin(margin)
 
-    def add_page(self, page_size=None, portrait=None, margin=None):
+    def add_page(
+        self, page_size: PageType=None, rotate_page: bool=None,
+        margin: MarginType=None
+    ) -> None:
+        """Method to add a new page. If provided, arguments will only apply for
+        the page being added.
+
+        Args:
+            page_size (str, int, float, tuple, list, optional): this argument
+                sets the dimensions of the page.
+                See :func:`pdfme.utils.get_page_size`.
+            rotate_page (bool, optional): whether the page dimensions should be
+                inverted (True), or not (False).
+            margin (str, int, float, tuple, list, dict, optional): the margins
+                of the page. See :func:`pdfme.utils.parse_margin`.
+        """
         if page_size is not None:
             page_width, page_height = get_page_size(page_size)
         else:
             page_height, page_width = self.page_height, self.page_width
 
-        if (portrait is None and not self.portrait) or portrait == False:
+        if (rotate_page is None and not self.rotate_page) or rotate_page == False:
             page_height, page_width = page_width, page_height
 
         margin_ = copy.deepcopy(self.margin)
@@ -101,17 +282,65 @@ class PDF:
         
         page.go_to_beginning()
 
-    def add_running_section(self, content, width, height, x, y):
+    def add_running_section(
+        self, content: dict, width: Number, height: Number, x: Number, y:Number
+    ) -> None:
+        """Method to add running sections, like a header and a footer, to this
+        document.
+
+        Args:
+            content (dict): a content dict like the one you pass to create a
+                instance of :class:`pdfme.content.PDFContent`.
+            width (int, float, optional): The width of the rectangle where the
+                contents will be arranged.
+            height (int, float, optional): The height of the rectangle where the
+                contents will be arranged.
+            x (int, float, optional): The x position of the left of the
+                rectangle.
+            y (int, float, optional): The y position of the top of the
+                rectangle.
+        """
         self.running_sections.append(dict(
             content=content, width=width, height=height, x=x, y=y
         ))
 
-    def create_image(self, image):
-        return PDFImage(image)
+    def create_image(
+        self, image: ImageType, extension: str=None, image_name: str=None
+    ) -> PDFImage:
+        """Method to create a PDF image.
+
+        Arguments for this method are the same as :class:`pdfme.image.PDFImage`.
+
+        Returns:
+            PDFImage: representing the PDF image.
+        """
+        return PDFImage(image, extension, image_name)
 
     def add_image(
-        self, pdf_image, x=None, y=None, width=None, height=None, move='bottom'
-    ):
+        self, pdf_image: PDFImage, x: Number=None, y: Number=None,
+        width: Number=None, height:Number=None, move: str='bottom'
+    ) -> None:
+        """Method to add a PDF image to the current page.
+
+        Args:
+            pdf_image (PDFImage): the PDF image.
+            x (int, float, optional): The x position of the left of the
+                image.
+            y (int, float, optional): The y position of the top of the
+                image.
+            width (int, float, optional): The width of the image. If this and 
+                ``height`` are None, the width will be the same as the page
+                content width, but if this is None and ``height`` is not, the
+                width will be calculated from ``height``, keeping the proportion
+                of the image.
+            height (int, float, optional): The height of the image. If this is
+                None, the height will be calculated from the image ``width``,
+                keeping the proportion.
+            move (str, optional): wheter it should move page x coordinate to
+                the right side of the image (``next``) or if it should move
+                page y coordinate to the bottom of the image (``bottom``)
+                (default).
+        """
         if pdf_image.image_name not in self.images:
             image_obj = self.base.add(pdf_image.pdf_obj)
             self.images[pdf_image.image_name] = image_obj.id
@@ -141,14 +370,70 @@ class PDF:
         if move == 'next':
             self.page.x += width
 
-    def image(self, image, width=None, height=None, move='bottom'):
-        pdf_image = self.create_image(image)
-        self.add_image(pdf_image, width=width, height=height, move=move)
+    def image(
+        self, image: ImageType, extension: str=None, image_name: str=None,
+        x: Number=None, y: Number=None, width: Number=None, height:Number=None,
+        move: str='bottom'
+    ) -> None:
+        """Method to create and add a PDF image to the current page.
 
-    def add_font(self, fontfile, font_family, mode='n'):
+        Args:
+            image (str, Path, BytesIO): see :class:`pdfme.image.PDFImage`.
+            extension (str, optional): see :class:`pdfme.image.PDFImage`.
+            image_name (str, optional): see :class:`pdfme.image.PDFImage`.
+            x (int, float, optional): the x position of the left of the
+                image.
+            y (int, float, optional): the y position of the top of the
+                image.
+            width (int, float, optional): the width of the image. If this and 
+                ``height`` are None, the width will be the same as the page
+                content width, but if this is None and ``height`` is not, the
+                width will be calculated from ``height``, keeping the proportion
+                of the image.
+            height (int, float, optional): the height of the image. If this is
+                None, the height will be calculated from the image ``width``,
+                keeping the proportion.
+            move (str, optional): wheter it should move page x coordinate to
+                the right side of the image (``next``) or if it should move
+                page y coordinate to the bottom of the image (``bottom``)
+                (default).
+        """
+        pdf_image = self.create_image(image, extension, image_name)
+        self.add_image(
+            pdf_image, x=x, y=y, width=width, height=height, move=move
+        )
+
+    def add_font(
+        self, fontfile: str, font_family: str, mode: str='n'
+    ) -> None:
+        """Method to add a new font to this document. This functionality is not
+        ready yet.
+
+        Args:
+            fontfile (str): the path of the fontfile.
+            font_family (str): the name of the font family being added.
+            mode (str, optional): the mode of the font being added. It can be
+                ``n`` for normal, ``b`` for bold and ``i`` for italics
+                (oblique).
+        """
         self.fonts.load_font(fontfile, font_family, mode)
 
-    def _add_or_get_font(self, font_family, mode):
+    def _add_or_get_font(self, font_family: str, mode: str) -> tuple:
+        """Method to add a new font to the already used fonts list, if it has
+        not been added, that returns information about the font to be used in
+        other places in the PDF.
+
+        Args:
+            font_family (str): the name of the font family being used.
+            mode (str, optional): the mode of the font being used. It can be
+                ``n`` for normal, ``b`` for bold and ``i`` for italics
+                (oblique).
+
+        Returns:
+            tuple: the first element is the name of the font (a name used in
+                the PDF text streams), and the second is the id of the inner PDF
+                object that represents the font.
+        """
         f = (font_family, mode) 
         if f in self.used_fonts:
             return self.used_fonts[f]
@@ -157,15 +442,39 @@ class PDF:
         self.used_fonts[(font_family, mode)] = (font.ref, font_obj.id)
         return font.ref, font_obj.id
 
-    def _used_font(self, font_family, mode):
+    def _used_font(self, font_family: str, mode: str) -> None:
+        """Method to add a font to the current page.
+
+        Args:
+            font_family (str): the name of the font family being used.
+            mode (str, optional): the mode of the font being used. It can be
+                ``n`` for normal, ``b`` for bold and ``i`` for italics
+                (oblique).
+        """
         f = (font_family, mode)
         font_args = self._add_or_get_font(*f)
         self.page.add_font(*font_args)
 
     def _default_paragraph_style(
-        self, width=None, height=None, text_align=None, line_height=None,
-        indent=0
-    ):
+        self, width: Number=None, height:Number=None, text_align: str=None,
+        line_height: Number=1.1, indent: Number=0
+    ) -> dict:
+        """This method returns a dict with each of the arguments as the keys.
+        If they are None, the PDF default value for each of them is used.
+
+        For more information about the arguments of this method see
+        :class:`pdfme.text.PDFText`
+
+        Args:
+            width (Number, optional): the width of the paragraph.
+            height (Number, optional): the height of the paragraph.
+            text_align (str, optional): the text align of the paragraph.
+            line_height (Number, optional): the line height of the paragraph.
+            indent (Number, optional): the indent of the paragraph.
+
+        Returns:
+            dict: with the default and the given parameters combined.
+        """
         return dict(
             width = self.page.width - self.page.margin_right - self.page.x \
                 if width is None else width,
@@ -177,21 +486,49 @@ class PDF:
             indent = indent
         )
 
-    def _init_text(self, content):
-        style = {'f': self.font_family, 's': self.font_size, 'c': self.font_color}
+    def _init_text(self, content: TextType) -> dict:
+        """Method that prepares the paragraph passed as argument to be used in
+        other methods.
+
+        Args:
+            content (str, list, tuple, dict): the paragraph object.
+
+        Returns:
+            dict: with the prepared paragraph.
+        """
+        style = {
+            'f': self.font_family, 's': self.font_size, 'c': self.font_color
+        }
         if isinstance(content, str):
             content = {'style': style, '.': [content]}
         elif isinstance(content, (list, tuple)):
             content = {'style': style, '.': content}
         elif isinstance(content, dict):
-            style_str = [key[1:] for key in content.keys() if key.startswith('.')]
+            style_str = [k[1:] for k in content.keys() if k.startswith('.')]
             if len(style_str) > 0:
                 style.update(parse_style_str(style_str[0], self.fonts))
             style.update(process_style(content.get('style'), self))
             content['style'] = style
         return content
 
-    def _position_and_size(self, x=None, y=None, width=None, height=None):
+    def _position_and_size(
+        self, x: Number=None, y: Number=None, width: Number=None,
+        height: Number=None
+    ) -> tuple:
+        """Method that returns a tuple with the arguments passed, with default
+        values if they are None.
+
+        Args:
+            x (int, float, optional): The x position of the left of the
+                element.
+            y (int, float, optional): The y position of the top of the
+                element.
+            width (int, float, optional): The width of the element.
+            height (int, float, optional): The height of the element.
+
+        Returns:
+            tuple: with the new ``x``,  ``y```, ``width`` and ``height``.
+        """
         if x is not None:
             self.page.x = x
         if y is not None:
@@ -202,14 +539,31 @@ class PDF:
             height = self.page.height - self.page.margin_bottom - self.page.y
         return self.page.x, self.page._y, width, height
 
-    def get_page_number(self):
+    def get_page_number(self) -> str:
+        """Method that returns the string reprensentation of the number of the
+        current page.
+
+        Returns:
+            str: depending on attribute ``page_numbering_offset`` and
+                ``page_numbering_style``.
+        """
         page = self.page_index + 1 + self.page_numbering_offset
-        return to_roman(page) if self.page_numbering_style == 'roman' else page
+        return to_roman(page) if self.page_numbering_style == 'roman'\
+            else str(page)
 
     def _create_text(
-        self, content, width, height, text_align=None, line_height=None,
-        indent=0, list_text=None, list_indent=None, list_style = None
-    ):
+        self, content: TextType, width: Number=None, height: Number=None,
+        text_align: str=None, line_height: Number=1.1, indent: Number=0,
+        list_text: str=None, list_indent: Number=None, list_style: dict=None
+    ) -> 'PDFText':
+        """Method to create a paragraph.
+
+        For more information about the arguments see
+        :class:`pdfme.text.PDFText`.
+
+        Returns:
+            PDFText: an object that represents a paragraph.
+        """
         par_style = self._default_paragraph_style(
             width, height, text_align, line_height, indent
         )
@@ -222,9 +576,17 @@ class PDF:
         return pdf_text
 
     def _add_text(
-        self, text_stream, x=None, y=None, width=None, height=None,
-        graphics_stream=None, used_fonts=None, ids=None, move='bottom'
-    ):
+        self, text_stream: str, x: Number=None, y: Number=None,
+        width: Number=None, height: Number=None, graphics_stream: str=None,
+        used_fonts: tuple=None, ids: dict=None, move: str='bottom'
+    ) -> None:
+        """Method to add a paragraph to this document. The arguments for this
+        method are obtained from the attribute ``result`` of class
+        :class:`pdfme.text.PDFText`.
+
+        For information about the arguments of this method see
+        :meth:`pdfme.text.PDFTextBase.result`
+        """
         stream = get_paragraph_stream(x, y, text_stream, graphics_stream)
         self.page.add(stream)
 
@@ -273,10 +635,19 @@ class PDF:
             self.page.x += width
 
     def _text(
-        self, content, x=None, y=None, width=None, height=None, text_align=None,
-        line_height=None, indent=0, list_text=None, list_indent=None,
-        list_style = None, move='bottom'
-    ):
+        self, content: TextType, width: Number=None, height: Number=None,
+        x: Number=None, y: Number=None, text_align: str=None,
+        line_height: Number=1.1, indent: Number=0, list_text: str=None,
+        list_indent: Number=None, list_style: dict=None, move: str='bottom'
+    ) -> 'PDFText':
+        """Method to create and add a paragraph to this document.
+
+        For more information about the arguments see
+        :class:`pdfme.text.PDFText`.
+
+        Returns:
+            PDFText: an object that represents the paragraph.
+        """
         x, y, width, height = self._position_and_size(x, y, width, height)
         if isinstance(content, PDFText):
             pdf_text = content
@@ -292,9 +663,17 @@ class PDF:
         return pdf_text
 
     def text(
-        self, content, text_align=None, line_height=None, indent=0,
-        list_text=None, list_indent=None, list_style=None
-    ):
+        self, content: TextType, text_align: str=None, line_height: Number=1.1,
+        indent: Number=0, list_text: str=None, list_indent: Number=None,
+        list_style: dict=None
+    ) -> None:
+        """Method to create and add a paragraph to this document. This method
+        will keep adding pages to the PDF until all the contents of the
+        paragraph are added to the document.
+
+        For more information about the arguments see
+        :class:`pdfme.text.PDFText`.
+        """
         pdf_text = self._text(
             content, x=self.page.margin_left, width=self.page.content_width,
             text_align=text_align, line_height=line_height, indent=indent,
@@ -307,15 +686,26 @@ class PDF:
                 self.page.margin_top
             )
 
-    def _default_content_style(self):
+    def _default_content_style(self) -> dict:
+        """This method returns a dict with the PDF default values used by
+        content boxes.
+
+        For more information about the keys in the dict return by this method
+        see :class:`pdfme.text.PDFText`
+
+        Returns:
+            dict: with the default values.
+        """
         return dict(
             f=self.font_family, s=self.font_size, c=self.font_color,
             text_align=self.text_align, line_height=self.line_height, indent=0
         )
 
     def _create_table(
-        self, content, width, height, x=None, y=None, widths=None, style=None,
-        borders=None, fills=None
+        self, content: TextType, width: Number=None, height: Number=None,
+        x: Number=None, y: Number=None, widths: Iterable=None,
+        style: Union[dict, str]=None, borders: Iterable=None,
+        fills: Iterable=None
     ):
         style_ = self._default_content_style()
         style_.update(process_style(style, self))

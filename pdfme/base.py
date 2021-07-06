@@ -39,7 +39,7 @@ class PDFBase:
     dict, as it is calculated by us. The value of ``__stream__`` key must
     be of type ``bytes`` or a dict whose values are of type ``bytes``.
     If you include a ``Filter`` key, a encoding is automatically done in the
-    stream (see :py:meth:`pdfme.encoders.encode_stream` function for
+    stream (see :meth:`pdfme.encoders.encode_stream` function for
     supported encoders). If the contents of the stream are already encoded
     using the filter in ``Filter`` key, you can skip the encoding process
     by including the ``__skip_filter__`` key.

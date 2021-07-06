@@ -153,10 +153,10 @@ colors = {
     'yellowgreen': [0.605, 0.805, 0.199]
 }
 
-color_type = Union[int, float, str, list, tuple]
+ColorType = Union[int, float, str, list, tuple]
 class PDFColor:
     """Class that generates a PDF color string (with function ``str()``)
-    using the rules described in :py:func:`pdfme.color.parse_color`.
+    using the rules described in :func:`pdfme.color.parse_color`.
 
     Args:
         color (int, float, list, tuple, str, PDFColor): The color
@@ -166,7 +166,7 @@ class PDFColor:
     """
 
     def __init__(
-        self, color: Union[color_type, 'PDFColor'], stroke: bool=False
+        self, color: Union[ColorType, 'PDFColor'], stroke: bool=False
     ) -> None:
         if isinstance(color, PDFColor):
             self.color = deepcopy(color.color)
@@ -199,7 +199,7 @@ class PDFColor:
                 'RG' if self.stroke else 'rg'
             )
 
-def parse_color(color: color_type) -> list:
+def parse_color(color: ColorType) -> list:
     """Function to parse ``color`` into a list representing a PDF color. 
     
     The scale of the colors is between 0 and 1, instead of 0 and 256, so all the

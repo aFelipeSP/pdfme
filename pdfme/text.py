@@ -177,7 +177,7 @@ class PDFTextLine:
     This class has the logic to add paragraph parts, and inside them add their
     words one by one, until all of the horizontal space of the paragraph has
     been used. For more information about this mechanism check the method
-    :py:meth:`pdfme.text.PDFTextLine.add_word`.
+    :meth:`pdfme.text.PDFTextLine.add_word`.
 
     Args:
         fonts (PDFFonts):  to extract information about the fonts
@@ -368,13 +368,13 @@ class PDFTextLine:
 
 class PDFTextBase:
     """Class that represents a rich text paragraph to be added to a
-    :py:class:`pdfme.pdf.PDF` instance.
+    :class:`pdfme.pdf.PDF` instance.
 
-    You should use :py:class:`pdfme.text.PDFText` instead of this class, because
+    You should use :class:`pdfme.text.PDFText` instead of this class, because
     it has more functionalities.
 
     To create the data needed to add this paragraph to the PDF document,
-    you have to call the method :py:meth:`pdfme.text.PDFTextBase.run`, which
+    you have to call the method :meth:`pdfme.text.PDFTextBase.run`, which
     will try to add all of the dict parts in ``content`` argument list (or
     tuple) to the rectangle defined by args ``x``, ``y``, ``width`` and
     ``height``.
@@ -404,7 +404,7 @@ class PDFTextBase:
     process is done.
 
     The other args not defined here, are explained in
-    :py:class:`pdfme.text.PDFText`.
+    :class:`pdfme.text.PDFText`.
 
     Args:
         content (str, list, tuple): If this is a string, it will
@@ -421,11 +421,11 @@ class PDFTextBase:
               defined in ``style`` key.
 
             * ``'style'``: this is a style dict like the one described in
-              :py:class:`pdfme.text.PDFText`.
+              :class:`pdfme.text.PDFText`.
 
-            * ``'ids'``: see :py:class:`pdfme.text.PDFText` definition.
+            * ``'ids'``: see :class:`pdfme.text.PDFText` definition.
 
-            * ``'var'``: see :py:class:`pdfme.text.PDFText` definition.
+            * ``'var'``: see :class:`pdfme.text.PDFText` definition.
 
     Raises:
         TypeError: if ``content`` is not a str, list or tuple.
@@ -486,19 +486,38 @@ class PDFTextBase:
     def result(self) -> dict:
         """Property that returns a dict with the result of calling method
         ``run``, and can be passed to method
-        :py:meth:`pdfme.pdf.PDF._add_text`, to add this paragraph to that
+        :meth:`pdfme.pdf.PDF._add_text`, to add this paragraph to that
         PDF document's page. Check method ``_add_parts`` from
-        :py:class:`pdfme.pdf.PDF` to see how a dict like the one returned by
+        :class:`pdfme.pdf.PDF` to see how a dict like the one returned by
         this method (a paragraph part) is added to a PDF instance.
 
+        The dict returned will have the following keys:
+
+        * ``x`` the x coordinate.
+        
+        * ``y`` the y coordinate.
+        
+        * ``width`` of the paragraph.
+
+        * ``height`` of the paragraph.
+
+        * ``text_stream`` a string with the paragraphs PDF text stream.
+        
+        * ``graphics_stream`` a string with the paragraphs PDF graphics stream.
+
+        * ``used_fonts`` a set with tuples of 2 elements, first element the
+          font family, and second element the font mode.
+
+        * ``ids`` a dict with every id extracted from the paragraph.
+
         Returns:
-            dict: information about the paragraph.
+            dict: like the one described.
 
         .. _PDF: https://github.com/aFelipeSP/pdfme/blob/main/pdfme/pdf.py
         """
         
         return dict(
-            x=self.x, y=self.y, height=self.current_height, width=self.width,
+            x=self.x, y=self.y, width=self.width, height=self.current_height,
             text_stream=self.text, graphics_stream=self.graphics,
             used_fonts=self.used_fonts, ids=self.ids,
         )
@@ -580,7 +599,7 @@ class PDFTextBase:
         documentation for more information about this method.
 
         This function args are the same as
-        :py:meth:`pdfme.text.PDFTextBase.setup`.
+        :meth:`pdfme.text.PDFTextBase.setup`.
 
         Returns:
             dict: The dict from the property ``result``.
@@ -944,9 +963,9 @@ class PDFTextBase:
 
 class PDFText(PDFTextBase):
     """Class that represents a rich text paragraph to be added to a
-    :py:class:`pdfme.pdf.PDF` instance.
+    :class:`pdfme.pdf.PDF` instance.
 
-    This is a subclass of :py:class:`pdfme.text.PDFTextBase` and adds the logic
+    This is a subclass of :class:`pdfme.text.PDFTextBase` and adds the logic
     to let the user of this class pass content in a nested cascading "jsonish"
     format (something like HTML), i.e. if you pass a dict to ``content``,
     and this dict has a ``style`` key, all of its children will inherit this
@@ -956,7 +975,7 @@ class PDFText(PDFTextBase):
 
     This is done by transforming the nested structure passed to this class, to
     a list of parts with the structure that can be passed to
-    :py:class:`pdfme.text.PDFTextBase`.
+    :class:`pdfme.text.PDFTextBase`.
 
     If ``content`` argument is a string, it will become the following:
 
@@ -996,14 +1015,14 @@ class PDFText(PDFTextBase):
       paragraph, call ``run``, and get the position of it afterwards.
 
     * ``'var'``: this is a string with the name of a global variable,
-      previously set in the containing :py:class:`pdfme.pdf.PDF`
+      previously set in the containing :class:`pdfme.pdf.PDF`
       instance, by adding a new key to its dict attribute ``context``.
       This way you can reuse a repetitive string throughout the PDF
       document.
 
     Style of the paragraph dicts can be described in the dot key
     itself (a semi-colon separeted list of the attributes explained in
-    :py:func:`pdfme.utils.parse_style_str`) or in a ``style`` key too.
+    :func:`pdfme.utils.parse_style_str`) or in a ``style`` key too.
     This ``style`` key must be in turn a dict containing any of the
     following keys:
 
@@ -1022,12 +1041,12 @@ class PDFText(PDFTextBase):
       Default is False.
 
     * ``'c'`` (int, float, list, tuple, str) to set the color of
-      the text inside this part. See :py:func:`pdfme.utils.parse_color`
+      the text inside this part. See :func:`pdfme.utils.parse_color`
       for information about this attribute. Default is black.
 
     * ``'bg'`` (int, float, list, tuple, str) to set the background
       color of the text inside this part. See
-      :py:func:`pdfme.utils.parse_color` for information about this
+      :func:`pdfme.utils.parse_color` for information about this
       attribute. Default is None.
 
     * ``'r'`` (int, float) to set the baseline of the text, relative
@@ -1106,7 +1125,7 @@ class PDFText(PDFTextBase):
         self, style: dict, ids: list, part_var: str=None, last_part: dict=None
     ) -> dict:
         """Creates a new text part compatible with
-        :py:class:`pdfme.text.PDFTextBase`.
+        :class:`pdfme.text.PDFTextBase`.
 
         Args:
             style (dict): The style of this new part.
@@ -1118,7 +1137,7 @@ class PDFText(PDFTextBase):
 
         Returns:
             dict: representing a part compatible with
-                :py:class:`pdfme.text.PDFTextBase`.
+                :class:`pdfme.text.PDFTextBase`.
         """
         if last_part is not None and last_part['text'] == '':
             self.content.remove(last_part)
@@ -1133,7 +1152,7 @@ class PDFText(PDFTextBase):
     ) -> None:
         """Function to be called recursively by this class, to transform the
         content passed to this instance into a list of parts compatible with
-        :py:class:`pdfme.text.PDFTextBase`.
+        :class:`pdfme.text.PDFTextBase`.
 
         Args:
             content (str, list, tuple, dict): An object like the one explained
