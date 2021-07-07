@@ -125,7 +125,7 @@ class PDFBase:
         """Create the PDF file.
 
         Args:
-            buffer (binary stream): A binary stream to write the PDF file into.
+            buffer (file_like): A file-like object to write the PDF file into.
         """
         header = subs('%PDF-{}\n%%\x129\x129\x129\n', self.version)
         count = len(header)

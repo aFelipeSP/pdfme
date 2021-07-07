@@ -1,12 +1,8 @@
 import copy
 from io import BytesIO
 from pathlib import Path
-from typing import Iterable, Union
+from typing import Any, Iterable, Union
 
-from .base import PDFBase
-from .fonts import PDFFonts
-from .image import PDFImage
-from .page import PDFPage
 from .utils import (
     create_graphics, get_page_size, get_paragraph_stream,
     parse_margin, parse_style_str, process_style, to_roman
@@ -38,17 +34,17 @@ class PDF:
             pdf.output(f)
 
     Through the constructor arguments you can modify the default features
-    of the PDF document, like the size of the pages, the orientation of them
+    of the PDF document, like the size of the pages, their orientation,
     the page numbering options, and the appearance of the text. These are
     used everytime you create a new page, or a new paragraph, but you
-    can replace these for each case.
+    can overwrite these for each case.
 
     You can change the default values for the pages by calling
     :meth:`pdfme.pdf.PDF.setup_page`, and change the default values for text
     by changing attributes ``font_family``, ``font_size``, ``font_color``,
     ``text_align`` and ``line_height``.
 
-    Methods :meth:`pdfme.pdf.PDF.text`, :meth:`pdfme.pdf.PDF.image`, 
+    Methods :meth:`pdfme.pdf.PDF.text`, :meth:`pdfme.pdf.PDF.image`,
     :meth:`pdfme.pdf.PDF.table` and :meth:`pdfme.pdf.PDF.content` are the main
     functions to add paragraphs, images, tables and content boxes respectively,
     and all of them, except the image method, take into account the margins of
@@ -67,7 +63,7 @@ class PDF:
     For more information about paragraphs see :class:`pdfme.text.PDFText`, and
     about tables :class:`pdfme.table.PDFTable`.
 
-    Although you can add all of the elements explained before, we recommend
+    Although you can add all of the elements explained so far, we recommend
     using content boxes only, because all of the additional funcionalities they
     have, including its ability to embed other elements. For more information
     about content boxes see :class:`pdfme.content.PDFContent`.
@@ -77,7 +73,7 @@ class PDF:
     why there's a dict attribute called ``formats`` where you can add named
     style dicts and used them everywhere inside this document, like this:
 
-    
+
     .. code-block:: python
 
         from pdfme import PDF
@@ -96,14 +92,14 @@ class PDF:
 
     If you find yourself using a piece of text often in the document, you can
     add it to the dict attribute ``context`` and include it in any paragraph in
-    the document by using the key you set in ``content``, like this:
+    the document by using its key in the dict, like this:
 
     .. code-block:: python
 
         from pdfme import PDF
 
         pdf = PDF()
-        pdf.context['arln'] = 'A Really Long Name' 
+        pdf.context['arln'] = 'A Really Long Name'
         pdf.add_page()
         pdf.text({
             '.': ['The following name is ', {'var': 'arln'}, '.']
@@ -111,16 +107,16 @@ class PDF:
 
     There are some special ``context`` variables that are used by us that start
     with symbol ``$``, so it's adviced to name your own variables without this
-    symbol in the beginning. The only variable you should care about is
-    ``$page`` that contains the number of the current page.
+    symbol in the beginning. The only of these variables you should care about
+    is ``$page`` that contains the number of the current page.
 
     You can add as much running sections as you want by using
     :meth:`pdfme.pdf.PDF.add_running_section`. Running sections are
     content boxes that are included on every page you create after adding them.
     Through these you can add a header and a footer to the PDF.
 
-    If you want a simpler and more powerful interface, you should use 
-    :class:`pdfme.document.PDFDcoument`.
+    If you want a simpler and more powerful interface, you should use
+    :class:`pdfme.document.PDFDocument`.
 
     Args:
         page_size (str, int, float, tuple, list, optional): this argument sets
@@ -137,7 +133,7 @@ class PDF:
             Options are ``arabic`` (1,2,3,...) and ``roman`` (I, II, III, IV,
             ...).
         font_family (str, optional): The name of the font family. Options are
-            ``Helvetica``, ``Times``, ``Courier``, ``Symbol`` and
+            ``Helvetica`` (default), ``Times``, ``Courier``, ``Symbol`` and
             ``ZapfDingbats``. You will also be able to add new fonts in a future
             release.
         font_size (in, optional): The size of the font.
@@ -183,7 +179,7 @@ class PDF:
         self._add_or_get_font('Helvetica', 'n')
 
     @property
-    def page(self) -> PDFPage:
+    def page(self) -> 'PDFPage':
         """
         Returns:
             PDFPage: current page
@@ -279,7 +275,7 @@ class PDF:
 
         for running_section in self.running_sections:
             self._content(**running_section)
-        
+
         page.go_to_beginning()
 
     def add_running_section(
@@ -304,20 +300,72 @@ class PDF:
             content=content, width=width, height=height, x=x, y=y
         ))
 
+    def add_font(
+        self, fontfile: str, font_family: str, mode: str='n'
+    ) -> None:
+        """Method to add a new font to this document. This functionality is not
+        ready yet.
+
+        Args:
+            fontfile (str): the path of the fontfile.
+            font_family (str): the name of the font family being added.
+            mode (str, optional): the mode of the font being added. It can be
+                ``n`` for normal, ``b`` for bold and ``i`` for italics
+                (oblique).
+        """
+        self.fonts.load_font(fontfile, font_family, mode)
+
+    def _add_or_get_font(self, font_family: str, mode: str) -> tuple:
+        """Method to add a new font to the already used fonts list, if it has
+        not been added, that returns information about the font to be used in
+        other places in the PDF.
+
+        Args:
+            font_family (str): the name of the font family being used.
+            mode (str, optional): the mode of the font being used. It can be
+                ``n`` for normal, ``b`` for bold and ``i`` for italics
+                (oblique).
+
+        Returns:
+            tuple: tuple with first element as the name of the font (a name used
+            in the PDF text streams), and the second as the id of the inner
+            PDF object that represents the font.
+        """
+        f = (font_family, mode)
+        if f in self.used_fonts:
+            return self.used_fonts[f]
+        font = self.fonts.get_font(*f)
+        font_obj = font.add_font(self.base)
+        self.used_fonts[(font_family, mode)] = (font.ref, font_obj.id)
+        return font.ref, font_obj.id
+
+    def _used_font(self, font_family: str, mode: str) -> None:
+        """Method to add a font to the current page.
+
+        Args:
+            font_family (str): the name of the font family being used.
+            mode (str, optional): the mode of the font being used. It can be
+                ``n`` for normal, ``b`` for bold and ``i`` for italics
+                (oblique).
+        """
+        f = (font_family, mode)
+        font_args = self._add_or_get_font(*f)
+        self.page.add_font(*font_args)
+
     def create_image(
         self, image: ImageType, extension: str=None, image_name: str=None
-    ) -> PDFImage:
+    ) -> 'PDFImage':
         """Method to create a PDF image.
 
         Arguments for this method are the same as :class:`pdfme.image.PDFImage`.
 
         Returns:
-            PDFImage: representing the PDF image.
+            PDFImage: object representing the PDF image.
         """
         return PDFImage(image, extension, image_name)
 
     def add_image(
-        self, pdf_image: PDFImage, x: Number=None, y: Number=None,
+        self, pdf_image: 'PDFImage', x: Number=None, y: Number=None,
         width: Number=None, height:Number=None, move: str='bottom'
     ) -> None:
         """Method to add a PDF image to the current page.
@@ -328,7 +376,7 @@ class PDF:
                 image.
             y (int, float, optional): The y position of the top of the
                 image.
-            width (int, float, optional): The width of the image. If this and 
+            width (int, float, optional): The width of the image. If this and
                 ``height`` are None, the width will be the same as the page
                 content width, but if this is None and ``height`` is not, the
                 width will be calculated from ``height``, keeping the proportion
@@ -385,7 +433,7 @@ class PDF:
                 image.
             y (int, float, optional): the y position of the top of the
                 image.
-            width (int, float, optional): the width of the image. If this and 
+            width (int, float, optional): the width of the image. If this and
                 ``height`` are None, the width will be the same as the page
                 content width, but if this is None and ``height`` is not, the
                 width will be calculated from ``height``, keeping the proportion
@@ -402,58 +450,6 @@ class PDF:
         self.add_image(
             pdf_image, x=x, y=y, width=width, height=height, move=move
         )
-
-    def add_font(
-        self, fontfile: str, font_family: str, mode: str='n'
-    ) -> None:
-        """Method to add a new font to this document. This functionality is not
-        ready yet.
-
-        Args:
-            fontfile (str): the path of the fontfile.
-            font_family (str): the name of the font family being added.
-            mode (str, optional): the mode of the font being added. It can be
-                ``n`` for normal, ``b`` for bold and ``i`` for italics
-                (oblique).
-        """
-        self.fonts.load_font(fontfile, font_family, mode)
-
-    def _add_or_get_font(self, font_family: str, mode: str) -> tuple:
-        """Method to add a new font to the already used fonts list, if it has
-        not been added, that returns information about the font to be used in
-        other places in the PDF.
-
-        Args:
-            font_family (str): the name of the font family being used.
-            mode (str, optional): the mode of the font being used. It can be
-                ``n`` for normal, ``b`` for bold and ``i`` for italics
-                (oblique).
-
-        Returns:
-            tuple: the first element is the name of the font (a name used in
-                the PDF text streams), and the second is the id of the inner PDF
-                object that represents the font.
-        """
-        f = (font_family, mode) 
-        if f in self.used_fonts:
-            return self.used_fonts[f]
-        font = self.fonts.get_font(*f)
-        font_obj = font.add_font(self.base)
-        self.used_fonts[(font_family, mode)] = (font.ref, font_obj.id)
-        return font.ref, font_obj.id
-
-    def _used_font(self, font_family: str, mode: str) -> None:
-        """Method to add a font to the current page.
-
-        Args:
-            font_family (str): the name of the font family being used.
-            mode (str, optional): the mode of the font being used. It can be
-                ``n`` for normal, ``b`` for bold and ``i`` for italics
-                (oblique).
-        """
-        f = (font_family, mode)
-        font_args = self._add_or_get_font(*f)
-        self.page.add_font(*font_args)
 
     def _default_paragraph_style(
         self, width: Number=None, height:Number=None, text_align: str=None,
@@ -473,7 +469,7 @@ class PDF:
             indent (Number, optional): the indent of the paragraph.
 
         Returns:
-            dict: with the default and the given parameters combined.
+            dict: dict with the default and the given parameters combined.
         """
         return dict(
             width = self.page.width - self.page.margin_right - self.page.x \
@@ -494,7 +490,7 @@ class PDF:
             content (str, list, tuple, dict): the paragraph object.
 
         Returns:
-            dict: with the prepared paragraph.
+            dict: dict with the prepared paragraph.
         """
         style = {
             'f': self.font_family, 's': self.font_size, 'c': self.font_color
@@ -527,7 +523,7 @@ class PDF:
             height (int, float, optional): The height of the element.
 
         Returns:
-            tuple: with the new ``x``,  ``y```, ``width`` and ``height``.
+            tuple: tuple with the new ``x``,  ``y``, ``width`` and ``height``.
         """
         if x is not None:
             self.page.x = x
@@ -544,8 +540,8 @@ class PDF:
         current page.
 
         Returns:
-            str: depending on attribute ``page_numbering_offset`` and
-                ``page_numbering_style``.
+            str: string with the page number that depends on attributes
+            ``page_numbering_offset`` and ``page_numbering_style``.
         """
         page = self.page_index + 1 + self.page_numbering_offset
         return to_roman(page) if self.page_numbering_style == 'roman'\
@@ -562,7 +558,7 @@ class PDF:
         :class:`pdfme.text.PDFText`.
 
         Returns:
-            PDFText: an object that represents a paragraph.
+            PDFText: object that represents a paragraph.
         """
         par_style = self._default_paragraph_style(
             width, height, text_align, line_height, indent
@@ -580,7 +576,7 @@ class PDF:
         width: Number=None, height: Number=None, graphics_stream: str=None,
         used_fonts: tuple=None, ids: dict=None, move: str='bottom'
     ) -> None:
-        """Method to add a paragraph to this document. The arguments for this
+        """Method to add a paragraph to the current page. The arguments for this
         method are obtained from the attribute ``result`` of class
         :class:`pdfme.text.PDFText`.
 
@@ -635,18 +631,24 @@ class PDF:
             self.page.x += width
 
     def _text(
-        self, content: TextType, width: Number=None, height: Number=None,
-        x: Number=None, y: Number=None, text_align: str=None,
-        line_height: Number=1.1, indent: Number=0, list_text: str=None,
-        list_indent: Number=None, list_style: dict=None, move: str='bottom'
+        self, content: Union[TextType, 'PDFText'], width: Number=None,
+        height: Number=None, x: Number=None, y: Number=None,
+        text_align: str=None, line_height: Number=1.1, indent: Number=0,
+        list_text: str=None, list_indent: Number=None, list_style: dict=None,
+        move: str='bottom'
     ) -> 'PDFText':
-        """Method to create and add a paragraph to this document.
+        """Method to create and add a paragraph to the current page.
+
+        If ``content`` is a PDFText, the method ``run`` for this instance will
+        be called with the new rectangle passed to this function.
+        Else, this method will try to build a new PDFText instance with argument
+        ``content`` and call method ``run`` afterwards.
 
         For more information about the arguments see
         :class:`pdfme.text.PDFText`.
 
         Returns:
-            PDFText: an object that represents the paragraph.
+            PDFText: object that represents the paragraph.
         """
         x, y, width, height = self._position_and_size(x, y, width, height)
         if isinstance(content, PDFText):
@@ -694,7 +696,7 @@ class PDF:
         see :class:`pdfme.text.PDFText`
 
         Returns:
-            dict: with the default values.
+            dict: dict with the default values.
         """
         return dict(
             f=self.font_family, s=self.font_size, c=self.font_color,
@@ -702,11 +704,19 @@ class PDF:
         )
 
     def _create_table(
-        self, content: TextType, width: Number=None, height: Number=None,
+        self, content: Iterable, width: Number=None, height: Number=None,
         x: Number=None, y: Number=None, widths: Iterable=None,
         style: Union[dict, str]=None, borders: Iterable=None,
         fills: Iterable=None
-    ):
+    ) -> 'PDFTable':
+        """Method to create a table.
+
+        For more information about this method arguments see
+        :class:`pdfme.table.PDFTable`.
+
+        Returns:
+            PDFTable: object that represents a table.
+        """
         style_ = self._default_content_style()
         style_.update(process_style(style, self))
         pdf_table = PDFTable(
@@ -716,9 +726,25 @@ class PDF:
         return pdf_table
 
     def _table(
-        self, content, width=None, height=None, x=None, y=None, widths=None,
-        style=None, borders=None, fills=None, move='bottom'
-    ):
+        self, content: Union[Iterable, 'PDFTable'], width: Number=None,
+        height: Number=None, x: Number=None, y: Number=None,
+        widths: Iterable=None, style: Union[dict, str]=None,
+        borders: Iterable=None, fills: Iterable=None, move: str='bottom'
+    ) -> 'PDFTable':
+        """Method to create and add a table to the current page.
+
+        If ``content`` is a PDFTable, the method ``run`` for this instance will
+        be called with the new rectangle passed to this function.
+        Else, this method will try to build a new PDFTable instance with
+        argument ``content`` and call method ``run`` afterwards.
+
+        For more information about this method arguments see
+        :class:`pdfme.table.PDFTable`.
+
+        Returns:
+            PDFTable: object that represents a table.
+        """
+
         x, y, width, height = self._position_and_size(x, y, width, height)
 
         if isinstance(content, PDFTable):
@@ -741,8 +767,17 @@ class PDF:
         return pdf_table
 
     def table(
-        self, content, widths=None, style=None, borders=None, fills=None
-    ):
+        self, content: Iterable, widths: Iterable=None,
+        style: Union[str, dict]=None, borders: Iterable=None,
+        fills: Iterable=None
+    ) -> None:
+        """Method to create and add a table to this document. This method
+        will keep adding pages to the PDF until all the contents of the
+        table are added to the document.
+
+        For more information about this method arguments see
+        :class:`pdfme.table.PDFTable`.
+        """
         pdf_table = self._table(
             content, widths=widths, style=style, borders=borders, fills=fills,
             x=self.page.margin_left, width=self.page.content_width
@@ -754,7 +789,18 @@ class PDF:
                 self.page.margin_left, self.page.margin_top
             )
 
-    def _create_content(self, content, width=None, height=None, x=None, y=None):
+    def _create_content(
+        self, content: dict, width: Number=None, height: Number=None,
+        x: Number=None, y: Number=None
+    ) -> 'PDFContent':
+        """Method to create a content box.
+
+        For more information about this method arguments see
+        :class:`pdfme.content.PDFContent`.
+
+        Returns:
+            PDFContent: object that represents a content box.
+        """
         style = self._default_content_style()
         content = content.copy()
         style.update(process_style(content.get('style'), self))
@@ -763,8 +809,22 @@ class PDF:
         return pdf_content
 
     def _content(
-        self, content, width=None, height=None, x=None, y=None, move='bottom'
-    ):
+        self, content: Union[dict, 'PDFContent'], width: Number=None,
+        height: Number=None, x: Number=None, y: Number=None, move: str='bottom'
+    ) -> 'PDFContent':
+        """Method to create and add a content box to teh current page.
+
+        If ``content`` is a PDFContent, the method ``run`` for this instance
+        will be called with the new rectangle passed to this function.
+        Else, this method will try to build a new PDFContent instance with
+        argument ``content`` and call method ``run`` afterwards.
+
+        For more information about this method arguments see
+        :class:`pdfme.content.PDFContent`.
+
+        Returns:
+            PDFContent: object that represents a content box.
+        """
         x, y, width, height = self._position_and_size(x, y, width, height)
 
         if isinstance(content, PDFContent):
@@ -784,7 +844,14 @@ class PDF:
 
         return pdf_content
 
-    def content(self, content):
+    def content(self, content: dict) -> None:
+        """Method to create and add a content box to this document. This method
+        will keep adding pages to the PDF until all the contents are added to
+        the document.
+
+        Args:
+            content (dict): see :class:`pdfme.content.PDFContent`.
+        """
         pdf_content = self._content(
             content, x=self.page.margin_left, width=self.page.content_width
         )
@@ -795,11 +862,29 @@ class PDF:
                 self.page.margin_left, self.page.margin_top
             )
 
-    def _add_graphics(self, graphics):
+    def _add_graphics(self, graphics: Iterable) -> None:
+        """Method to add a list of PDF graphics streams to current page.
+
+        Args:
+            graphics (list, tuple): an iterable with strings of PDF graphics
+                streams.
+        """
         stream = create_graphics(graphics)
         self.page.add(stream)
 
-    def _add_parts(self, parts):
+    def _add_parts(self, parts: Iterable) -> None:
+        """Method to add a list of parts to current page.
+
+        Each element of ``parts`` should be a dictionary with a ``type`` key,
+        with value ``'text'`` for paragraph streams, or ``'image'``
+        for images. The other keys in a ``text`` part are the ones obtained from
+        PDFText ``result`` property, and the other keys in a ``image`` part,
+        should be the same as the arguments for :meth:`pdfme.pdf.PDF.add_image`
+        method.
+
+        Args:
+            parts (list, tuple): the iterable just explained.
+        """
         for part in parts:
             part = part.copy()
             type_ = part.pop('type')
@@ -808,7 +893,15 @@ class PDF:
             elif type_ == 'image':
                 self.add_image(**part)
 
-    def _build_pages_tree(self, page_list, first_level = True):
+    def _build_pages_tree(self, page_list:list, first_level:bool=True) -> None:
+        """Method to build the PDF pages tree.
+
+        Args:
+            page_list (list): a list of PDF page objects or PDFPage objects to
+                be added to the PDF pages tree.
+            first_level (bool, optional): whether you are calling this method
+                from outside (True) or recursively from inside (False).
+        """
         new_page_list = []
         count = 0
         for page in page_list:
@@ -833,7 +926,19 @@ class PDF:
         else:
             self._build_pages_tree(new_page_list, False)
 
-    def _build_dests_tree(self, keys, vals, first_level=True):
+    def _build_dests_tree(
+        self, keys: list, vals: list, first_level: bool=True
+    ) -> None:
+        """Method to build the PDF dests tree.
+
+        Args:
+            keys (list): a list of the keys of the dests to be added to the
+                PDF dests tree.
+            values (list): a list of the corresponding values for each key in
+                ``keys`` list.
+            first_level (bool, optional): whether you are calling this method
+                from outside (True) or recursively from inside (False).
+        """
         k = 7
         new_keys = []
         new_vals = []
@@ -872,20 +977,34 @@ class PDF:
         else:
             self._build_dests_tree(new_keys, new_vals, False)
 
-    def _build_dests(self):
+    def _build_dests(self) -> None:
+        """Method to create and add the dests tree to the document.
+        """
         dests = list(self.dests.keys())
         if len(dests) == 0:
             return
         dests.sort()
         self._build_dests_tree(dests, [self.dests[k] for k in dests])
 
-    def output(self, buffer):
+    def output(self, buffer: Any) -> None:
+        """Method to create the PDF file.
+
+        Args:
+            buffer (file_like): a file-like object to write the PDF file into.
+
+        Raises:
+            Exception: if this document doesn't have any pages.
+        """
         if len(self.pages) == 0:
             raise Exception("pdf doesn't have any pages")
         self._build_pages_tree(self.pages)
         self._build_dests()
         self.base.output(buffer)
 
-from .content import Number, PDFContent
+from .base import PDFBase
+from .content import PDFContent
+from .fonts import PDFFonts
+from .image import PDFImage
+from .page import PDFPage
 from .table import PDFTable
 from .text import PDFText

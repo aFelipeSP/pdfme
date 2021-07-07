@@ -201,7 +201,9 @@ class PDFDocument:
         for index, footnote in enumerate(page_footnotes):
             footnote = deepcopy(footnote)
             style = footnote.setdefault('style', {})
-            style.update(dict(list_text=index + 1, list_style='$footnote'))
+            style.update(dict(
+                list_text=str(index + 1) + ' ', list_style='$footnote'
+            ))
             content['content'].append(footnote)
 
         footnote_obj = self.pdf._create_content(
