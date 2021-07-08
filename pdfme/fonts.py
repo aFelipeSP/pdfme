@@ -47,45 +47,96 @@ to_unicode = (
 ).encode('latin')
 
 class PDFFont(abc.ABC):
+    """Abstract class that represents a PDF font.
+
+    Args:
+        ref (str): the name of the font, included in every paragraph and page
+            that uses this font.
+    """
     def __init__(self, ref: str) -> None:
         self._ref = ref
 
     @property
-    def ref(self):
+    def ref(self) -> str:
+        """Property that returns the name (ref) of this font. 
+
+        Returns:
+            str: the name of this font
+        """
         return self._ref
 
     @abc.abstractproperty
-    def base_font(self):
+    def base_font(self) -> str:
+        """Abstract property that should return this font's base font name.
+
+        Returns:
+            str: the base font name
+        """
         pass
 
     @abc.abstractmethod
     def get_char_width(self, char: str) -> float:
+        """Abstract method that should return the width of ``char`` character 
+        in this font.
+
+        Args:
+            char (str): the character.
+
+        Returns:
+            float: the character's width.
+        """
         pass
 
     @abc.abstractmethod
-    def get_text_width(self, text) -> float:
+    def get_text_width(self, text: str) -> float:
+        """Abstract method that should return the width of the ``text`` string
+        in this font.
+
+        Args:
+            text (str): the sentence to measure.
+
+        Returns:
+            float: the sentence's width.
+        """
         pass
     
     @abc.abstractmethod
     def add_font(self, base: 'PDFBase') -> 'PDFObject':
+        """Abstract method that should add this font to the PDFBase instance,
+        passed as argument.
+
+        Args:
+            base (PDFBase): the base instance to add this font.
+        """
         pass
 class PDFStandardFont(PDFFont):
+    """This class represents a standard PDF font.
+
+    Args:
+        ref (str): the name of this font.
+        base_font (str): the base font name of this font.
+        widths (dict): the widths of each character in this font.
+    """
     def __init__(self, ref: str, base_font: str, widths: dict) -> None:
         super().__init__(ref)
         self._base_font = base_font
         self.widths = widths
 
     @property
-    def base_font(self):
+    def base_font(self) -> str:
+        """See :meth:`pdfme.fonts.PDFFont.base_font`"""
         return self._base_font
 
     def get_char_width(self, char: str) -> float:
+        """See :meth:`pdfme.fonts.PDFFont.get_char_width`"""
         return self.widths[char] / 1000
 
     def get_text_width(self, text) -> float:
+        """See :meth:`pdfme.fonts.PDFFont.get_text_width`"""
         return sum(self.widths[char] for char in text) / 1000
 
     def add_font(self, base: 'PDFBase') -> 'PDFObject':
+        """See :meth:`pdfme.fonts.PDFFont.add_font`"""
         font = base.add({
             'Type': b'/Font',
             'Subtype': b'/Type1',
@@ -97,6 +148,15 @@ class PDFStandardFont(PDFFont):
         return font
 
 class PDFTrueTypeFont(PDFFont):
+    """This class represents a TrueType PDF font.
+
+    This class is not working yet.
+
+    Args:
+        ref (str): the name of this font.
+        base_font (str): the base font name of this font.
+        widths (dict): the widths of each character in this font.
+    """
     def __init__(self, ref: str, filename:str=None) -> None:
         super().__init__(ref)
         self._base_font = None
@@ -104,10 +164,19 @@ class PDFTrueTypeFont(PDFFont):
             self.load_font(filename)
 
     @property
-    def base_font(self):
+    def base_font(self) -> str:
+        """See :meth:`pdfme.fonts.PDFFont.base_font`"""
         return self._base_font
 
     def _get_char_width(self, char: str) -> float:
+        """Method to get the width of the ``char`` character string.
+
+        Args:
+            char (str): the character.
+
+        Returns:
+            float: the character's width.
+        """
         index = ord(char)
         if index in self.cmap:
             glyph = self.cmap[index]
@@ -117,12 +186,23 @@ class PDFTrueTypeFont(PDFFont):
         return self.glyph_set['.notdef'].width
 
     def get_char_width(self, char: str) -> float:
+        """See :meth:`pdfme.fonts.PDFFont.get_char_width`"""
         return self._get_char_width(char) / self.units_per_em
 
     def get_text_width(self, text) -> float:
+        """See :meth:`pdfme.fonts.PDFFont.get_text_width`"""
         return sum(self._get_char_width(c) for c in text) / self.units_per_em
 
-    def load_font(self, filename: str):
+    def load_font(self, filename: str) -> None:
+        """Method to extract information needed by the PDF document about this
+        font, from font file in ``filename`` path.
+
+        Args:
+            filename (str): font file path.
+
+        Raises:
+            ImportError: if ``fonttools`` library is not installed.
+        """
         try:
             from fontTools import ttLib
         except:
@@ -137,9 +217,18 @@ class PDFTrueTypeFont(PDFFont):
         self.cmap = self.font['cmap'].getcmap(3,1).cmap
         self.glyph_set = self.font.getGlyphSet()
 
-        self.font_descriptor = self.get_font_descriptor()
+        self.font_descriptor = self._get_font_descriptor()
 
-    def get_font_descriptor(self):
+    def _get_font_descriptor(self) -> dict:
+        """Method to extract information needed by the PDF document from the
+        font file, to build a PDF object called "font descriptor". 
+
+        Raises:
+            Exception: if font file has copyright restrictions.
+
+        Returns:
+            dict: dict representing this font's "font descriptor".
+        """
         self._base_font = self.font['name'].names[6].toStr()
         head = self.font["head"]
         self.units_per_em = head.unitsPerEm
@@ -201,7 +290,8 @@ class PDFTrueTypeFont(PDFFont):
         }
 
         
-    def add_font(self, base: 'PDFBase'):
+    def add_font(self, base: 'PDFBase') -> 'PDFObject':
+        """See :meth:`pdfme.fonts.PDFFont.add_font`"""
         font_file = BytesIO()
         self.font.save(font_file)
         font_file_bytes = font_file.getvalue()
@@ -241,6 +331,8 @@ class PDFTrueTypeFont(PDFFont):
             'ToUnicode': to_unicode_stream.id
         })
 class PDFFonts:
+    """Class that represents the set of all the fonts added to a PDF document.
+    """
     def __init__(self) -> None:
         self.fonts = {}
         self.index = 1
@@ -252,11 +344,29 @@ class PDFFonts:
                 )
                 self.index += 1
     
-    def get_font(self, font_family, mode):
+    def get_font(self, font_family: str, mode: str) -> PDFFont:
+        """Method to get a font from its ``font_family`` and ``mode``.
+
+        Args:
+            font_family (str): the name of the font family
+            mode (str): the mode of the font you want to get. ``n``, ``b``,
+                ``i`` or ``bi``.
+
+        Returns:
+            PDFFont: an object that represents a PDF font.
+        """
         family = self.fonts[font_family]
         return family['n'] if mode not in family else family[mode]
 
-    def load_font(self, path, font_family, mode='n'):
+    def load_font(self, path: str, font_family: str, mode: str='n') -> None:
+        """Method to add a TrueType font to this instance.
+
+        Args:
+            path (str): the location of the font file.
+            font_family (str): the name of the font family
+            mode (str, optional): the mode of the font you want to get.
+                ``n``, ``b``, ``i`` or ``bi``.
+        """
         font = PDFTrueTypeFont('F'+str(self.index), path)
         if not font_family in self.fonts:
             self.fonts[font_family] = {'n': font}

@@ -1,6 +1,25 @@
 import zlib
 
-def encode_stream(stream, filter, parameters = {}):
+def encode_stream(stream: bytes, filter: bytes, parameters: dict=None) -> bytes:
+	"""Function to use ``filter`` method to encode ``stream``, using
+	``parameters`` if required.
+
+	Args:
+		stream (bytes): the stream to be encoded.
+		filter (bytes): the method to use for the encoding process.
+		parameters (dict, optional): if necessary, this dict contains the
+			parameters required by the ``filter`` method.
+
+	Raises:
+		NotImplementedError: if the filter passed is not implemented yet.
+		Exception: if the filter passed doesn't exist. 
+
+	Returns:
+		bytes: the encoded stream.
+	"""
+	if parameters is None:
+		parameters = {}
+	
 	if filter == b'/FlateDecode':
 		return flate_encode(stream)
 	elif filter == b'/ASCIIHexDecode':
@@ -21,7 +40,17 @@ def encode_stream(stream, filter, parameters = {}):
 		raise NotImplementedError('/JPXDecode')
 	elif filter == b'/Crypt':
 		raise NotImplementedError('/Crypt')
+	else:
+		raise Exception("Filter {} not found".format(filter.decode('latin')))
 
-def flate_encode(stream):
-    return zlib.compress(stream)
+def flate_encode(stream: bytes) -> bytes:
+	"""Function that encodes a bytes stream using the zlib.compress method.
+
+	Args:
+		stream (bytes): stream to be encoded.
+
+	Returns:
+		bytes: the encoded stream.
+	"""
+	return zlib.compress(stream)
 

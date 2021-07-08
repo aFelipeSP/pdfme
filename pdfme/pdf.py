@@ -141,15 +141,17 @@ class PDF:
             font. See :func:`pdfme.color.parse_color`.
         text_align (str, optional):  ``'l'`` for left (default), ``'c'`` for
             center, ``'r'`` for right and ``'j'`` for justified text.
-        line_height (int, float, optional): how much space between the
-            lines of the paragraph. See :class:`pdfme.text.PDFText`.
+        line_height (int, float, optional): space between the lines of the
+            paragraph. See :class:`pdfme.text.PDFText`.
+        indent (int, float, optional): space between left of the paragraph, and
+            the beggining of the first line. See :class:`pdfme.text.PDFText`.
     """
     def __init__(
-        self, page_size: PageType='a4', rotate_page: bool=True,
+        self, page_size: PageType='a4', rotate_page: bool=False,
         margin: MarginType=56.693, page_numbering_offset: Number=0,
         page_numbering_style: str='arabic', font_family: str='Helvetica',
         font_size: Number=11, font_color: ColorType=0.1, text_align: str='l',
-        line_height: Number=1.1
+        line_height: Number=1.1, indent: Number=0
     ) -> None:
         self.setup_page(page_size, rotate_page, margin)
         self.page_numbering_offset = page_numbering_offset
@@ -160,6 +162,7 @@ class PDF:
         self.font_color = font_color
         self.text_align = text_align
         self.line_height = line_height
+        self.indent = indent
 
         self.formats = {}
         self.context = {}
@@ -259,7 +262,7 @@ class PDF:
         else:
             page_height, page_width = self.page_height, self.page_width
 
-        if (rotate_page is None and not self.rotate_page) or rotate_page == False:
+        if (rotate_page is None and self.rotate_page) or rotate_page:
             page_height, page_width = page_width, page_height
 
         margin_ = copy.deepcopy(self.margin)
@@ -283,6 +286,9 @@ class PDF:
     ) -> None:
         """Method to add running sections, like a header and a footer, to this
         document.
+
+        Running sections are content boxes that are included on every page you
+        create after adding them.
 
         Args:
             content (dict): a content dict like the one you pass to create a
@@ -453,7 +459,7 @@ class PDF:
 
     def _default_paragraph_style(
         self, width: Number=None, height:Number=None, text_align: str=None,
-        line_height: Number=1.1, indent: Number=0
+        line_height: Number=None, indent: Number=None
     ) -> dict:
         """This method returns a dict with each of the arguments as the keys.
         If they are None, the PDF default value for each of them is used.
@@ -479,7 +485,7 @@ class PDF:
             text_align = self.text_align if text_align is None else text_align,
             line_height = self.line_height if line_height is None \
                 else line_height,
-            indent = indent
+            indent = self.indent if indent is None else indent,
         )
 
     def _init_text(self, content: TextType) -> dict:
@@ -692,7 +698,7 @@ class PDF:
         """This method returns a dict with the PDF default values used by
         content boxes.
 
-        For more information about the keys in the dict return by this method
+        For more information about the keys in the dict returned by this method
         see :class:`pdfme.text.PDFText`
 
         Returns:
@@ -700,7 +706,8 @@ class PDF:
         """
         return dict(
             f=self.font_family, s=self.font_size, c=self.font_color,
-            text_align=self.text_align, line_height=self.line_height, indent=0
+            text_align=self.text_align, line_height=self.line_height,
+            indent=self.indent
         )
 
     def _create_table(

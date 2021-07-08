@@ -1,44 +1,201 @@
 from copy import deepcopy
+from typing import Any, Iterable, Union
+
+from .content import PDFContent
 from .pdf import PDF
+from .utils import process_style
 
 STYLE_PROPS = dict(
-    f='font_family', s='font_size', c='font_color',
-    text_align='text_align', line_height='line_height'
+    f='font_family', s='font_size', c='font_color', text_align='text_align',
+    line_height='line_height', indent='indent'
 )
 
+MARGINS = ('margin_top', 'margin_right', 'margin_bottom', 'margin_left')
+
 PAGE_PROPS = ('page_size', 'rotate_page', 'margin')
+PAGE_NUMBERING = ('page_numbering_offset', 'page_numbering_style')
 
 class PDFDocument:
-    def __init__(self, document, context=None):
+    """Class that helps to build a PDF document from a dict (``document``
+    argument) describing the document contents.
+
+    This class uses an instance of :class:`pdfme.pdf.PDF` internally to build
+    the PDF document, but adds some functionalities to allow the user to
+    build a PDF document from a JSONish dict, add footnotes and the other
+    functions explained here.
+
+    A document is made up of sections, that can have their own page layout,
+    page numbering, running sections and style. 
+
+    ``document`` dict has the following keys:
+
+    * ``style``: the default style of each section inside the document. A dict
+      with all of the keys that a content box can have (see 
+      :class:`pdfme.content.PDFContent` for more information about content
+      box, and for the default values of the attributes of this dict see
+      :class:`pdfme.pdf.PDF`).
+
+    * ``page_style``: a dict with the default attributes for each page in this
+      document. You can include any of the following keys: ``page_size``,
+      ``rotate_page``, ``margin``, ``page_numbering_offset`` and
+      ``page_numbering_style``. For more information about this page attributes
+      and their default values see :class:`pdfme.pdf.PDF` definition.
+
+    * ``formats``: a dict with the global styles of the document that can be
+      used anywhere in the document. For more information about this dict
+      see :class:`pdfme.pdf.PDF` definition.
+
+    * ``running_sections``: a dict with the running sections that will be used
+      by each section in the document. Each section can have, in turn, a
+      ``running_section`` list, with the name of the running sections defined in
+      this argument that should be included in the section. For information
+      about running sections see :class:`pdfme.pdf.PDF`.
+      If ``width`` key is equal to ``'left'``, it takes the value of the left
+      margin, if equal to ``'right'`` it takes the value of the right margin, if
+      equal to ``'full'`` it takes the value of the whole page width, and if it
+      is not defined or is None it will take the value of the content width of
+      the page.
+      If ``height`` key is equal to ``'top'``, it takes the value of the top
+      margin, if equal to ``'bottom'`` it takes the value of the bottom margin,
+      if equal to ``'full'`` it takes the value of the whole page height, and if
+      it is not defined or is None it will take the value the content height of
+      the page.
+      If ``x`` key is equal to ``'left'``, it takes the value of the left
+      margin, if equal to ``'right'`` it takes the value of the whole page width
+      minus the right margin, and if it is not defined or is None it will be 0.
+      If ``y`` key is equal to ``'top'``, it takes the value of the top
+      margin, if equal to ``'bottom'`` it takes the value of the whole page
+      height minus the bottom margin, and if it is not defined or is None i
+      will be 0.
+
+    * ``sections``: an iterable with the sections of the document.
+
+    Each section in ``sections`` iterable is a dict like the one that can be
+    passed to :class:`pdfme.content.PDFContent`, so each section ends up being
+    a content box. Additional to the keys from a content box dict, you can
+    include also a ``page_style`` dict to overwrite the default ``page_style``
+    of the document, and a ``running_sections`` list with the name of the
+    running sections that you want to be included in all of the pages of the
+    section. There is a special key that you can include in a section's
+    ``page_style`` dict called ``page_numbering_reset``, that if True, resets
+    the numbering of the pages.
+
+    You can also include footnotes in any paragraph, by adding a dict with the
+    key ``footnote`` with the description of the footnote as its value, to the
+    list of elements of the dot key (see :class:`pdfme.text.PDFText` for more
+    informarion about the structure of a paragraph and the dot key).
+
+    Here is an example of a document dict, and how it can be used to build a
+    PDF document using the helper function :func:`pdfme.document.build_pdf`.
+
+    .. code-block:: python
+
+        from pdfme import build_pdf
+
+        document = {
+            "page_style": {"page_size": "letter", "margin": [70, 60]},
+            "style": {
+                "s": 10, "c": 0.3, "f": "Times", "text_align": "j",
+                "margin_bottom": 10
+            },
+            "formats": {
+                "link": {"c": "blue", "u": True},
+                "title": {"s": 12, "b": True}
+            },
+            "running_sections": {
+                "header": {
+                    "x": "left", "y": 40, "height": "top",
+                    "content": ["Document with header"]
+                },
+                "footer": {
+                    "x": "left", "y": "bottom", "height": "bottom",
+                    "style": {"text_align": "c"},
+                    "content": [{".": ["Page ", {"var": "$page"}]}]
+                }
+            },
+            "sections": [
+                {
+                    "running_sections": ["header", "footer"],
+                    "page_style": {"margin": 60},
+                    "content": [
+                        {".": "This is a title", "style": "title"},
+                        {".": [
+                            "Here we include a footnote", 
+                            {"footnote": "Description of a footnote"},
+                            ". And here we include a ",
+                            {
+                                ".": "link", "style": "link",
+                                "uri": "https://some.url.com"
+                            }
+                        ]}
+                    ]
+                },
+                {
+                    "running_sections": ["footer"],
+                    "page_style": {"rotate_page": True},
+                    "content": [
+                        "This is a rotated page"
+                    ]
+                }
+            ]
+        }
+
+        with open('borrar.pdf', 'wb') as f:
+            build_pdf(document, f)
+
+    Args:
+        document (dict): a dict like the one just described.
+        context (dict, optional): a dict containing the context of the inner
+            :class:`pdfme.pdf.PDF` instance.
+    """
+    def __init__(self, document: dict, context: dict=None) -> None:
         context = {} if context is None else context
         style = deepcopy(document.get('style', {}))
         style_args = {
             v: style.pop(k) for k, v in STYLE_PROPS.items() if k in style
         }
-        page_style = document.get('page_style', {})
-        page_args = {p: page_style[p] for p in PAGE_PROPS if p in page_style}
 
-        self.pdf = PDF(**page_args, **style_args)
+        self.style_args = deepcopy(style_args)
+        self.style_args.update({k: style[k] for k in MARGINS if k in style})
+
+        page_style = document.get('page_style', {})
+        self.page_args = {
+            k: page_style[k] for k in PAGE_PROPS + PAGE_NUMBERING
+            if k in page_style
+        }
+
+        self.pdf = PDF(**self.page_args, **style_args)
         self.pdf.formats = {}
         self.pdf.formats['$footnote'] = {'r': 0.5, 's': 6}
         self.pdf.formats['$footnotes'] = {'s': 10, 'c': 0}
         self.pdf.formats.update(document.get('formats', {}))
         self.pdf.context.update(context)
 
-        self.defs = document.get('defs', {})
+        self.running_sections = document.get('running_sections', {})
         self.style = style
 
         self.sections = document.get('sections', [])
 
         self.footnotes = []
-        self.traverse_document_footnotes(self.sections)
+        self._traverse_document_footnotes(self.sections)
 
         self.footnotes_margin = 10
 
-    def traverse_document_footnotes(self, element):
+    def _traverse_document_footnotes(
+        self, element: Union[list, tuple, dict]
+    ) -> None:
+        """Method to traverse the document sections, trying to find footnotes
+        dicts, to prepare them for being processed by the inner PDF instance.
+
+        Args:
+            element (list, tuple, dict): the element to be tarversed.
+
+        Raises:
+            TypeError: 
+        """
         if isinstance(element, (list, tuple)):
             for child in element:
-                self.traverse_document_footnotes(child)
+                self._traverse_document_footnotes(child)
         elif isinstance(element, dict):
             if 'footnote' in element:
                 element.setdefault('ids', [])
@@ -65,54 +222,77 @@ class PDFDocument:
             else:
                 for value in element.values():
                     if isinstance(value, (list, tuple, dict)):
-                        self.traverse_document_footnotes(value)
+                        self._traverse_document_footnotes(value)
 
-    def set_running_sections(self, running_sections):
+    def _set_running_sections(self, running_sections: Iterable) -> None:
+        """Method to set the running sections for every section in the document.
+
+        Args:
+            running_sections (list, tuple): the list of the running sections
+                of the current section being added.
+        """
         self.pdf.running_sections = []
         for name in running_sections:
-            section = deepcopy(self.defs[name])
+            section = deepcopy(self.running_sections[name])
             margin = self.pdf.margin
+
+            page_width, page_height = self.pdf.page_width, self.pdf.page_height
+            if self.pdf.rotate_page:
+                page_width, page_height = page_height, page_width
+
             if section.get('width') in ['left', 'right']:
                 section['width'] = margin[section.get('width')]
             if section.get('width') == 'full':
-                section['width'] = self.pdf.page_width
+                section['width'] = page_width
             if section.get('height') in ['top', 'bottom']:
                 section['height'] = margin[section.get('height')]
             if section.get('height') == 'full':
-                section['height'] = self.pdf.page_height
+                section['height'] = page_height
             if section.get('x') == 'left':
                 section['x'] = margin['left']
             if section.get('x') == 'right':
-                section['x'] = self.pdf.page_width - margin['right']
+                section['x'] = page_width - margin['right']
             if section.get('y') == 'top':
                 section['y'] = margin['top']
             if section.get('y') == 'bottom':
-                section['y'] = self.pdf.page_height - margin['bottom']
+                section['y'] = page_height - margin['bottom']
 
             width = section.get('width', (
-                self.pdf.page_width - margin['right'] - margin['left']
+                page_width - margin['right'] - margin['left']
             ))
             height = section.get('height', (
-                self.pdf.page_height - margin['top'] - margin['bottom']
+                page_height - margin['top'] - margin['bottom']
             ))
             x = section.get('x', 0)
             y = section.get('y', 0)
             self.pdf.add_running_section(section, width, height, x, y)
 
-    def run(self):
+    def run(self) -> None:
+        """Method to process this document sections.
+        """
         for section in self.sections:
-            self.process_section(section)
+            self._process_section(section)
 
-    def process_section(self, section):
+    def _process_section(self, section: dict) -> None:
+        """Method to process a section from this document.
+
+        Args:
+            section (dict): a dict representing the section to be processed.
+        """
         page_style = section.get('page_style', {})
-        page_args = {p: page_style[p] for p in PAGE_PROPS if p in page_style}
+        page_args_ = {k: page_style[k] for k in PAGE_PROPS if k in page_style}
+        page_args = deepcopy(self.page_args)
+        page_args.update(page_args_)
         self.pdf.setup_page(**page_args)
+
         running_sections = section.get('running_sections', [])
-        self.set_running_sections(running_sections)
+        self._set_running_sections(running_sections)
+
+        self.pdf.add_page()
 
         pdf = self.pdf
-        self.width = pdf.page_width - pdf.margin['right'] - pdf.margin['left']
-        self.y = pdf.page_height - pdf.margin['top']
+        self.width = pdf.page.width - pdf.margin['right'] - pdf.margin['left']
+        self.y = pdf.page.height - pdf.margin['top']
         self.height = self.y - pdf.margin['bottom']
         self.x = pdf.margin['left']
 
@@ -123,18 +303,24 @@ class PDFDocument:
         if page_style.get('page_numbering_reset', False):
             self.pdf.page_numbering_offset = -len(self.pdf.pages)
 
+        section_style = deepcopy(self.style_args)
+        section_style.update(process_style(section.get('style', {}), self.pdf))
+        section['style'] = section_style
+
         self.section = self.pdf._create_content(
             section, self.width, self.height, self.x, self.y
         )
-
-        self.add_pages()
-
-    def add_pages(self):
+        self._add_content()
         while not self.section.finished:
-            self.add_page()
+            self.pdf.add_page()
+            self._add_content()
 
-    def add_page(self):
-        self.pdf.add_page()
+    def _add_content(self) -> None:
+        """Method to add the section contents to the current page.
+
+        Raises:
+            Exception: if the footnotes added to the page are very large.
+        """
         content_part = self.section.pdf_content_part
         first_page = content_part is None
         if first_page:
@@ -145,11 +331,11 @@ class PDFDocument:
             section_element_index = deepcopy(content_part.section_element_index)
             section_delayed = deepcopy(content_part.section_delayed)
             children_memory = deepcopy(content_part.children_memory)
-        
+
         self.section.run(height=self.height)
         if first_page:
             content_part = self.section.pdf_content_part
-        footnotes_obj = self.process_footnotes()
+        footnotes_obj = self._process_footnotes()
 
         if footnotes_obj is None:
             self.pdf._add_graphics([*self.section.fills,*self.section.lines])
@@ -163,15 +349,15 @@ class PDFDocument:
                 )
             new_height = self.height - footnotes_obj.current_height \
                 - self.footnotes_margin
-            
+
             content_part.section_element_index = section_element_index
             content_part.section_delayed = section_delayed
             content_part.children_memory = children_memory
 
             self.pdf._content(self.section, height=new_height)
 
-            footnotes_obj = self.process_footnotes()
-            
+            footnotes_obj = self._process_footnotes()
+
             if footnotes_obj is not None:
                 self.pdf.page._y = self.pdf.margin['bottom'] + footnotes_height
 
@@ -182,7 +368,15 @@ class PDFDocument:
                 ))
                 self.pdf._content(footnotes_obj, height=self.height)
 
-    def check_footnote(self, ids, page_footnotes):
+    def _check_footnote(self, ids: dict, page_footnotes: list) -> None:
+        """Method that extract the footnotes from the ids passed as argument,
+        and adds them to the ``page_footnotes`` list argument.
+
+        Args:
+            ids (dict): the ids list.
+            page_footnotes (list): the list of the page footnotes to save the
+                footnotes found in the ids.
+        """
         for id_, rects in ids.items():
             if len(rects) == 0:
                 continue
@@ -191,12 +385,28 @@ class PDFDocument:
                 page_footnotes.append(self.footnotes[index])
                 self.pdf.context[id_] = len(page_footnotes)
 
-    def check_footnotes(self, page_footnotes):
+    def _check_footnotes(self, page_footnotes: list) -> None:
+        """Method that loops through the current section parts, extracting the
+        footnotes from each part's ids.
+
+        Args:
+            page_footnotes (list): the list of the page footnotes to save the
+                footnotes found in the ids.
+        """
         for part in self.section.parts:
             if part['type'] == 'paragraph':
-                self.check_footnote(part['ids'], page_footnotes)
-        
-    def get_footnotes_obj(self, page_footnotes):
+                self._check_footnote(part['ids'], page_footnotes)
+
+    def _get_footnotes_obj(self, page_footnotes: list) -> 'PDFContent':
+        """Method to create the PDFContent object containing the footnotes of
+        the current page.
+
+        Args:
+            page_footnotes (list): the list of the page footnotes
+
+        Returns:
+            PDFContent: object containing the footnotes.
+        """
         content = {'style': '$footnotes', 'content': []}
         for index, footnote in enumerate(page_footnotes):
             footnote = deepcopy(footnote)
@@ -211,18 +421,38 @@ class PDFDocument:
         )
         footnote_obj.run()
         return footnote_obj
-    
-    def process_footnotes(self):
+
+    def _process_footnotes(self) -> 'PDFContent':
+        """Method to extract the footnotes from the current section parts, and
+        create the PDFContent object containing the footnotes of
+        the current page.
+
+        Returns:
+            PDFContent: object containing the footnotes.
+        """
         page_footnotes = []
-        self.check_footnotes(page_footnotes)
+        self._check_footnotes(page_footnotes)
         if len(page_footnotes) == 0:
             return None
-        return self.get_footnotes_obj(page_footnotes)
+        return self._get_footnotes_obj(page_footnotes)
 
-    def output(self, buffer):
+    def output(self, buffer: Any) -> None:
+        """Method to create the PDF file.
+
+        Args:
+            buffer (file_like): a file-like object to write the PDF file into.
+        """
         self.pdf.output(buffer)
 
-def build_pdf(document, buffer, context=None):
+def build_pdf(document: dict, buffer: Any, context: dict=None) -> None:
+    """Function to build a PDF document using a PDFDocument instance. This is
+    the easiest way to build a PDF document file in this library. For more
+    information about arguments ``document``, and ``context`` see
+    :class:`pdfme.document.PDFDocument`.
+
+    Args:
+        buffer (file_like): a file-like object to write the PDF file into.
+    """
     doc = PDFDocument(document, context)
     doc.run()
     doc.output(buffer)
