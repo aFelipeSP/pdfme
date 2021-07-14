@@ -1003,6 +1003,7 @@ class PDF:
         self._build_dests()
         self.base.output(buffer)
 
+
 from .base import PDFBase
 from .content import PDFContent
 from .fonts import PDFFonts

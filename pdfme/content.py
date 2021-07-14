@@ -723,7 +723,7 @@ class PDFContentPart:
         self.update_dimensions(style)
 
         if len(keys) > 0 or 'paragraph' in element:
-            return self.process_text(element, style, element_style, keys)
+            return self.process_text(element, style, element_style)
         elif 'image' in element:
             return self.process_image(element, style)
         elif 'table' in element or 'table_delayed' in element:
@@ -732,8 +732,7 @@ class PDFContentPart:
             return self.process_child(element, style, last)
 
     def process_text(
-        self, element: dict, style: dict, element_style: dict,
-        paragraph_keys: list
+        self, element: dict, style: dict, element_style: dict
     ) -> dict:
         """Function that tries to add a paragraph to the current column
         rectangle, and add the remainder to the delayed list
@@ -743,7 +742,6 @@ class PDFContentPart:
             style (dict): The style of the paragraph, combined with the style
                 of this element.
             element_style (dict): The style of the paragraph.
-            paragraph_keys (list): The keys of the paragraph dict.
 
         Returns:
             dict: Containing instructions to the caller.
@@ -760,10 +758,9 @@ class PDFContentPart:
             par_style = {
                 v: style.get(v) for v in PARAGRAPH_PROPERTIES if v in style
             }
-            key = paragraph_keys[0]
+            element['style'] = style.copy()
             pdf_text = PDFText(
-                {key: element[key], 'style': style.copy()},
-                self.width, self.max_height, self.x, self.y,
+                element, self.width, self.max_height, self.x, self.y,
                 fonts=self.p.fonts, pdf=self.p.pdf, **par_style
             )
             remaining = {'paragraph': pdf_text, 'style': element_style}

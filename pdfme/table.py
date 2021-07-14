@@ -761,7 +761,7 @@ class PDFTable:
         real_height = 0
         if len(keys) > 0 or self._is_delayed_type(element, 'text'):
             real_height = self.process_text(
-                col, element, x, y, width, height, style, keys, delayed
+                col, element, x, y, width, height, style, delayed
             )
         elif self.is_type(element, 'image'):
             real_height = self.process_image(
@@ -788,7 +788,7 @@ class PDFTable:
 
     def process_text(
         self, col: int, element: dict, x: Number, y: Number, width: Number,
-        height: Number, style: dict, keys: list, delayed: dict
+        height: Number, style: dict, delayed: dict
     ) -> float:
         """Method to add a paragraph to a cell.
 
@@ -800,7 +800,6 @@ class PDFTable:
             width (Number): the width of the paragraph.
             height (Number): the height of the paragraph.
             style (dict): the paragraph style.
-            keys (list): the list of keys containing the paragraph element.
             delayed (dict): the delayed element to add the current paragraph if
                 it can not be added completely to the current cell.
 
@@ -815,11 +814,10 @@ class PDFTable:
             par_style = {
                 v: style.get(v) for v in PARAGRAPH_PROPS if v in style
             }
-            key = keys[0]
+            element['style'] = style
             pdf_text = PDFText(
-                {key: element[key], 'style': style},
-                width, height, x, y,
-                fonts=self.fonts, pdf=self.pdf, **par_style
+                element, width, height, x, y, fonts=self.fonts, pdf=self.pdf,
+                **par_style
             )
 
         result = pdf_text.run()

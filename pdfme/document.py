@@ -284,6 +284,13 @@ class PDFDocument:
         running_sections = section.get('running_sections', [])
         self._set_running_sections(running_sections)
 
+        if 'page_numbering_offset' in page_style:
+            self.pdf.page_numbering_offset = page_style['page_numbering_offset']
+        if 'page_numbering_style' in page_style:
+            self.pdf.page_numbering_style = page_style['page_numbering_style']
+        if page_style.get('page_numbering_reset', False):
+            self.pdf.page_numbering_offset = -len(self.pdf.pages)
+
         self.pdf.add_page()
 
         pdf = self.pdf
@@ -291,13 +298,6 @@ class PDFDocument:
         self.y = pdf.page.height - pdf.margin['top']
         self.height = self.y - pdf.margin['bottom']
         self.x = pdf.margin['left']
-
-        if 'page_numbering_offset' in page_style:
-            self.pdf.page_numbering_offset = page_style['page_numbering_offset']
-        if 'page_numbering_style' in page_style:
-            self.pdf.page_numbering_style = page_style['page_numbering_style']
-        if page_style.get('page_numbering_reset', False):
-            self.pdf.page_numbering_offset = -len(self.pdf.pages)
 
         section_style = deepcopy(self.style_args)
         section_style.update(process_style(section.get('style', {}), self.pdf))

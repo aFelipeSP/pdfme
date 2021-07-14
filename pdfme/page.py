@@ -132,7 +132,7 @@ class PDFPage:
             rect (list): a list with the following information about the
                 annotation: [x, y, width, height].
         """
-        self.add_annot({'A': uri_id}, rect)
+        self.add_annot({'A': uri_id, 'H': b'/N'}, rect)
 
     def add_reference(self, dest: str, rect: list) -> None:
         """Method to add a reference annotation (a clickable area, that takes
