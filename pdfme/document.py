@@ -1,10 +1,6 @@
 from copy import deepcopy
 from typing import Any, Iterable, Union
 
-from .content import PDFContent
-from .pdf import PDF
-from .utils import process_style
-
 STYLE_PROPS = dict(
     f='font_family', s='font_size', c='font_color', text_align='text_align',
     line_height='line_height', indent='indent'
@@ -456,3 +452,7 @@ def build_pdf(document: dict, buffer: Any, context: dict=None) -> None:
     doc = PDFDocument(document, context)
     doc.run()
     doc.output(buffer)
+
+from .content import PDFContent
+from .pdf import PDF
+from .utils import process_style

@@ -1,7 +1,18 @@
-from copy import deepcopy
 import re
+from typing import Iterable, Union
 class PDFObject:
-    def __init__(self, id_=None, obj=None):
+    """A class that represents a PDF object.
+
+    This object has a :class:`pdfme.parser.PDFRef` ``id`` attribute representing
+    the id of this object inside the PDF document, and acts as a dict, so the
+    user can update any property of this PDF object like you would do with a
+    dict.
+
+    Args:
+        id_ (PDFRef): The id of this object inside the PDF document.
+        obj (dict, optional): the dict representing the PDF object.
+    """
+    def __init__(self, id_: 'PDFRef', obj: dict=None) -> None:
         if not isinstance(id_, PDFRef):
             raise TypeError('id_ argument must be of type PDFRef')
         self.id = id_
@@ -20,13 +31,38 @@ class PDFObject:
         return name in self.value
 
 class PDFRef(int):
+    """An ``int`` representing the id of a PDF object.
+
+    This is a regular ``int`` that has an additional property called ``ref``
+    with a representation of this object, to be referenced elsewhere in the PDF
+    document.
+    """
     def __new__(cls, id_):
         return int.__new__(cls, id_)
     @property
-    def ref(self):
+    def ref(self) -> bytes:
+        """
+        Returns:
+            bytes: bytes with a representation of this object, to be referenced
+            elsewhere in the PDF document.
+        """
         return subs('{} 0 R', self)
 
-def parse_obj(obj):
+ObjectType = Union[
+    PDFObject, PDFRef, dict, list, tuple, set, bytes, bool, int, float, str
+]
+
+def parse_obj(obj: ObjectType) -> bytes:
+    """Function to convert a python object to a bytes object representing the
+    corresponding PDF object.
+
+    Args:
+        obj (PDFObject, PDFRef, dict, list, tuple, set, bytes, bool, int, float,
+            str): the object to be converted to a PDF object.
+
+    Returns:
+        bytes: bytes representing the corresponding PDF object.
+    """
     if isinstance(obj, PDFObject):
         return parse_obj(obj.value)
     elif isinstance(obj, PDFRef):
@@ -48,7 +84,16 @@ def parse_obj(obj):
         return ('(' + re.sub(r'([()])', r'\\\1', obj) + ')').encode('latin')
     
 
-def parse_dict(obj):
+def parse_dict(obj: dict) -> bytes:
+    """Function to convert a python dict to a bytes object representing the
+    corresponding PDF Dictionary.
+
+    Args:
+        obj (dict): the dict to be converted to a PDF Dictionary.
+
+    Returns:
+        bytes: bytes representing the corresponding PDF Dictionary.
+    """
     bytes_ = b'<<'
     for key, value in obj.items():
         bytes_ += b'/' + key.encode('latin')
@@ -58,7 +103,16 @@ def parse_dict(obj):
 
     return bytes_ + b'>>'
 
-def parse_list(obj):
+def parse_list(obj: Iterable) -> bytes:
+    """Function to convert a python iterable to a bytes object representing the
+    corresponding PDF Array.
+
+    Args:
+        obj (iterable): the iterable to be converted to a PDF Array.
+
+    Returns:
+        bytes: bytes representing the corresponding PDF Array.
+    """
     bytes_ = b'['
     for i, value in enumerate(obj):
         ret = parse_obj(value)
@@ -67,7 +121,26 @@ def parse_list(obj):
 
     return bytes_ + b']'
 
-def parse_stream(obj):
+def parse_stream(obj: dict) -> bytes:
+    """Function to convert a dict representing a PDF Stream object to a bytes
+    object.
+
+    A dict representing a PDF stream should have a ``'__stream__`` key
+    containing the stream bytes. You don't have to include ``Length`` key in the
+    dict, as it is calculated by us. The value of ``'__stream__'`` key must
+    be of type ``bytes`` or a dict whose values are of type ``bytes``.
+    If you include a ``Filter`` key, a encoding is automatically done in the
+    stream (see :meth:`pdfme.encoders.encode_stream` function for
+    supported encoders). If the contents of the stream are already encoded
+    using the filter in ``Filter`` key, you can skip the encoding process
+    by including the ``__skip_filter__`` key.
+
+    Args:
+        obj (dict): the dict representing a PDF stream.
+
+    Returns:
+        bytes: bytes representing the corresponding PDF Stream.
+    """
     stream_ = obj.pop('__stream__')
     skip_filter = obj.pop('__skip_filter__', False)
 

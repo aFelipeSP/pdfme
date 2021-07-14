@@ -3,11 +3,6 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any, Iterable, Union
 
-from .utils import (
-    create_graphics, get_page_size, get_paragraph_stream,
-    parse_margin, parse_style_str, process_style, to_roman
-)
-
 Number = Union[int, float]
 PageType = Union[Number, str, Iterable[Number]]
 MarginType = Union[int, float, Iterable[Number], dict]
@@ -727,7 +722,7 @@ class PDF:
         style_ = self._default_content_style()
         style_.update(process_style(style, self))
         pdf_table = PDFTable(
-            content, self.fonts, width, height, x, y,
+            content, self.fonts, x, y, width, height,
             widths, style_, borders, fills, self
         )
         return pdf_table
@@ -1015,3 +1010,7 @@ from .image import PDFImage
 from .page import PDFPage
 from .table import PDFTable
 from .text import PDFText
+from .utils import (
+    create_graphics, get_page_size, get_paragraph_stream,
+    parse_margin, parse_style_str, process_style, to_roman
+)

@@ -1,11 +1,6 @@
 import copy
 from typing import Union
 
-from .fonts import PDFFonts
-from .image import PDFImage
-from .text import PDFText
-from .utils import parse_style_str, process_style
-
 TABLE_PROPERTIES = ('widths', 'borders', 'fills')
 PARAGRAPH_PROPERTIES = (
     'text_align', 'line_height', 'indent',
@@ -144,7 +139,7 @@ class PDFContent:
         height (int, float): The height of the rectangle where the contents will
             be arranged.
         pdf (PDF, optional): A PDF object used to get string styles inside the
-            elements. Defaults to None.
+            elements.
 
     Raises:
         TypeError: if ``content`` is not a dict
@@ -153,7 +148,7 @@ class PDFContent:
     """
 
     def __init__(
-        self, content: dict, fonts: PDFFonts, x: Number, y: Number,
+        self, content: dict, fonts: 'PDFFonts', x: Number, y: Number,
         width: Number, height: Number, pdf: 'PDF'=None
     ) -> None:
         if not isinstance(content, dict):
@@ -176,13 +171,13 @@ class PDFContent:
 
         Args:
             x (int, float, optional): The x coordinate of the left of the
-                rectangle. Defaults to None.
+                rectangle.
             y (int, float, optional): The y coordinate of the top of the
-                rectangle. Defaults to None.
+                rectangle.
             width (int, float, optional): The width of the rectangle where the
-                contents will be arranged. Defaults to None.
+                contents will be arranged.
             height (int, float, optional): The height of the rectangle where the
-                contents will be arranged. Defaults to None.
+                contents will be arranged.
         """
         if x is not None:
             self.x = x
@@ -258,11 +253,11 @@ class PDFContentPart:
         parent (PDFContentPart, optional): If not None, this is the parent
             of the current object, and it's needed because the arranging process
             made by this object affects the parent arranging process and
-            viceversa. Defaults to None.
+            viceversa.
         last (bool, optional): This tells whether this is the last element
             of the list of elements of the parent. Defaults to False.
         inherited_style (dict, optional): The accumulated styles of all of
-            the ancestors of the current object. Defaults to None.
+            the ancestors of the current object.
 
     Raises:
         TypeError: If content is not a dict
@@ -848,8 +843,9 @@ class PDFContentPart:
                 if v in element
             }
             pdf_table = PDFTable(
-                element['table'], self.p.fonts, self.width, self.max_height,
-                self.x, self.y, style=style, pdf=self.p.pdf, **table_props
+                element['table'], self.p.fonts, self.x, self.y,
+                self.width, self.max_height, style=style, pdf=self.p.pdf,
+                **table_props
             )
             remaining = {'table_delayed': pdf_table, 'style': element_style}
 
@@ -916,5 +912,9 @@ class PDFContentPart:
             self.starting = False
             return {'delayed': None, 'next': False}
 
-from .table import PDFTable
+from .fonts import PDFFonts
+from .image import PDFImage
 from .pdf import PDF
+from .text import PDFText
+from .table import PDFTable
+from .utils import parse_style_str, process_style

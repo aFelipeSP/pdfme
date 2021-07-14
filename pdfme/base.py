@@ -34,25 +34,18 @@ class PDFBase:
         }
         base.add(page_dict)
 
-    You can add a ``stream`` object by adding a ``dict`` with a key named
-    ``__stream__``, and you don't have to include ``Length`` key in the
-    dict, as it is calculated by us. The value of ``__stream__`` key must
-    be of type ``bytes`` or a dict whose values are of type ``bytes``.
-    If you include a ``Filter`` key, a encoding is automatically done in the
-    stream (see :meth:`pdfme.encoders.encode_stream` function for
-    supported encoders). If the contents of the stream are already encoded
-    using the filter in ``Filter`` key, you can skip the encoding process
-    by including the ``__skip_filter__`` key.
+    You can add a ``stream`` object by adding a ``dict`` like the one described
+    in function :func:`pdfme.parser.parse_stream`.
 
     This class behaves like a ``list``, and you can get a ``PDFObject`` by
-    index (you can get the index from a ``PDFObject.id`` attribute), set
+    index (you can get the index from a ``PDFObject.id`` attribute), update
     by index, iterate through the PDF PDFObjects and use ``len`` to get the
     amount of objects in this list-like class.
 
     Args:
         version (str, optional): Version of the PDF file. Defaults to '1.5'.
         trailer (dict, optional): You can create your own trailer dict and
-            pass it as this argument. Defaults to None.
+            pass it as this argument.
 
     Raises:
         ValueError: If trailer is not dict type

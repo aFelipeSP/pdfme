@@ -1,11 +1,30 @@
-from io import BytesIO
-from pathlib import Path
 import struct
 import traceback
+from io import BytesIO, BufferedReader
+from pathlib import Path
+from typing import Union
 
+ImageType = Union[str, Path, BytesIO]
 class PDFImage:
+    """Class that represents a PDF image.
+
+    You can pass the location path (``str`` or ``pathlib.Path`` format) of the
+    image, or pass a file-like object (``io.BytesIO``) with the image bytes, the
+    extension of the image, and the image name.
+
+    Only JPEG image format is supported in this moment.
+
+    Args:
+        image (str, pathlib.Path, BytesIO): The path or file-like object of the
+            image.
+        extension (str, optional): If ``image`` is path-like object, this
+            argument should contain the extension of the image.
+        image_name (str, optional): If ``image`` is path-like object, this
+            argument should contain the name of the image. This name should be
+            unique among the images added to the same PDF document.
+    """
     def __init__(
-        self, image, extension=None, image_name=None
+        self, image: ImageType, extension: str=None, image_name: str=None
     ):
         image_bytes = None
         try:
@@ -55,7 +74,18 @@ class PDFImage:
             if image_bytes is not None:
                 image_bytes.close()
 
-    def parse_jpg(self, bytes_):
+    def parse_jpg(self, bytes_: Union[BytesIO, BufferedReader]) -> None:
+        """Method to extract metadata from a JPEG image ``bytes_`` needed to
+        embed this image in a PDF document.
+
+        This method creates this instance's attibute ``pdf_obj``, containing
+        a dict that can be added to a :class:`pdfme.base.PDFBase` instance as
+        a PDF Stream object that represents this image.
+
+        Args:
+            bytes_ (BytesIO, BufferedReader): A file-like object containing the
+                image.
+        """
         try:
             while True:
                 markerHigh, markerLow = struct.unpack('BB', bytes_.read(2))

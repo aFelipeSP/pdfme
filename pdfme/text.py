@@ -2,12 +2,6 @@ import re
 from copy import deepcopy
 from typing import Optional, Union
 
-from .color import PDFColor
-from .fonts import PDFFonts
-from .utils import (
-    default, get_paragraph_stream, parse_style_str, process_style
-)
-
 PARAGRAPH_DEFAULTS = {'text_align': 'l', 'line_height': 1.1, 'indent': 0}
 TEXT_DEFAULTS = {'f': 'Helvetica', 'c': 0.1, 's': 11, 'r': 0, 'bg': None}
 
@@ -24,7 +18,7 @@ class PDFState:
         fonts (PDFFonts): the fonts instance with the information about
             the fonts already added to the PDF document.
     """
-    def __init__(self, style: dict, fonts: PDFFonts) -> None:
+    def __init__(self, style: dict, fonts: 'PDFFonts') -> None:
         self.font_family = style['f']
 
         f_mode = ''
@@ -74,7 +68,7 @@ class PDFTextLinePart:
             the fonts already added to the PDF document.
         ids (list, optional): the ids of this part.
     """
-    def __init__(self, style: dict, fonts: PDFFonts, ids: list=None) -> None:
+    def __init__(self, style: dict, fonts: 'PDFFonts', ids: list=None) -> None:
         self.fonts = fonts
 
         self.style = style
@@ -190,7 +184,7 @@ class PDFTextLine:
             the line, added to the actual line height.
     """
     def __init__(
-        self, fonts: PDFFonts, max_width: Number=0, text_align: str=None,
+        self, fonts: 'PDFFonts', max_width: Number=0, text_align: str=None,
         top_margin: Number=0
     ) -> None:
         self.fonts = fonts
@@ -198,7 +192,8 @@ class PDFTextLine:
         self.line_parts = []
 
         self.justify_min_factor = 0.7
-        self.text_align = default(text_align, PARAGRAPH_DEFAULTS['text_align'])
+        self.text_align = PARAGRAPH_DEFAULTS['text_align'] \
+            if text_align is None else text_align
 
         self.factor = 1 if self.text_align != 'j' else self.justify_min_factor
 
@@ -434,17 +429,18 @@ class PDFTextBase:
     """
     def __init__(
         self, content: Union[str, list, tuple], width: Number, height: Number,
-        x: Number=0, y: Number=0, fonts: PDFFonts=None, text_align: str=None,
+        x: Number=0, y: Number=0, fonts: 'PDFFonts'=None, text_align: str=None,
         line_height: Number=None, indent: Number=0, list_text: str=None,
         list_indent: Number=None, list_style: dict=None, pdf: 'PDF'=None
     ) -> None:
         self.fonts = fonts
         self.setup(x, y, width, height)
         self.indent = indent
-        self.text_align = default(text_align, PARAGRAPH_DEFAULTS['text_align'])
-        self.line_height = default(
-            line_height, PARAGRAPH_DEFAULTS['line_height']
-        )
+        self.text_align = PARAGRAPH_DEFAULTS['text_align'] \
+            if text_align is None else text_align
+        self.line_height = PARAGRAPH_DEFAULTS['line_height'] \
+            if line_height is None else line_height
+
         self.list_text = list_text
         self.list_indent = list_indent
         self.list_style = list_style
@@ -1108,7 +1104,7 @@ class PDFText(PDFTextBase):
     """
     def __init__(
         self, content: ContentType, width: Number, height: Number,
-        x: Number=0, y: Number=0, fonts: PDFFonts=None, text_align: str=None,
+        x: Number=0, y: Number=0, fonts: 'PDFFonts'=None, text_align: str=None,
         line_height: Number=None, indent: Number=0, list_text: str=None,
         list_indent: Number=None, list_style: dict=None, pdf: 'PDF'=None
     ) -> None:
@@ -1242,4 +1238,7 @@ class PDFText(PDFTextBase):
         if text_part is not None and text_part['text'] == '':
             self.content.remove(text_part)
 
+from .color import PDFColor
+from .fonts import PDFFonts
 from .pdf import PDF
+from .utils import get_paragraph_stream, parse_style_str, process_style
