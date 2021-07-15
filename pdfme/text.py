@@ -1,6 +1,8 @@
+import json
 import re
 from copy import deepcopy
 from typing import Optional, Union
+from uuid import uuid4
 
 PARAGRAPH_DEFAULTS = {'text_align': 'l', 'line_height': 1.1, 'indent': 0}
 TEXT_DEFAULTS = {'f': 'Helvetica', 'c': 0.1, 's': 11, 'r': 0, 'bg': None}
@@ -1019,6 +1021,16 @@ class PDFText(PDFTextBase):
     * ``'uri'``: this is a string with a reference to a web resource,
       that will turn this text part in a link to that web page.
 
+    * ``'outline'``: an outline is a label that is shown in the outlines panel
+      of the PDF reader. This outlines show the structure of the document.
+      This attribute is a dict with the following optional keys:
+      
+      * ``level``: an int with the level of this outline in the outlines tree.
+        The default value is 1.
+        
+      * ``text``: the text to be shown in the outlines panel for this outline.
+        The default value is the contents of this part.
+
     * ``'ids'``: when method ``run`` is called, dict attr ``result`` is
       available with information to add the paragraph to the PDF, and
       within that information you'll find a key ``ids``, a dict with
@@ -1219,15 +1231,26 @@ class PDFText(PDFTextBase):
         if part_var is not None:
             elements = ['0']
 
-        label = content.get('label', None)
+        label = content.get('label')
         if label is not None:
             text_part['ids'].append('$label:' + label)
-        ref = content.get('ref', None)
+        ref = content.get('ref')
         if ref is not None:
             text_part['ids'].append('$ref:' + ref)
-        uri = content.get('uri', None)
+        uri = content.get('uri')
         if uri is not None:
             text_part['ids'].append('$uri:' + uri)
+        outline = content.get('outline')
+        if isinstance(outline, dict):
+            text = outline.get('text', ''.join(str(e) for e in elements))
+            level = outline.get('level', 1)
+            if label is None:
+                outline_label = str(uuid4())
+                text_part['ids'].append('$label:' + outline_label)
+            else:
+                outline_label = label
+            outline_ = {'text': text, 'level': level, 'label': outline_label}
+            text_part['ids'].append('$outline:{}'.format(json.dumps(outline_)))
 
         is_last_string = False
 

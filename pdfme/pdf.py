@@ -1,4 +1,5 @@
 import copy
+import json
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Iterable, Union
@@ -140,13 +141,15 @@ class PDF:
             paragraph. See :class:`pdfme.text.PDFText`.
         indent (int, float, optional): space between left of the paragraph, and
             the beggining of the first line. See :class:`pdfme.text.PDFText`.
+        outlines_level (int, optional): the level of the outlines to be
+            displayed on the outlines panel when the PDF document is opened.
     """
     def __init__(
         self, page_size: PageType='a4', rotate_page: bool=False,
         margin: MarginType=56.693, page_numbering_offset: Number=0,
         page_numbering_style: str='arabic', font_family: str='Helvetica',
         font_size: Number=11, font_color: ColorType=0.1, text_align: str='l',
-        line_height: Number=1.1, indent: Number=0
+        line_height: Number=1.1, indent: Number=0, outlines_level: int=1
     ) -> None:
         self.setup_page(page_size, rotate_page, margin)
         self.page_numbering_offset = page_numbering_offset
@@ -158,6 +161,7 @@ class PDF:
         self.text_align = text_align
         self.line_height = line_height
         self.indent = indent
+        self.outlines_level = outlines_level
 
         self.formats = {}
         self.context = {}
@@ -166,6 +170,7 @@ class PDF:
         self.uris = {}
         self.pages = []
         self.running_sections = []
+        self.outlines = []
 
         self.base = PDFBase()
         self.root = self.base.add({ 'Type': b'/Catalog'})
@@ -625,6 +630,13 @@ class PDF:
                             round(x + r[2], 3), round(y + r[3], 3)
                         ]
                     )
+            elif id_.startswith('$outline:'):
+                outline_data = json.loads(id_[9:])
+                outline = self.outlines
+                for _ in range(outline_data['level'] - 1):
+                    outline = outline[-1].setdefault('children', [])
+
+                outline.append(outline_data)
 
         if move == 'bottom':
             self.page.y += height
@@ -988,6 +1000,62 @@ class PDF:
         dests.sort()
         self._build_dests_tree(dests, [self.dests[k] for k in dests])
 
+    def _build_outlines_tree(
+        self, outlines: list, parent: 'PDFObject', level: int
+    ) -> None:
+        """Method to build a PDF outline tree.
+
+        Args:
+            outlines (list): list of outlines.
+            parent (PDFObject): the parent of the passed outlines.
+            level (int): the level of the passed outlines.
+        """
+        prev = None
+        count = 0
+        obj = None
+        for outline in outlines:
+            count += 1
+
+            obj = self.base.add({
+                'Title': outline['text'],
+                'Parent': parent.id,
+                'Dest': outline['label']
+            })
+
+            if prev is not None:
+                obj['Prev'] = prev.id
+                prev['Next'] = obj.id
+            else:
+                parent['First'] = obj.id
+
+            prev = obj
+
+            children = outline.get('children', [])
+            if len(children) > 0:
+                count_ = self._build_outlines_tree(children, obj, level - 1)
+                if level > 1:
+                    count += count_
+                    obj['Count'] = count_
+                else:
+                    obj['Count'] = -1
+
+        parent['Last'] = obj.id
+        return count
+
+    def _build_outlines(self) -> None:
+        """Method to create and add the outlines tree to the document.
+        """
+        if len(self.outlines) == 0:
+            return
+
+        obj = self.base.add({
+            'Type': b'/Outlines'
+        })
+        self.root['PageMode'] = b'/UseOutlines'
+        self.root['Outlines'] = obj.id
+        n = self._build_outlines_tree(self.outlines, obj, self.outlines_level)
+        obj['Count'] = n
+
     def output(self, buffer: Any) -> None:
         """Method to create the PDF file.
 
@@ -1001,14 +1069,15 @@ class PDF:
             raise Exception("pdf doesn't have any pages")
         self._build_pages_tree(self.pages)
         self._build_dests()
+        self._build_outlines()
         self.base.output(buffer)
-
 
 from .base import PDFBase
 from .content import PDFContent
 from .fonts import PDFFonts
 from .image import PDFImage
 from .page import PDFPage
+from .parser import PDFObject
 from .table import PDFTable
 from .text import PDFText
 from .utils import (

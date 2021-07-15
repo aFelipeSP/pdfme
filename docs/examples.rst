@@ -49,7 +49,10 @@ almost all of the functionalities of this library.
                 "running_sections": ["footer"],
                 "content": [
 
-                    {".": "A Title", "style": "title", "label": "title1"},
+                    {
+                        ".": "A Title", "style": "title", "label": "title1",
+                        "outline": {"level": 1, "text": "A different title 1"}
+                    },
 
                     ["This is a paragraph with a ", {".b": "bold part"}, ", a ",
                     {".": "link", "style": "url", "uri": "https://some.url.com"},
@@ -102,7 +105,10 @@ almost all of the functionalities of this library.
                 "running_sections": ["header", "footer"],
                 "content": [
 
-                    {".": "Title 2", "style": "title", "label": "title2"},
+                    {
+                        ".": "Title 2", "style": "title", "label": "title2",
+                        "outline": {}
+                    },
 
                     ["This is a paragraph with a reference to ",
                     {".": "Title 1.", "style": "url", "ref": "title1"}],
