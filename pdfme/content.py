@@ -12,7 +12,8 @@ StrOrDict = Union[str, dict]
 ProcessElement = Union[str, list, tuple, dict]
 class PDFContent:
     """This class represents a group of elements (paragraphs, images, tables)
-    to be added to a :class:`pdfme.pdf.PDF` instance.
+    to be added to a :class:`pdfme.pdf.PDF` instance; what is called a "content
+    box" in this library.
 
     This class receives as the first argument a dict representing the
     layout of the elements that are going to be added to the PDF.
@@ -42,6 +43,10 @@ class PDFContent:
     it again. You can check the ``content`` method in `PDF`_ module to see how
     this process is done.
 
+    This process of creating new pages to fit all of the elements of a content
+    box is done automatically when you use :class:`pdfme.document.PDFDocument`
+    or ::func:`pdfme.document.build_pdf`
+
     A ``cols`` key with a dict as a value can be included to arrange the
     elements in more than one column. For example, to use 2 columns, and to set
     a gap space between the 2 columns of 20 points, a dict like this one can be
@@ -57,14 +62,13 @@ class PDFContent:
     The elements in the ``content`` list can be one of the following:
 
     * A paragraph that can be a string, a list, a tuple or a dictionary with a
-      key starting with a ``.``. To know more about the meaning of these types
-      check :class:`pdfme.text.PDFText`. Additional to the keys
-      that can be included inside ``style`` key of a paragraph dict like the one
-      you pass to :class:`pdfme.text.PDFText`, you can include the following
-      too: ``text_align``, ``line_height``, ``indent``, ``list_text``,
-      ``list_style`` and ``list_indent``. For information about these attributes
-      check :class:`pdfme.text.PDFText`. Here is an example of a paragraph
-      dict:
+      key starting with a ``.``. To know more about paragraphs check
+      :class:`pdfme.text.PDFText`. Additional to the keys that can be included
+      inside ``style`` key of a paragraph dict like the one you pass to
+      :class:`pdfme.text.PDFText`, you can include the following too:
+      ``text_align``, ``line_height``, ``indent``, ``list_text``, ``list_style``
+      and ``list_indent``. For information about these attributes check
+      :class:`pdfme.text.PDFText`. Here is an example of a paragraph dict:
 
       .. code-block:: python
 
@@ -90,7 +94,7 @@ class PDFContent:
       fit a column through the key ``image_place``. This attribute can be
       "normal" or "flow"(default) and both of them will take the image to the
       next column or rectangle, but the second one will try to accommodate the
-      elements coming after the image to fiil the space left by it.
+      elements coming after the image to fill the space left by it.
       Here is an example of an image dict:
 
       .. code-block:: python
@@ -114,20 +118,19 @@ class PDFContent:
             'borders': [{'pos': 'h0,1,3;:', 'width': 2, 'color': 0}]
         }
 
-    * A content that can be a dict like the one explained before, and can
-      contain other elements inside it recursively. This can be used to insert
-      a new section with more columns (for example a 2 columns section, inside
-      another 2 columns section).
+    * A content box that can be a dict like the one being explained here, and can
+      can contain other elements inside it recursively. This can be used to
+      insert a new section with more columns (for example a 2 columns content
+      box, inside another 2 columns content box).
 
-    Each element in content can have margins to keep it separated from the other
-    elements, and these margins can be set inside the ``style`` dict with the
-    following keys: ``margin_top``, ``margin_left``, ``margin_bottom`` and
-    ``margin_right``. Default value for all of them is 0, except for
-    ``margin_bottom`` that have a default value of 5.
+    Each element in the content box can have margins to keep it separated from
+    the other elements, and these margins can be set inside the ``style`` dict
+    of the content box dict with the following keys: ``margin_top``, ``margin_left``,
+    ``margin_bottom`` and ``margin_right``. Default value for all of them is 0,
+    except for ``margin_bottom`` that have a default value of 5.
 
-    A content dict itself can have a ``style`` dict, and all of the content
-    children will inherit this style. They will only use the content
-    ``style`` properties not included in their own ``style`` dicts.
+    All of the children elements in the content box will inherit the
+    the content box style.
 
     Args:
         content (dict): A content dict.
@@ -538,13 +541,13 @@ class PDFContentPart:
     def reset(self) -> None:
         """Function that first checks if resetting process is over, and if not
         calculates a new value for attribute ``max_y`` and resets all of the
-        elements added to the rectangle so far to repeat the arranging process
+        elements added to the rectangle so far to repeat the arranging process.
 
         Returns:
             True if resetting process should continue or False if this process
             is done.
         """
-        if self.minim_diff_last and self.minim_diff_last - self.minim_diff < 1:
+        if self.minim_diff_last and self.minim_diff_last - self.minim_diff < 10:
             if self.minim_forward:
                 self.minim_diff *= 2
             else:

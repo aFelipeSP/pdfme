@@ -225,7 +225,7 @@ class PDFTextLine:
     def min_width(self) -> float:
         """Property that returns the width of the line, calculated using the
         minimum value for attribute ``factor``. This attribute is used to
-        increase or decrease the space character width inside a line to 
+        increase or decrease the space character width inside a line to
 
         Returns:
             float: the line width.
@@ -248,7 +248,7 @@ class PDFTextLine:
         return bottom
 
     def get_widths(self) -> tuple:
-        """This function returns the widths of the line. 
+        """This function returns the widths of the line.
 
         Returns:
             tuple: of 2 elements, the width on the words as the first, and the
@@ -376,10 +376,10 @@ class PDFTextBase:
 
     Each part represents a part of the paragraph with a different style or with
     a ``var`` or a specific ``id``.
-    
+
     The parts are added to this rectangle, until they are all
     inside of it, or until all of the vertical space is used and the rest of
-    the parts can not be added. In these two cases method ``run`` 
+    the parts can not be added. In these two cases method ``run``
     finishes, and the property ``finished`` will be True if all the parts
     were added, and False if the vertical space ran out.
     If ``finished`` is False, you can set a new rectangle (on a new page for
@@ -490,15 +490,15 @@ class PDFTextBase:
         The dict returned will have the following keys:
 
         * ``x`` the x coordinate.
-        
+
         * ``y`` the y coordinate.
-        
+
         * ``width`` of the paragraph.
 
         * ``height`` of the paragraph.
 
         * ``text_stream`` a string with the paragraphs PDF text stream.
-        
+
         * ``graphics_stream`` a string with the paragraphs PDF graphics stream.
 
         * ``used_fonts`` a set with tuples of 2 elements, first element the
@@ -511,7 +511,7 @@ class PDFTextBase:
 
         .. _PDF: https://github.com/aFelipeSP/pdfme/blob/main/pdfme/pdf.py
         """
-        
+
         return dict(
             x=self.x, y=self.y, width=self.width, height=self.current_height,
             text_stream=self.text, graphics_stream=self.graphics,
@@ -589,7 +589,7 @@ class PDFTextBase:
     ) -> dict:
         """Function to create the data needed to add this paragraph to the PDF
         document.
-        
+
         This function will try to add all of the dict parts in ``content``
         argument list (or tuple) to this paragraph rectangle. Check this class
         documentation for more information about this method.
@@ -631,7 +631,7 @@ class PDFTextBase:
         return self.result
 
     def add_part(self, part: dict, part_index: int) -> bool:
-        """Function used by methodm ``run`` to add one paragraph part at a time. 
+        """Function used by methodm ``run`` to add one paragraph part at a time.
 
         Args:
             part (dict): part to be added.
@@ -736,7 +736,7 @@ class PDFTextBase:
         to be added, and if this is a list paragraph, i.e. a paragraph with a
         something on its left (a bullet, a number, etc), this function will
         setup everything needed to display the text of the list paragraph, and
-        will adjust its width to make space for the list text. 
+        will adjust its width to make space for the list text.
 
         Raises:
             TypeError: if list_style or list_indent passed to this instance
@@ -961,36 +961,52 @@ class PDFText(PDFTextBase):
     """Class that represents a rich text paragraph to be added to a
     :class:`pdfme.pdf.PDF` instance.
 
-    This is a subclass of :class:`pdfme.text.PDFTextBase` and adds the logic
-    to let the user of this class pass content in a nested cascading "jsonish"
-    format (something like HTML), i.e. if you pass a dict to ``content``,
+    ``content`` argument should be a dict, with a key starting with a dot, like
+    ``'.b;s:10;c:1;u'`` for example (keep reading to learn more about the format
+    of this key), which we are going to refer to as the "the dot key" from here
+    on. The value for the dot key is a list/tuple containing strings or more
+    ``content`` dicts like the one we are describing here (you can have nested
+    ``content`` dicts), but for simplicity, you can pass a string (for non-rich
+    text) or a tuple/list with strings and more ``content`` dicts:
+
+    * If ``content`` argument is a string, it will become the following:
+
+      .. code-block:: python
+
+          { '.': [ <STRING>, ] }
+
+    * If ``content`` argument is a list/tuple, it will become the following:
+
+      .. code-block:: python
+
+          { '.': <LIST_OR_TUPLE> }
+
+    This is an example of a ``content`` argument:
+
+    .. code-block:: python
+
+        {
+            ".b;u;i;c:1;bg:0.5;f:Courier": [
+                "First part of the paragraph ",
+                {
+                    ".b:0;u:0;i:0;c:0;bg:": [
+                        "and here the second, nested inside the root paragraph,",
+                    ]
+                },
+                "and yet one more part before a ",
+                {".c:blue;u:1": "url link", "uri": "https://some.url.com"}
+            ]
+        }
+
+    This class is a subclass of :class:`pdfme.text.PDFTextBase` and adds the
+    logic to let the user of this class pass content in a nested cascading
+    "jsonish" format (like HTML), i.e. if you pass a dict to ``content``,
     and this dict has a ``style`` key, all of its children will inherit this
     style and will be able to overwrite some or all of the style parameters
     coming from it. The children will be able to pass their own
     style parameters to their children too, and so on.
 
-    This is done by transforming the nested structure passed to this class, to
-    a list of parts with the structure that can be passed to
-    :class:`pdfme.text.PDFTextBase`.
-
-    If ``content`` argument is a string, it will become the following:
-
-    .. code-block:: python
-
-        { '.': [ <STRING>, ] }
-
-    If ``content`` argument is a list or a tuple, it will become the following:
-
-    .. code-block:: python
-
-        { '.': <LIST_OR_TUPLE> }
-
-    If ``content`` argument is a dict, it should have one and only one key
-    starting with a dot, that contains a tuple or a list with the parts of
-    the paragraph, that can be in turn a string, list, tuple or a
-    new paragraph dict like the one we are describing here.
-
-    Other keys in this dict can be:
+    Additional to the dot key, ``content`` dicts can have the following keys:
 
     * ``'label'``: this is a string with a unique name (there should be
       only one label with this name in the whole document) representing
@@ -1016,11 +1032,10 @@ class PDFText(PDFTextBase):
       This way you can reuse a repetitive string throughout the PDF
       document.
 
-    Style of the paragraph dicts can be described in the dot key
-    itself (a semi-colon separeted list of the attributes explained in
-    :func:`pdfme.utils.parse_style_str`) or in a ``style`` key too.
-    This ``style`` key must be in turn a dict containing any of the
-    following keys:
+    Style of the paragraph dicts can be defined in the dot key
+    itself (a string with a semi-colon separeted list of the attributes,
+    explained in :func:`pdfme.utils.parse_style_str`) or in a ``style`` dict
+    too. The attributes for a paragraph style are the following:
 
     * ``'b'`` (bool) to make text inside this part bold. Default is False.
 
@@ -1037,12 +1052,12 @@ class PDFText(PDFTextBase):
       Default is False.
 
     * ``'c'`` (int, float, list, tuple, str) to set the color of
-      the text inside this part. See :func:`pdfme.utils.parse_color`
+      the text inside this part. See :func:`pdfme.color.parse_color`
       for information about this attribute. Default is black.
 
     * ``'bg'`` (int, float, list, tuple, str) to set the background
       color of the text inside this part. See
-      :func:`pdfme.utils.parse_color` for information about this
+      :func:`pdfme.color.parse_color` for information about this
       attribute. Default is None.
 
     * ``'r'`` (int, float) to set the baseline of the text, relative
@@ -1051,7 +1066,8 @@ class PDFText(PDFTextBase):
       number in points, upwards if positive, and downwards if negative.
       Default is 0.
 
-    Here is an example of ``content`` argument:
+    One more example of a ``content`` argument with a ``style`` dict, and
+    additional keys:
 
     .. code-block:: python
 
@@ -1070,6 +1086,11 @@ class PDFText(PDFTextBase):
             'label': 'a_important_paragraph',
             'uri': 'https://github.com/aFelipeSP/pdfme'
         }
+
+    With arguments ``list_text``, ``list_indent`` and ``list_style`` you can
+    turn a paragraph into a list paragraph, one that has a bullet or a number
+    at the left of the paragraph, with an additional indentation. With this
+    you can build a bulleted or numbered list of paragraphs.
 
     Args:
         content (str, list, tuple, dict): the one just described.

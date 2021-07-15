@@ -200,8 +200,8 @@ class PDFColor:
             )
 
 def parse_color(color: ColorType) -> list:
-    """Function to parse ``color`` into a list representing a PDF color. 
-    
+    """Function to parse ``color`` into a list representing a PDF color.
+
     The scale of the colors is between 0 and 1, instead of 0 and 256, so all the
     numbers in ``color`` must be between 0 and 1.
 
@@ -209,7 +209,7 @@ def parse_color(color: ColorType) -> list:
     white (1).
 
     ``color`` of type list or tuple is a gray color if its length is 1, a rgb
-    color if its length is 3, and a rgba color if its length is 4 (not yet 
+    color if its length is 3, and a rgba color if its length is 4 (not yet
     supported).
 
     ``color`` of type str can be a hex color of the form "#aabbcc", the name
@@ -231,7 +231,9 @@ def parse_color(color: ColorType) -> list:
     if isinstance(color, (int, float)):
         return [color]
     if isinstance(color, str):
-        if color in colors:
+        if color is '':
+            return None
+        elif color in colors:
             return colors[color]
         elif color[0] == '#' and len(color) in [4,5,7,9]:
             try: int(color[1:], 16)

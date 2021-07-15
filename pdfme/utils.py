@@ -110,7 +110,7 @@ def parse_margin(margin: MarginType) -> dict:
     """
     if isinstance(margin, dict):
         return margin
-        
+
     if isinstance(margin, str):
         margin = re.split(',| ', margin)
         if len(margin) == 1:
@@ -142,23 +142,32 @@ def parse_style_str(style_str: str, fonts: 'PDFFonts') -> dict:
     """Function to parse a style string into a style dict.
 
     It parses a string with a semi-colon separeted list of the style attributes
-    you want to apply. For the ones that are of type bool, you just have to
-    include the name, and for the rest you need to include the name, a colon,
-    and the value of the attribute. In case the value is a color, it can be any
-    of the possible string inputs to function :func:`pdfme.color.parse_color`.
+    you want to apply (for a list of the attributes you can use in this string
+    see :class:`pdfme.text.PDFText`). For the ones that are of type bool, you
+    just have to include the name and it will mean they are ``True``,
+    and for the rest you need to include the name, a colon, and the value of the
+    attribute. In case the value is a color, it can be any of the possible
+    string inputs to function :func:`pdfme.color.parse_color`.
+    Empty values mean ``None``, and ``"1" == True`` and ``"0" == False`` for
+    bool attributes.
+
+    This is an example of a valid style string:
+
+    .. code-block::
+
+        ".b;s:10;c:1;u:0;bg:"
 
     Args:
         style_str (str): The string representing the text style.
         fonts (PDFFonts): If a font family is included, this is needed to check
-            if is is among the fonts already added to the PDFFonts instance
+            if it is among the fonts already added to the PDFFonts instance
             passed.
 
     Raises:
-        ValueError: If the string format is no the one defined in this docs.
+        ValueError: If the string format is not valid.
 
     Returns:
-        dict: A style dict like the one described in
-            :meth:`pdfme.text.PDFText`.
+        dict: A style dict like the one described in :class:`pdfme.text.PDFText`.
     """
 
     style = {}
@@ -177,13 +186,24 @@ def parse_style_str(style_str: str, fonts: 'PDFFonts') -> dict:
         elif len(attrs) == 2:
             attr = attrs[0].strip()
             value = attrs[1].strip()
+
+            if attr in ['b', 'i', 'u']:
+                if value == '1':
+                    style[attr] = True
+                elif value == '0':
+                    style[attr] = False
+                else:
+                    raise ValueError(
+                        'Style element "{}" must be 0 or 1: {}'
+                        .format(attr, value)
+                    )
             if attr == "f":
                 if value not in fonts.fonts:
                     raise ValueError(
                         'Style element "f" must have the name of a font family'
                         ' already added.'
                     )
-                
+
                 style['f'] = value
             elif attr == "c":
                 style['c'] = PDFColor(value)
@@ -209,13 +229,12 @@ def parse_style_str(style_str: str, fonts: 'PDFFonts') -> dict:
                     )
             else:
                 raise ValueError(
-                    'Style elements with arguments must be "f", "s", "c", "r"'
+                    'Style elements with arguments must be '
+                    '"b", "u", "i", "f", "s", "c", "r"'
                 )
 
         else:
-            raise ValueError(
-                'Style elements must be "b", "u", "i", "f", "s", "c", "r"'
-            )
+            raise ValueError('Invalid Style string: {}'.format(attrs_str))
 
     return style
 
@@ -241,7 +260,7 @@ def create_graphics(graphics: list) -> str:
                 round(g['x'], 3), round(g['y'], 3),
                 round(g['width'], 3), round(g['height'], 3)
             )
-        
+
         if g['type'] == 'line':
             if g['color'] != last_color:
                 last_color = g['color']
@@ -276,7 +295,7 @@ def create_graphics(graphics: list) -> str:
 
     if stream != '':
         stream = ' q' + stream + ' Q'
-    
+
     return stream
 
 def _roman_five(n, one, five):

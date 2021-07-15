@@ -36,6 +36,10 @@ You can install using pip:
 
   pip install pdfme
 
+About this docs
+---------------
+
+The description and instructions for each feature are inside the docs for each class representing the feature, so in :class:`pdfme.text.PDFText` class you'll learn how to build a paragraph, in :class:`pdfme.table.PDFTable` class you'll learn how to build a table, in :class:`pdfme.content.PDFContent` class you'll learn how to build a content box, in :class:`pdfme.document.PDFDocument` class you'll learn how to build a PDF from a nested-dict structure (Json) and in :class:`pdfme.pdf.PDF` class you'll learn how to use the main class of this library, the one that represents the PDF document.
 
 Usage
 -----
@@ -44,15 +48,13 @@ You can use this library to create PDF documents by using one of the following
 strategies:
 
 * The recommended way is to use the function :func:`pdfme.document.build_pdf`,
-  passing a dictionary with the description of the document as its argument.
+  passing a dictionary with the description and styling of the document as its argument.
   For more information about this approach see
   :class:`pdfme.document.PDFDocument`.
 
 * Use the :class:`pdfme.pdf.PDF` class and use its methods to build the PDF
   document. For more information about this approach see :class:`pdfme.pdf.PDF`
   class definition.
-
-  
   
 Shortcomings
 ------------

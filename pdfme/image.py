@@ -63,7 +63,7 @@ class PDFImage:
                 extension = extension[1:]
 
             extension = extension.strip().lower()
-            
+
             if extension in ['jpg', 'jpeg']:
                 self.parse_jpg(image_bytes)
             else:
@@ -105,7 +105,7 @@ class PDFImage:
                         (markerLow >= 0xC5 and markerLow <= 0xC7) or #SOF4-SOF7
                         (markerLow >= 0xC9 and markerLow <= 0xCB) or #SOF9-SOF11
                         (markerLow >= 0xCD and markerLow <= 0xCF) #SOF13-SOF15
-                    ): 
+                    ):
                         depth, h, w, layers = struct.unpack_from('>BHHB', data)
 
                         if layers == 3: colspace = b'/DeviceRGB'

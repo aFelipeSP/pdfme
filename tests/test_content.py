@@ -10,11 +10,11 @@ def run_test(index):
     name = 'test_content{}'.format(index)
     input_file = Path(name + '.json')
     if input_file.exists():
-        with input_file.open() as f:
+        with input_file.open(encoding='utf8') as f:
             content = json.load(f)
     else:
         content = gen_content(20)
-        with input_file.open('w') as f:
+        with input_file.open('w', encoding='utf8') as f:
             json.dump(content, f, ensure_ascii=False)
 
     pdf.content(content)

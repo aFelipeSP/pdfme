@@ -6,7 +6,7 @@ MarginType = Union[int, float, Iterable[Number], dict]
 
 class PDFPage:
     """Class that represents a PDF page, and has methods to add stream parts
-    into the internal page PDF Stream Object, and other things like 
+    into the internal page PDF Stream Object, and other things like
     fonts, annotations and images.
 
     This object have ``x`` and ``y`` coordinates used by the

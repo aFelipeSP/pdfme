@@ -28,7 +28,7 @@ class PDFTable:
 
     Argument ``style``, if passed, should be a dict with any of the following
     keys:
-    
+
     * ``cell_margin``: the margin of the four sides of the cells in the table.
       Default value is ``5``.
 
@@ -45,14 +45,14 @@ class PDFTable:
       Default value is ``cell_margin``.
 
     * ``cell_fill``: the color of all the cells in the table. Default value is
-      ``None`` (transparent). See :func:`pdfme.utils.parse_color` for information
+      ``None`` (transparent). See :func:`pdfme.color.parse_color` for information
       about this attribute.
 
     * ``border_width``: the width of all the borders in the table. Default value
       is ``0.5``.
 
     * ``border_color``: the color of all the borders in the table .Default value
-      is ``'black'``. See :func:`pdfme.utils.parse_color` for information
+      is ``'black'``. See :func:`pdfme.color.parse_color` for information
       about this attribute.
 
     * ``border_style``: the style of all the borders in the table. It can be
@@ -70,7 +70,7 @@ class PDFTable:
     you have to include a ``h`` or a ``v`` before the positions, to tell if you
     want to change vertical or horizontal borders. The indexes in this string
     can be negative, referring to positions from the end to the beginning.
-    
+
     The following are examples of valid ``pos`` strings:
 
     * ``'h:;0,1,-1'`` to modify the first, second and last horizontal lines in
@@ -83,7 +83,7 @@ class PDFTable:
 
     Additional to the ``pos`` key for dicts inside ``fills`` iterable, you
     have to include a ``color`` key, with a valid color value. See
-    :func:`pdfme.utils.parse_color` for information about this attribute.
+    :func:`pdfme.color.parse_color` for information about this attribute.
 
     Additional to the ``pos`` key for dicts inside ``borders`` iterable, you
     can include ``width`` (border width), ``color`` (border color) and
@@ -96,7 +96,7 @@ class PDFTable:
     In a cell dict, you can also include ``colspan`` and ``rowspan`` keys, to
     span it horizontally and vertically respectively. The cells being merged to
     this spanned cell should be None.
-    
+
     Here's an example of a valid ``content`` value:
 
     .. code-block:: python
@@ -269,7 +269,7 @@ class PDFTable:
             iterable: a list of indexes, or a ``range`` object.
         """
         data = ':' if data == '' else data
-        if ':' in data: 
+        if ':' in data:
             parts = data.split(':')
             num = 0 if parts[0].strip() == '' else int(parts[0])
             parts[0] = num if num >= 0 else count + num
@@ -550,7 +550,7 @@ class PDFTable:
         self.current_height += self.max_height
 
         return 'continue' if ret else 'interrupt'
-        
+
     def get_cell_dimensions(
         self, col: int, border_left: dict, border_top: dict,
         cell_style: dict, rowspan: int, colspan: int
@@ -830,7 +830,7 @@ class PDFTable:
         else:
             self.delayed.pop(col, None)
         return pdf_text.current_height
-    
+
     def process_image(
         self, col: int, element: dict, x: Number, y: Number,
         width: Number, height: Number, delayed: dict
@@ -870,7 +870,7 @@ class PDFTable:
             delayed.update({'delayed': pdf_image, 'type': 'image'})
             self.delayed[col] = delayed
         return real_height
-    
+
     def process_content(
         self, col: int, element: dict, x: Number, y: Number,
         width: Number, height: Number, style: dict, delayed: dict
@@ -912,7 +912,7 @@ class PDFTable:
             self.delayed[col] = delayed
         else:
             self.delayed.pop(col, None)
-        
+
         return pdf_content.current_height
 
     def process_table(

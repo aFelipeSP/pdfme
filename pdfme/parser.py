@@ -82,7 +82,7 @@ def parse_obj(obj: ObjectType) -> bytes:
         return str(obj).encode('latin')
     elif isinstance(obj, str):
         return ('(' + re.sub(r'([()])', r'\\\1', obj) + ')').encode('latin')
-    
+
 
 def parse_dict(obj: dict) -> bytes:
     """Function to convert a python dict to a bytes object representing the

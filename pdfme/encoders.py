@@ -12,14 +12,14 @@ def encode_stream(stream: bytes, filter: bytes, parameters: dict=None) -> bytes:
 
 	Raises:
 		NotImplementedError: if the filter passed is not implemented yet.
-		Exception: if the filter passed doesn't exist. 
+		Exception: if the filter passed doesn't exist.
 
 	Returns:
 		bytes: the encoded stream.
 	"""
 	if parameters is None:
 		parameters = {}
-	
+
 	if filter == b'/FlateDecode':
 		return flate_encode(stream)
 	elif filter == b'/ASCIIHexDecode':

@@ -17,16 +17,16 @@ class PDFDocument:
 
     This class uses an instance of :class:`pdfme.pdf.PDF` internally to build
     the PDF document, but adds some functionalities to allow the user to
-    build a PDF document from a JSONish dict, add footnotes and the other
+    build a PDF document from a JSONish dict, add footnotes and other
     functions explained here.
 
     A document is made up of sections, that can have their own page layout,
-    page numbering, running sections and style. 
+    page numbering, running sections and style.
 
-    ``document`` dict has the following keys:
+    ``document`` dict can have the following keys:
 
     * ``style``: the default style of each section inside the document. A dict
-      with all of the keys that a content box can have (see 
+      with all of the keys that a content box can have (see
       :class:`pdfme.content.PDFContent` for more information about content
       box, and for the default values of the attributes of this dict see
       :class:`pdfme.pdf.PDF`).
@@ -68,7 +68,10 @@ class PDFDocument:
 
     Each section in ``sections`` iterable is a dict like the one that can be
     passed to :class:`pdfme.content.PDFContent`, so each section ends up being
-    a content box. Additional to the keys from a content box dict, you can
+    a content box. This class will add as many pages as it is needed to add
+    all the contents of every section (content box) to the PDF document.
+    
+    Additional to the keys from a content box dict, you can
     include also a ``page_style`` dict to overwrite the default ``page_style``
     of the document, and a ``running_sections`` list with the name of the
     running sections that you want to be included in all of the pages of the
@@ -116,7 +119,7 @@ class PDFDocument:
                     "content": [
                         {".": "This is a title", "style": "title"},
                         {".": [
-                            "Here we include a footnote", 
+                            "Here we include a footnote",
                             {"footnote": "Description of a footnote"},
                             ". And here we include a ",
                             {
@@ -136,7 +139,7 @@ class PDFDocument:
             ]
         }
 
-        with open('borrar.pdf', 'wb') as f:
+        with open('document.pdf', 'wb') as f:
             build_pdf(document, f)
 
     Args:
@@ -187,7 +190,7 @@ class PDFDocument:
             element (list, tuple, dict): the element to be tarversed.
 
         Raises:
-            TypeError: 
+            TypeError:
         """
         if isinstance(element, (list, tuple)):
             for child in element:
