@@ -29,7 +29,13 @@ class PDFDocument:
       with all of the keys that a content box can have (see
       :class:`pdfme.content.PDFContent` for more information about content
       box, and for the default values of the attributes of this dict see
-      :class:`pdfme.pdf.PDF`).
+      :class:`pdfme.pdf.PDF`). Additional to the keys of content box style, you
+      can add the following keys:
+
+      * ``outlines_level``: the level of the outlines to be displayed on the
+        outlines panel of the PDF reader, when the PDF document is opened.
+        For example if this is 2, you will see only the first 2 levels of the
+        outlines. Default value is 1.
 
     * ``page_style``: a dict with the default attributes for each page in this
       document. You can include any of the following keys: ``page_size``,
@@ -163,7 +169,10 @@ class PDFDocument:
             if k in page_style
         }
 
-        self.pdf = PDF(**self.page_args, **style_args)
+        self.pdf = PDF(
+            outlines_level=style.get('outlines_level', 1),
+            **self.page_args, **style_args
+        )
         self.pdf.formats = {}
         self.pdf.formats['$footnote'] = {'r': 0.5, 's': 6}
         self.pdf.formats['$footnotes'] = {'s': 10, 'c': 0}

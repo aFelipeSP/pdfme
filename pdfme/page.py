@@ -36,7 +36,7 @@ class PDFPage:
         self.height = height
         self.go_to_beginning()
 
-        self.stream = base.add({'__stream__': {}})
+        self.stream = base.add({'Filter': b'/FlateDecode', '__stream__': {}})
         self.page = base.add({
             'Type': b'/Page', 'Contents': self.stream.id, 'Resources': {}
         })
