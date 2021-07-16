@@ -2,7 +2,7 @@ Examples
 ========
 
 Example of a PDF document created with :func:`pdfme.document.build_pdf` using
-almost all of the functionalities of this library. 
+almost all of the functionalities of this library.
    
 .. code-block::
 
@@ -24,7 +24,10 @@ almost all of the functionalities of this library.
         return [gen_text(random.randint(50, 200)) for _ in range(n)]
 
     document = {
-        "style": {"margin_bottom": 15, "text_align": "j"},
+        "style": {
+            "margin_bottom": 15, "text_align": "j",
+            "page_size": "letter", "margin": [60, 50]
+        },
         "formats": {
             "url": {"c": "blue", "u": 1},
             "title": {"b": 1, "s": 13}
@@ -39,13 +42,9 @@ almost all of the functionalities of this library.
                 "content": [{".": ["Page ", {"var": "$page"}]}]
             }
         },
-        "page_style": {
-            "page_size": "letter",
-            "margin": [60, 50]
-        },
         "sections": [
             {
-                "page_style": {"page_numbering_style": "roman"},
+                "style": {"page_numbering_style": "roman"},
                 "running_sections": ["footer"],
                 "content": [
 
@@ -99,7 +98,7 @@ almost all of the functionalities of this library.
                 ]
             },
             {
-                "page_style": {
+                "style": {
                     "page_numbering_reset": True, "page_numbering_style": "arabic"
                 },
                 "running_sections": ["header", "footer"],

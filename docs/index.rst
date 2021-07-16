@@ -3,6 +3,19 @@ pdfme
 =====
 This is a powerful library to create PDF documents easily.
 
+The way you create a PDF document with pdfme is very similar to how you create
+documents with LaTex: you just tell pdfme at a very high level what elements you
+want to be in the document, without worrying about wrapping text in a box,
+positioning every element inside the page, creating the lines of a table, or the
+internals of the PDF Document Format. pdfme will put every element
+below the last one, and when a page is full it will add a new page to keep
+adding elements to the document, and will keep adding pages until all of the
+elements are inside the document. It just works.
+
+If you want the power to place elements wherever you want and mess with the PDF
+Document Format internals, pdfme got you covered too. Give the docs a look to
+check how you can do this.
+
 Main features
 -------------
 
@@ -17,11 +30,11 @@ Main features
   and rows, and change the fills and borders in the easiest way possible.
 
 * You can add content boxes, a multi-column element where you can add
-  paragraphs, images, tables and even content boxes themselves. The elements inside this
-  content boxes are added from top to bottom and from left to right.
+  paragraphs, images, tables and even content boxes themselves. The elements
+  inside this content boxes are added from top to bottom and from left to right.
 
-* You can add url links (to web pages), labels/references and footnotes anywhere
-  in the document.
+* You can add url links (to web pages), labels/references, footnotes and
+  outlines anywhere in the document.
 
 * You can add running sections, content boxes that will be included in every
   page you add to the document. Headers and footers are the most common running
@@ -39,7 +52,14 @@ You can install using pip:
 About this docs
 ---------------
 
-The description and instructions for each feature are inside the docs for each class representing the feature, so in :class:`pdfme.text.PDFText` class you'll learn how to build a paragraph, in :class:`pdfme.table.PDFTable` class you'll learn how to build a table, in :class:`pdfme.content.PDFContent` class you'll learn how to build a content box, in :class:`pdfme.document.PDFDocument` class you'll learn how to build a PDF from a nested-dict structure (Json) and in :class:`pdfme.pdf.PDF` class you'll learn how to use the main class of this library, the one that represents the PDF document.
+The description and instructions for each feature are inside the docs for each 
+class representing the feature, so in :class:`pdfme.text.PDFText` class you'll
+learn how to build a paragraph, in :class:`pdfme.table.PDFTable` class you'll
+learn how to build a table, in :class:`pdfme.content.PDFContent` class you'll
+learn how to build a content box, in :class:`pdfme.document.PDFDocument` class
+you'll learn how to build a PDF from a nested-dict structure (Json) and in
+:class:`pdfme.pdf.PDF` class you'll learn how to use the main class of this
+library, the one that represents the PDF document.
 
 Usage
 -----
@@ -67,6 +87,7 @@ You can explore the rest of this library components in the following links:
 .. toctree::
     :maxdepth: 3
 
+    tutorial
     examples
     modules
 

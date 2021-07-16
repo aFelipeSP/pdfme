@@ -6,8 +6,6 @@ STYLE_PROPS = dict(
     line_height='line_height', indent='indent'
 )
 
-MARGINS = ('margin_top', 'margin_right', 'margin_bottom', 'margin_left')
-
 PAGE_PROPS = ('page_size', 'rotate_page', 'margin')
 PAGE_NUMBERING = ('page_numbering_offset', 'page_numbering_style')
 
@@ -30,15 +28,7 @@ class PDFDocument:
       :class:`pdfme.content.PDFContent` for more information about content
       box, and for the default values of the attributes of this dict see
       :class:`pdfme.pdf.PDF`). Additional to the keys of content box style, you
-      can add the following keys:
-
-      * ``outlines_level``: the level of the outlines to be displayed on the
-        outlines panel of the PDF reader, when the PDF document is opened.
-        For example if this is 2, you will see only the first 2 levels of the
-        outlines. Default value is 1.
-
-    * ``page_style``: a dict with the default attributes for each page in this
-      document. You can include any of the following keys: ``page_size``,
+      can add the following keys: ``outlines_level``, ``page_size``,
       ``rotate_page``, ``margin``, ``page_numbering_offset`` and
       ``page_numbering_style``. For more information about this page attributes
       and their default values see :class:`pdfme.pdf.PDF` definition.
@@ -78,11 +68,10 @@ class PDFDocument:
     all the contents of every section (content box) to the PDF document.
     
     Additional to the keys from a content box dict, you can
-    include also a ``page_style`` dict to overwrite the default ``page_style``
-    of the document, and a ``running_sections`` list with the name of the
+    include a ``running_sections`` list with the name of the
     running sections that you want to be included in all of the pages of the
     section. There is a special key that you can include in a section's
-    ``page_style`` dict called ``page_numbering_reset``, that if True, resets
+    ``style`` dict called ``page_numbering_reset``, that if True, resets
     the numbering of the pages.
 
     You can also include footnotes in any paragraph, by adding a dict with the
@@ -98,8 +87,8 @@ class PDFDocument:
         from pdfme import build_pdf
 
         document = {
-            "page_style": {"page_size": "letter", "margin": [70, 60]},
             "style": {
+                "page_size": "letter", "margin": [70, 60],
                 "s": 10, "c": 0.3, "f": "Times", "text_align": "j",
                 "margin_bottom": 10
             },
@@ -121,7 +110,7 @@ class PDFDocument:
             "sections": [
                 {
                     "running_sections": ["header", "footer"],
-                    "page_style": {"margin": 60},
+                    "style": {"margin": 60},
                     "content": [
                         {".": "This is a title", "style": "title"},
                         {".": [
@@ -137,7 +126,7 @@ class PDFDocument:
                 },
                 {
                     "running_sections": ["footer"],
-                    "page_style": {"rotate_page": True},
+                    "style": {"rotate_page": True},
                     "content": [
                         "This is a rotated page"
                     ]
@@ -157,22 +146,20 @@ class PDFDocument:
         context = {} if context is None else context
         style = deepcopy(document.get('style', {}))
         style_args = {
-            v: style.pop(k) for k, v in STYLE_PROPS.items() if k in style
+            v: style[k] for k, v in STYLE_PROPS.items() if k in style
         }
 
-        self.style_args = deepcopy(style_args)
-        self.style_args.update({k: style[k] for k in MARGINS if k in style})
-
-        page_style = document.get('page_style', {})
-        self.page_args = {
-            k: page_style[k] for k in PAGE_PROPS + PAGE_NUMBERING
-            if k in page_style
+        page_args = {
+            k: style[k] for k in PAGE_PROPS + PAGE_NUMBERING if k in style
         }
 
         self.pdf = PDF(
             outlines_level=style.get('outlines_level', 1),
-            **self.page_args, **style_args
+            **page_args, **style_args
         )
+
+        self.style = style
+
         self.pdf.formats = {}
         self.pdf.formats['$footnote'] = {'r': 0.5, 's': 6}
         self.pdf.formats['$footnotes'] = {'s': 10, 'c': 0}
@@ -180,7 +167,6 @@ class PDFDocument:
         self.pdf.context.update(context)
 
         self.running_sections = document.get('running_sections', {})
-        self.style = style
 
         self.sections = document.get('sections', [])
 
@@ -287,20 +273,23 @@ class PDFDocument:
         Args:
             section (dict): a dict representing the section to be processed.
         """
-        page_style = section.get('page_style', {})
-        page_args_ = {k: page_style[k] for k in PAGE_PROPS if k in page_style}
-        page_args = deepcopy(self.page_args)
-        page_args.update(page_args_)
+
+        section_style = deepcopy(self.style)
+        section_style.update(process_style(section.get('style', {}), self.pdf))
+
+        page_args = {
+            k: section_style[k] for k in PAGE_PROPS if k in section_style
+        }
         self.pdf.setup_page(**page_args)
 
         running_sections = section.get('running_sections', [])
         self._set_running_sections(running_sections)
 
-        if 'page_numbering_offset' in page_style:
-            self.pdf.page_numbering_offset = page_style['page_numbering_offset']
-        if 'page_numbering_style' in page_style:
-            self.pdf.page_numbering_style = page_style['page_numbering_style']
-        if page_style.get('page_numbering_reset', False):
+        if 'page_numbering_offset' in section_style:
+            self.pdf.page_numbering_offset = section_style['page_numbering_offset']
+        if 'page_numbering_style' in section_style:
+            self.pdf.page_numbering_style = section_style['page_numbering_style']
+        if section_style.get('page_numbering_reset', False):
             self.pdf.page_numbering_offset = -len(self.pdf.pages)
 
         self.pdf.add_page()
@@ -311,8 +300,6 @@ class PDFDocument:
         self.height = self.y - pdf.margin['bottom']
         self.x = pdf.margin['left']
 
-        section_style = deepcopy(self.style_args)
-        section_style.update(process_style(section.get('style', {}), self.pdf))
         section['style'] = section_style
 
         self.section = self.pdf._create_content(
