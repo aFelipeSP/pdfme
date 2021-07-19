@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add possibility of embedding ttf and unicode fonts.
 - Add possibility to embed png files.
 
+## [0.4.0] - 2021-07-19
+### Added
+- `page_style` properties, in `document` module are now defined inside `style`
+  key.
+
 ## [0.3.0] - 2021-07-16
 ### Added
 - PDF Outlines are now available.
