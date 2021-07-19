@@ -58,14 +58,15 @@ class PDFTable:
     * ``border_style``: the style of all the borders in the table. It can be
       ``solid``, ``dotted`` or ``solid``. Default value is ``solid``.
 
-    You can override the default values for the cell fills and the borders with
+    You can overwrite the default values for the cell fills and the borders with
     ``fills`` and ``borders`` arguments.
     These arguments, if passed, should be iterables of dicts. Each dict should
-    have a ``pos`` key that contains a string with information of the horizontal
-    and vertical position of the fills or borders you want to change, and so
-    this string has 2 parts separated by a semi colon, the first one for the
-    horizontal position and the second one for the vertical position. The
-    position can be a single int, a comma-separated list of ints, or a slice
+    have a ``pos`` key that contains a string with information of the vertical
+    (rows) and horizontal (columns) position of the fills or borders you want
+    to change, and for this, such a string should has 2 parts separated by a
+    semi colon, the first one for the vertical position and the second one for
+    the horizontal position.
+    The position can be a single int, a comma-separated list of ints, or a slice
     (range), like the one you pass to get a slice of a python list. For borders
     you have to include a ``h`` or a ``v`` before the positions, to tell if you
     want to change vertical or horizontal borders. The indexes in this string
@@ -73,11 +74,11 @@ class PDFTable:
 
     The following are examples of valid ``pos`` strings:
 
-    * ``'h:;0,1,-1'`` to modify the first, second and last horizontal lines in
+    * ``'h0,1,-1;:'`` to modify the first, second and last horizontal lines in
       the table. The horizontal position is a single colon, and thus the whole
       horizontal lines are affected.
 
-    * ``':;::2'`` to modify all of the fills horizontally, every two rows. This
+    * ``'::2;:'`` to modify all of the fills horizontally, every two rows. This
       would set the current fill to all the cells in the first row, the third
       row, the fifth row and so on.
 
@@ -91,7 +92,7 @@ class PDFTable:
 
     If a cell element is a dict it's ``style`` dict can have any of the
     following keys: ``cell_margin``, ``cell_margin_left``, ``cell_margin_top``,
-    ``cell_margin_right``, ``cell_margin_bottom`` and ``cell_fill``, to override
+    ``cell_margin_right``, ``cell_margin_bottom`` and ``cell_fill``, to overwrite
     the default value of any of these parameters on its cell.
     In a cell dict, you can also include ``colspan`` and ``rowspan`` keys, to
     span it horizontally and vertically respectively. The cells being merged to
@@ -694,11 +695,12 @@ class PDFTable:
             width (Number): the width of the cell.
             rowspan (int): the rowspan of the cell.
         """
-        fill_color = cell_style.get('cell_fill',
-            self.fills_defs[(self.current_index, col)]
-            if (self.current_index, col) in self.fills_defs
-            else None
-        )
+        fill_color = cell_style.get('cell_fill', None)
+
+        if fill_color is None:
+            fill_color = (
+                self.fills_defs.get(self.current_index, {}).get(col, None)
+            )
 
         if fill_color is not None:
             self.fills_mem[col] = { 'type': 'fill', 'x': self.x_abs,

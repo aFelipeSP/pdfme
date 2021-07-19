@@ -968,8 +968,9 @@ class PDFText(PDFTextBase):
     of this key), which we are going to refer to as the "the dot key" from here
     on. The value for the dot key is a list/tuple containing strings or more
     ``content`` dicts like the one we are describing here (you can have nested
-    ``content`` dicts), but for simplicity, you can pass a string (for non-rich
-    text) or a tuple/list with strings and more ``content`` dicts:
+    ``content`` dicts or what we call a paragraph part), but for simplicity,
+    you can pass a string (for non-rich text) or a tuple/list with strings and
+    more paragraph parts:
 
     * If ``content`` argument is a string, it will become the following:
 
@@ -1008,7 +1009,7 @@ class PDFText(PDFTextBase):
     coming from it. The children will be able to pass their own
     style parameters to their children too, and so on.
 
-    Additional to the dot key, ``content`` dicts can have the following keys:
+    Additional to the dot key, paragraph parts can have the following keys:
 
     * ``'label'``: this is a string with a unique name (there should be
       only one label with this name in the whole document) representing
@@ -1025,11 +1026,11 @@ class PDFText(PDFTextBase):
       of the PDF reader. This outlines show the structure of the document.
       This attribute is a dict with the following optional keys:
       
-      * ``level``: an int with the level of this outline in the outlines tree.
-        The default value is 1.
+      * ``level``: an optional int with the level of this outline in the
+        outlines tree. The default value is 1.
         
-      * ``text``: the text to be shown in the outlines panel for this outline.
-        The default value is the contents of this part.
+      * ``text``: an optional string to be shown in the outlines panel for this
+        outline. The default value is the contents of this part.
 
     * ``'ids'``: when method ``run`` is called, dict attr ``result`` is
       available with information to add the paragraph to the PDF, and

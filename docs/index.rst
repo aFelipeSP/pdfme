@@ -52,7 +52,8 @@ You can install using pip:
 About this docs
 ---------------
 
-The description and instructions for each feature are inside the docs for each 
+We recommend starting with the tutorial in :doc:`tutorial`, but you can find
+the description and instructions for each feature inside the docs for each 
 class representing the feature, so in :class:`pdfme.text.PDFText` class you'll
 learn how to build a paragraph, in :class:`pdfme.table.PDFTable` class you'll
 learn how to build a table, in :class:`pdfme.content.PDFContent` class you'll
@@ -68,9 +69,10 @@ You can use this library to create PDF documents by using one of the following
 strategies:
 
 * The recommended way is to use the function :func:`pdfme.document.build_pdf`,
-  passing a dictionary with the description and styling of the document as its argument.
-  For more information about this approach see
-  :class:`pdfme.document.PDFDocument`.
+  passing a dictionary with the description and styling of the document as its
+  argument. :doc:`tutorial` section uses this method to build a PDF document,
+  and you can get more information about this approach in
+  :class:`pdfme.document.PDFDocument` definition.
 
 * Use the :class:`pdfme.pdf.PDF` class and use its methods to build the PDF
   document. For more information about this approach see :class:`pdfme.pdf.PDF`

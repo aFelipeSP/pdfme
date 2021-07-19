@@ -107,7 +107,7 @@ class PDFPage:
         The ``object`` dict should have the keys describing the annotation to
         be added. By default, this object will have the following key/values
         by default: ``Type = /Annot`` and ``Subtype = /Link``.
-        You can include these keys in ``object`` if you want to override any of
+        You can include these keys in ``object`` if you want to overwrite any of
         the default values for them.
 
         Args:
