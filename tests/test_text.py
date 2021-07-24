@@ -32,11 +32,11 @@ def add_content(content, text_options, name):
 def base(text_options={}, name='test', words=5000):
     input_file = Path(name + '.json')
     if input_file.exists():
-        with input_file.open() as f:
+        with input_file.open(encoding='utf8') as f:
             content = json.load(f)
     else:
         content = gen_rich_text(words)
-        with input_file.open('w') as f:
+        with input_file.open('w', encoding='utf8') as f:
             json.dump(content, f, ensure_ascii=False)
     add_content(content, text_options, name)
 
