@@ -1,4 +1,3 @@
-import copy
 from typing import Union
 
 TABLE_PROPERTIES = ('widths', 'borders', 'fills')
@@ -232,6 +231,16 @@ class PDFContent:
         if ret == 'continue':
             self.finished = True
 
+    def get_state(self) -> dict:
+        return self.pdf_content_part.get_state()
+
+    def set_state(
+        self, section_element_index: int=None, section_delayed: list=None,
+        children_memory: list=None
+    ) -> None:
+        self.pdf_content_part.set_state(
+            section_element_index, section_delayed, children_memory
+        )
 class PDFContentPart:
     """Class that represent a content element.
 
@@ -328,7 +337,7 @@ class PDFContentPart:
         self.col_width = (width - cols_spaces) / self.cols_n
 
         self.element_index = self.section_element_index # current index
-        self.delayed = copy.deepcopy(self.section_delayed) # current delayed elements
+        self.delayed = copy(self.section_delayed) # current delayed elements
         self.will_reset = False
         self.resetting = False
         self.parts_index = len(self.p.parts)
@@ -336,6 +345,21 @@ class PDFContentPart:
         self.minim_diff_last = None
         self.minim_diff = None
         self.minim_forward = None
+
+    def get_state(self) -> dict:
+        return {
+            'section_element_index': self.section_element_index,
+            'section_delayed': copy(self.section_delayed),
+            'children_memory': copy(self.children_memory)
+        }
+
+    def set_state(
+        self, section_element_index: int=None, section_delayed: list=None,
+        children_memory: list=None
+    ) -> None:
+        self.section_element_index = section_element_index
+        self.section_delayed = copy(section_delayed)
+        self.children_memory = copy(children_memory)
 
     def add_delayed(self) -> str:
         '''Function to add the delayed elements to the rectangle.
@@ -351,12 +375,12 @@ class PDFContentPart:
         '''
         n = 0
         while n < len(self.delayed):
-            ret = self.process(copy.deepcopy(self.delayed[n]), False)
+            ret = self.process(copy(self.delayed[n]), False)
             if ret in ['interrupt', 'break', 'partial_next']:
                 return ret
 
             if ret.get('delayed'):
-                self.delayed[n] = copy.deepcopy(ret['delayed'])
+                self.delayed[n] = copy(ret['delayed'])
             else:
                 self.delayed.pop(n)
 
@@ -547,7 +571,7 @@ class PDFContentPart:
             True if resetting process should continue or False if this process
             is done.
         """
-        if self.minim_diff_last and self.minim_diff_last - self.minim_diff < 10:
+        if self.minim_diff_last and self.minim_diff_last - self.minim_diff < 1:
             if self.minim_forward:
                 self.minim_diff *= 2
             else:
@@ -571,7 +595,7 @@ class PDFContentPart:
         self.resetting = True
 
         self.element_index = self.section_element_index
-        self.delayed = copy.deepcopy(self.section_delayed)
+        self.delayed = copy(self.section_delayed)
 
         return True
 
@@ -611,17 +635,17 @@ class PDFContentPart:
                 return 'break'
             else:
                 self.section_element_index = self.element_index
-                self.section_delayed = copy.deepcopy(self.delayed)
+                self.section_delayed = copy(self.delayed)
                 new_index = {
                     'index': self.element_index,
-                    'delayed': copy.deepcopy(self.delayed)
+                    'delayed': copy(self.delayed)
                 }
                 if children_memory is None:
                     self.children_memory = []
                     new_children_memory = [new_index]
                 else:
-                    self.children_memory = copy.deepcopy(children_memory)
-                    new_children_memory = copy.deepcopy(children_memory)
+                    self.children_memory = copy(children_memory)
+                    new_children_memory = copy(children_memory)
                     new_children_memory.append(new_index)
 
                 if self.is_root:
@@ -641,7 +665,7 @@ class PDFContentPart:
             self.y = self.min_y
 
             if len(self.delayed) > 0 and children_memory is not None:
-                self.partial_children_memory = copy.deepcopy(children_memory)
+                self.partial_children_memory = copy(children_memory)
                 return 'partial_next'
 
             return 'retry' if children_memory is None else \
@@ -751,12 +775,9 @@ class PDFContentPart:
         """
         if 'paragraph' in element:
             pdf_text = element['paragraph']
-            pdf_text.setup(
-                self.x, self.y, self.width, self.max_height,
-                element['last_part'], element['last_word']
-            )
-            pdf_text.pdf = self.p.pdf
-            remaining = copy.deepcopy(element)
+            pdf_text.setup(self.x, self.y, self.width, self.max_height)
+            pdf_text.set_state(**element['state'])
+            remaining = copy(element)
         else:
             par_style = {
                 v: style.get(v) for v in PARAGRAPH_PROPERTIES if v in style
@@ -781,6 +802,7 @@ class PDFContentPart:
         if pdf_text.finished:
             return {'delayed': None, 'next': False}
         else:
+            remaining['state'] = pdf_text.get_state()
             return {'delayed': remaining, 'next': True}
 
     def process_image(self, element: dict, style: dict) -> dict:
@@ -835,8 +857,8 @@ class PDFContentPart:
         if 'table_delayed' in element:
             pdf_table = element['table_delayed']
             pdf_table.setup(self.x, self.y, self.width, self.max_height)
-            pdf_table.pdf = self.p.pdf
-            remaining = element
+            pdf_table.set_state(**element['state'])
+            remaining = copy(element)
         else:
             table_props = {
                 v: element.get(v) for v in TABLE_PROPERTIES
@@ -859,6 +881,7 @@ class PDFContentPart:
             self.add_top_margin(style)
 
         if not pdf_table.finished:
+            remaining['state'] = pdf_table.get_state()
             return {'delayed': remaining, 'next': True}
         else:
             return {'delayed': None, 'next': False}
@@ -878,7 +901,7 @@ class PDFContentPart:
         """
         pdf_content = PDFContentPart(
             element, self.p, self.get_min_x(), self.col_width, self.y,
-            self.max_y, self, last, copy.deepcopy(style)
+            self.max_y, self, last, style.copy()
         )
         down_condition1 = len(self.children_memory) > 0 and \
             self.element_index == self.section_element_index
@@ -888,9 +911,9 @@ class PDFContentPart:
             child = self.children_memory[-1] if down_condition1 else \
                 self.partial_children_memory[-1]
             pdf_content.section_element_index = child['index']
-            pdf_content.section_delayed = copy.deepcopy(child['delayed'])
+            pdf_content.section_delayed = copy(child['delayed'])
             pdf_content.element_index = child['index']
-            pdf_content.delayed = copy.deepcopy(child['delayed'])
+            pdf_content.delayed = copy(child['delayed'])
             pdf_content.children_memory = self.children_memory[:-1] \
                 if down_condition1 else self.partial_children_memory[:-1]
 
@@ -917,4 +940,4 @@ from .image import PDFImage
 from .pdf import PDF
 from .text import PDFText
 from .table import PDFTable
-from .utils import parse_style_str, process_style
+from .utils import parse_style_str, process_style, copy

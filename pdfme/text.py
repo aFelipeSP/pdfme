@@ -1,6 +1,5 @@
 import json
 import re
-from copy import deepcopy
 from typing import Optional, Union
 from uuid import uuid4
 
@@ -520,9 +519,28 @@ class PDFTextBase:
             used_fonts=self.used_fonts, ids=self.ids,
         )
 
+    def get_state(self) -> dict:
+        return {
+            'last_part': self.last_part,
+            'last_word': self.last_word
+        }
+
+    def set_state(self, last_part: int=None, last_word: int=None) -> None:
+        """Function to update the state of the paragraph
+
+        Args:
+            last_part (int): this is the index of the part that was being
+                processed the last time method ``run`` was called.
+            last_word (int): this is the index of the
+                word of the last part that was added the last time method
+                ``run`` was called.
+        """
+        self.last_part = last_part
+        self.last_word = last_word
+
     def setup(
         self, x: Number=None, y:Number=None, width: Number=None,
-        height: Number=None, last_part: int=None, last_word: int=None
+        height: Number=None
     ):
         """Function to change any or all of the parameters of the rectangle of
         the content.
@@ -551,10 +569,6 @@ class PDFTextBase:
             self.width = width
         if height is not None:
             self.height = height
-        if last_part is not None:
-            self.last_part = last_part
-        if last_word is not None:
-            self.last_word = last_word
 
     def init(self) -> None:
         """Function to reset all of the instance properties that have to be
@@ -587,7 +601,7 @@ class PDFTextBase:
 
     def run(
         self, x: Number=None, y: Number=None, width: Number=None,
-        height: Number=None, last_part: Number=None, last_word: Number=None
+        height: Number=None
     ) -> dict:
         """Function to create the data needed to add this paragraph to the PDF
         document.
@@ -602,7 +616,7 @@ class PDFTextBase:
         Returns:
             dict: The dict from the property ``result``.
         """
-        self.setup(x, y, width, height, last_part, last_word)
+        self.setup(x, y, width, height)
         self.init()
         for part_index in range(self.last_part, len(self.content)):
             part = self.content[part_index]
@@ -1196,8 +1210,8 @@ class PDFText(PDFTextBase):
             TypeError: If the content part passed doesn't have the format
                 described in the documentation of this class.
         """
-        style = deepcopy(parent_style)
-        ids = deepcopy(ids)
+        style = parent_style.copy()
+        ids = ids.copy()
 
         if isinstance(content, str):
             content = {'.': [content]}
@@ -1286,4 +1300,4 @@ class PDFText(PDFTextBase):
 from .color import PDFColor
 from .fonts import PDFFonts
 from .pdf import PDF
-from .utils import get_paragraph_stream, parse_style_str, process_style
+from .utils import get_paragraph_stream, parse_style_str, process_style, copy

@@ -1,4 +1,3 @@
-import copy
 import json
 from io import BytesIO
 from pathlib import Path
@@ -265,7 +264,7 @@ class PDF:
         if (rotate_page is None and self.rotate_page) or rotate_page:
             page_height, page_width = page_width, page_height
 
-        margin_ = copy.deepcopy(self.margin)
+        margin_ = copy(self.margin)
         if margin is not None:
             margin_.update(parse_margin(margin))
 
@@ -1081,6 +1080,6 @@ from .parser import PDFObject
 from .table import PDFTable
 from .text import PDFText
 from .utils import (
-    create_graphics, get_page_size, get_paragraph_stream,
-    parse_margin, parse_style_str, process_style, to_roman
+    create_graphics, get_page_size, get_paragraph_stream, parse_margin,
+    parse_style_str, process_style, to_roman, copy
 )

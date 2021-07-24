@@ -1,5 +1,4 @@
 import re
-from copy import deepcopy
 from typing import Union
 
 colors = {
@@ -169,7 +168,7 @@ class PDFColor:
         self, color: Union[ColorType, 'PDFColor'], stroke: bool=False
     ) -> None:
         if isinstance(color, PDFColor):
-            self.color = deepcopy(color.color)
+            self.color = copy(color.color)
         else:
             self.color = parse_color(color)
         self.stroke = stroke
@@ -267,3 +266,5 @@ def parse_color(color: ColorType) -> list:
             return [float(c) for c in color[:4]]
         except:
             raise TypeError("Couldn't parse numeric color value: {}".format(color))
+
+from .utils import copy

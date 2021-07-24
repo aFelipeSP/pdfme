@@ -1,4 +1,3 @@
-from copy import deepcopy
 from typing import Any, Iterable, Union
 
 STYLE_PROPS = dict(
@@ -144,7 +143,7 @@ class PDFDocument:
     """
     def __init__(self, document: dict, context: dict=None) -> None:
         context = {} if context is None else context
-        style = deepcopy(document.get('style', {}))
+        style = copy(document.get('style', {}))
         style_args = {
             v: style[k] for k, v in STYLE_PROPS.items() if k in style
         }
@@ -227,7 +226,7 @@ class PDFDocument:
         """
         self.pdf.running_sections = []
         for name in running_sections:
-            section = deepcopy(self.running_sections[name])
+            section = copy(self.running_sections[name])
             margin = self.pdf.margin
 
             page_width, page_height = self.pdf.page_width, self.pdf.page_height
@@ -274,7 +273,7 @@ class PDFDocument:
             section (dict): a dict representing the section to be processed.
         """
 
-        section_style = deepcopy(self.style)
+        section_style = copy(self.style)
         section_style.update(process_style(section.get('style', {}), self.pdf))
 
         page_args = {
@@ -316,20 +315,15 @@ class PDFDocument:
         Raises:
             Exception: if the footnotes added to the page are very large.
         """
-        content_part = self.section.pdf_content_part
-        first_page = content_part is None
-        if first_page:
-            section_element_index = 0
-            section_delayed = []
-            children_memory = []
-        else:
-            section_element_index = deepcopy(content_part.section_element_index)
-            section_delayed = deepcopy(content_part.section_delayed)
-            children_memory = deepcopy(content_part.children_memory)
+
+        section_state = self.section.get_state() \
+            if self.section.pdf_content_part is not None else {
+                'section_element_index': 0,
+                'section_delayed': [],
+                'children_memory': []
+            }
 
         self.section.run(height=self.height)
-        if first_page:
-            content_part = self.section.pdf_content_part
         footnotes_obj = self._process_footnotes()
 
         if footnotes_obj is None:
@@ -345,10 +339,8 @@ class PDFDocument:
             new_height = self.height - footnotes_obj.current_height \
                 - self.footnotes_margin
 
-            content_part.section_element_index = section_element_index
-            content_part.section_delayed = section_delayed
-            content_part.children_memory = children_memory
-
+            if section_state is not None:
+                self.section.set_state(**section_state)
             self.pdf._content(self.section, height=new_height)
 
             footnotes_obj = self._process_footnotes()
@@ -404,7 +396,7 @@ class PDFDocument:
         """
         content = {'style': '$footnotes', 'content': []}
         for index, footnote in enumerate(page_footnotes):
-            footnote = deepcopy(footnote)
+            footnote = copy(footnote)
             style = footnote.setdefault('style', {})
             style.update(dict(
                 list_text=str(index + 1) + ' ', list_style='$footnote'
@@ -454,4 +446,4 @@ def build_pdf(document: dict, buffer: Any, context: dict=None) -> None:
 
 from .content import PDFContent
 from .pdf import PDF
-from .utils import process_style
+from .utils import process_style, copy
