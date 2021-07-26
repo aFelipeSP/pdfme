@@ -218,21 +218,35 @@ class PDFTable:
         if height is not None:
             self.height = height
 
-    def get_state(self):
+    def get_state(self) -> dict:
+        """Method to get the current state of this table. This can be used
+        later in method :meth:`pdfme.table.PDFTable.set_state` to
+        restore this state in this table (like a checkpoint in a
+        videogame).
+
+        Returns:
+            dict: a dict with the state of this table.
+        """
         return {
             'current_index': self.current_index, 'delayed': copy(self.delayed)
         }
 
     def set_state(self, current_index: int=None, delayed: dict=None) -> None:
-        """Function to update the state of the paragraph
+        """Method to set the state of this table.
+        
+        The arguments of this method define the current state of this table,
+        and with this method you can change that state.
 
         Args:
-            current_index (int): this is the index of the row to be added
-                the next time you call method ``run``.
-            delayed (dict): 
+            current_index (int, optional): the index of the current row being
+                added.
+            delayed (dict, optional): a dict with delayed cells that should be
+                added before the next row.
         """
-        self.current_index = current_index
-        self.delayed = delayed
+        if current_index is not None:
+            self.current_index = current_index
+        elif delayed is not None:
+            self.delayed = delayed
 
     def set_default_border(self) -> None:
         """Method to create attribute ``default_border`` containing the default

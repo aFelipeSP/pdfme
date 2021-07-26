@@ -520,6 +520,14 @@ class PDFTextBase:
         )
 
     def get_state(self) -> dict:
+        """Method to get the current state of this paragraph. This can be used
+        later in method :meth:`pdfme.text.PDFText.set_state` to
+        restore this state in this paragraph (like a checkpoint in a
+        videogame).
+
+        Returns:
+            dict: a dict with the state of this paragraph.
+        """
         return {
             'last_part': self.last_part,
             'last_word': self.last_word
@@ -527,6 +535,9 @@ class PDFTextBase:
 
     def set_state(self, last_part: int=None, last_word: int=None) -> None:
         """Function to update the state of the paragraph
+
+        The arguments of this method define the current state of this paragraph,
+        and with this method you can change that state.
 
         Args:
             last_part (int): this is the index of the part that was being

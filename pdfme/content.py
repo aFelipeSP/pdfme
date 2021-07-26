@@ -232,12 +232,33 @@ class PDFContent:
             self.finished = True
 
     def get_state(self) -> dict:
+        """Method to get the current state of this content box. This can be used
+        later in method :meth:`pdfme.content.PDFContent.set_state` to restore
+        this state in this content box (like a checkpoint in a videogame).
+
+        Returns:
+            dict: a dict with the state of this content box.
+        """
         return self.pdf_content_part.get_state()
 
     def set_state(
         self, section_element_index: int=None, section_delayed: list=None,
         children_memory: list=None
     ) -> None:
+        """Method to set the state of this content box.
+        
+        The 3 arguments of this method define the current state of this content
+        box, and with this method you can change that state.
+
+        Args:
+            section_element_index (int, optional): the index of the current
+                element being added.
+            section_delayed (list, optional): a list of delayed elements, that
+                should be added before continuing with the rest of elements.
+            children_memory (list, optional): if the current element is in turn
+                a content box, this list says what the indexes of the nested
+                content boxes inside this content box are.
+        """
         self.pdf_content_part.set_state(
             section_element_index, section_delayed, children_memory
         )
@@ -347,6 +368,14 @@ class PDFContentPart:
         self.minim_forward = None
 
     def get_state(self) -> dict:
+        """Method to get the current state of this content box. This can be used
+        later in method :meth:`pdfme.content.PDFContentPart.set_state` to
+        restore this state in this content box (like a checkpoint in a
+        videogame).
+
+        Returns:
+            dict: a dict with the state of this content box.
+        """
         return {
             'section_element_index': self.section_element_index,
             'section_delayed': copy(self.section_delayed),
@@ -357,6 +386,20 @@ class PDFContentPart:
         self, section_element_index: int=None, section_delayed: list=None,
         children_memory: list=None
     ) -> None:
+        """Method to set the state of this content box part.
+        
+        The arguments of this method define the current state of this content
+        box part, and with this method you can change that state.
+
+        Args:
+            section_element_index (int, optional): the index of the current
+                element being added.
+            section_delayed (list, optional): a list of delayed elements, that
+                should be added before continuing with the rest of elements.
+            children_memory (list, optional): if the current element is in turn
+                a content box, this list says what the indexes of the nested
+                content boxes inside this content box are.
+        """
         self.section_element_index = section_element_index
         self.section_delayed = copy(section_delayed)
         self.children_memory = copy(children_memory)
