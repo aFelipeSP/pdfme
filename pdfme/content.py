@@ -777,6 +777,7 @@ class PDFContentPart:
             pdf_text = element['paragraph']
             pdf_text.setup(self.x, self.y, self.width, self.max_height)
             pdf_text.set_state(**element['state'])
+            pdf_text.finished = False
             remaining = copy(element)
         else:
             par_style = {
@@ -858,6 +859,7 @@ class PDFContentPart:
             pdf_table = element['table_delayed']
             pdf_table.setup(self.x, self.y, self.width, self.max_height)
             pdf_table.set_state(**element['state'])
+            pdf_table.finished = False
             remaining = copy(element)
         else:
             table_props = {
@@ -921,13 +923,14 @@ class PDFContentPart:
 
         action = pdf_content.run()
 
-        current_height = pdf_content.min_y - (
-            pdf_content.max_y if pdf_content.cols_n > 1 else pdf_content.y
-        )
-        self.y -= current_height
+        if action != 'partial_next':
+            current_height = pdf_content.min_y - (
+                pdf_content.max_y if pdf_content.cols_n > 1 else pdf_content.y
+            )
+            self.y -= current_height
 
-        if current_height > 0:
-            self.add_top_margin(style)
+            if current_height > 0:
+                self.add_top_margin(style)
 
         if action in ['interrupt', 'break', 'partial_next']:
             return action
