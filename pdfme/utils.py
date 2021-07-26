@@ -1,6 +1,5 @@
-from copy import deepcopy
 import re
-from typing import Iterable, Union
+from typing import Any, Iterable, Union
 
 page_sizes = {
     'a5': (419.528, 595.276),
@@ -46,7 +45,7 @@ def process_style(style: Union[str, dict], pdf: 'PDF'=None) -> dict:
     elif isinstance(style, str):
         if pdf is None:
             return {}
-        return deepcopy(pdf.formats[style])
+        return copy(pdf.formats[style])
     elif isinstance(style, dict):
         return style
     else:
@@ -352,6 +351,24 @@ def get_paragraph_stream(
     if text_stream != '':
         stream += ' BT 1 0 0 1 {} {} Tm{} ET'.format(x, y, text_stream)
     return stream
+
+def copy(obj: Any) -> Any:
+    """Function to copy objects like the ones used in this project: dicts,
+    lists, PDFText, PDFTable, PDFContent, etc.
+
+
+    Args:
+        obj (Any): the object to be copied.
+
+    Returns:
+        Any: the copy of the object passed as argument.
+    """
+    if isinstance(obj, list):
+        return [copy(el) for el in obj]
+    elif isinstance(obj, dict):
+        return {k: copy(v) for k, v in obj.items()}
+    else:
+        return obj
 
 from .color import PDFColor
 from .fonts import PDFFonts

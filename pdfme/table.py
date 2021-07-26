@@ -1,4 +1,3 @@
-from copy import deepcopy
 from typing import Iterable, Optional, Union
 
 PARAGRAPH_PROPS = (
@@ -219,6 +218,36 @@ class PDFTable:
         if height is not None:
             self.height = height
 
+    def get_state(self) -> dict:
+        """Method to get the current state of this table. This can be used
+        later in method :meth:`pdfme.table.PDFTable.set_state` to
+        restore this state in this table (like a checkpoint in a
+        videogame).
+
+        Returns:
+            dict: a dict with the state of this table.
+        """
+        return {
+            'current_index': self.current_index, 'delayed': copy(self.delayed)
+        }
+
+    def set_state(self, current_index: int=None, delayed: dict=None) -> None:
+        """Method to set the state of this table.
+        
+        The arguments of this method define the current state of this table,
+        and with this method you can change that state.
+
+        Args:
+            current_index (int, optional): the index of the current row being
+                added.
+            delayed (dict, optional): a dict with delayed cells that should be
+                added before the next row.
+        """
+        if current_index is not None:
+            self.current_index = current_index
+        elif delayed is not None:
+            self.delayed = delayed
+
     def set_default_border(self) -> None:
         """Method to create attribute ``default_border`` containing the default
         border values.
@@ -298,7 +327,7 @@ class PDFTable:
         self.borders_h = {}
         self.borders_v = {}
         for b in borders:
-            border = deepcopy(deepcopy(self.default_border))
+            border = copy(self.default_border)
             border.update(b)
             border['color'] = PDFColor(border['color'], True)
             pos = border.pop('pos', None)
@@ -325,9 +354,9 @@ class PDFTable:
         """
         border_l = self.borders_v if is_vert else self.borders_h
         if i in border_l and j in border_l[i]:
-            return deepcopy(border_l[i][j])
+            return copy(border_l[i][j])
         else:
-            return deepcopy(self.default_border)
+            return copy(self.default_border)
 
     def setup_fills(self, fills: Iterable) -> None:
         """Method to process the ``fills`` argument passed to this class, and
@@ -653,7 +682,7 @@ class PDFTable:
             cell_style = element['cell_style']
             style = {}
         else:
-            style = deepcopy(self.style)
+            style = copy(self.style)
 
             if element is None:
                 element = ''
@@ -680,7 +709,7 @@ class PDFTable:
                 )
             style.pop(attr, None)
             cell_style['cell_fill'] = style.pop('cell_fill', None)
-        element = deepcopy(element)
+        element = copy(element)
         return element, style, cell_style
 
     def _setup_cell_fill(
@@ -761,23 +790,29 @@ class PDFTable:
         keys = [key for key in element.keys() if key.startswith('.')]
 
         real_height = 0
+        did_finished = False
         if len(keys) > 0 or self._is_delayed_type(element, 'text'):
-            real_height = self.process_text(
-                col, element, x, y, width, height, style, delayed
+            real_height, did_finished = self.process_text(
+                element, x, y, width, height, style, delayed
             )
         elif self.is_type(element, 'image'):
-            real_height = self.process_image(
-                col, element, x, y, width, height, delayed
+            real_height, did_finished = self.process_image(
+                element, x, y, width, height, delayed
             )
         elif self.is_type(element, 'content'):
-            real_height = self.process_content(
-                col, element, x, y, width, height, style, delayed
+            real_height, did_finished = self.process_content(
+                element, x, y, width, height, style, delayed
             )
 
         elif self.is_type(element, 'table'):
-            real_height = self.process_table(
-                col, element, x, y, width, height, style, delayed
+            real_height, did_finished = self.process_table(
+                element, x, y, width, height, style, delayed
             )
+
+        if did_finished:
+            self.delayed.pop(col, None)
+        else:
+            self.delayed[col] = delayed
 
         real_height += padd_y if real_height>0 else (0 if self.first_row else 4)
         if rowspan > 0:
@@ -789,7 +824,7 @@ class PDFTable:
         return False
 
     def process_text(
-        self, col: int, element: dict, x: Number, y: Number, width: Number,
+        self, element: dict, x: Number, y: Number, width: Number,
         height: Number, style: dict, delayed: dict
     ) -> float:
         """Method to add a paragraph to a cell.
@@ -811,7 +846,8 @@ class PDFTable:
         if 'delayed' in element:
             pdf_text = element['delayed']
             pdf_text.setup(x, y, width, height)
-            pdf_text.pdf = self.pdf
+            pdf_text.set_state(**element['state'])
+            pdf_text.finished = False
         else:
             par_style = {
                 v: style.get(v) for v in PARAGRAPH_PROPS if v in style
@@ -828,13 +864,11 @@ class PDFTable:
 
         if not pdf_text.finished:
             delayed.update({'delayed': pdf_text, 'type': 'text'})
-            self.delayed[col] = delayed
-        else:
-            self.delayed.pop(col, None)
-        return pdf_text.current_height
+            delayed['state'] = pdf_text.get_state()
+        return pdf_text.current_height, pdf_text.finished
 
     def process_image(
-        self, col: int, element: dict, x: Number, y: Number,
+        self, element: dict, x: Number, y: Number, 
         width: Number, height: Number, delayed: dict
     ) -> float:
         """Method to add an image to a cell.
@@ -860,6 +894,7 @@ class PDFTable:
         img_height = img_width * pdf_image.height / pdf_image.width
 
         real_height = 0
+        finished = False
         if img_height < height:
             real_height = img_height
             self.parts.append({
@@ -867,14 +902,13 @@ class PDFTable:
                 'x': x, 'y': y - img_height,
                 'width': img_width, 'height': img_height
             })
-            self.delayed.pop(col, None)
+            finished = True
         else:
             delayed.update({'delayed': pdf_image, 'type': 'image'})
-            self.delayed[col] = delayed
-        return real_height
+        return real_height, finished
 
     def process_content(
-        self, col: int, element: dict, x: Number, y: Number,
+        self, element: dict, x: Number, y: Number,
         width: Number, height: Number, style: dict, delayed: dict
     ) -> float:
         """Method to add a content box to a cell.
@@ -896,7 +930,8 @@ class PDFTable:
         if 'delayed' in element and element['type'] == 'content':
             pdf_content = element['delayed']
             pdf_content.setup(x, y, width, height)
-            pdf_content.pdf = self.pdf
+            pdf_content.set_state(**element['state'])
+            pdf_content.finished = False
         else:
             element['style'] = style
             pdf_content = PDFContent(
@@ -911,14 +946,11 @@ class PDFTable:
 
         if not pdf_content.finished:
             delayed.update({'delayed': pdf_content, 'type': 'content'})
-            self.delayed[col] = delayed
-        else:
-            self.delayed.pop(col, None)
-
-        return pdf_content.current_height
+            delayed['state'] = pdf_content.get_state()
+        return pdf_content.current_height, pdf_content.finished
 
     def process_table(
-        self, col: int, element: dict, x: Number, y: Number,
+        self, element: dict, x: Number, y: Number,
         width: Number, height: Number, style: dict, delayed: dict
     ) -> float:
         """Method to add a table to a cell.
@@ -940,7 +972,8 @@ class PDFTable:
         if 'delayed' in element and element['type'] == 'table':
             pdf_table = element['delayed']
             pdf_table.setup(x, y, width, height)
-            pdf_table.pdf = self.pdf
+            pdf_table.set_state(**element['state'])
+            pdf_table.finished = False
         else:
             table_props = {
                 v: element.get(v) for v in TABLE_PROPS if v in element
@@ -958,11 +991,8 @@ class PDFTable:
 
         if not pdf_table.finished:
             delayed.update({'delayed': pdf_table, 'type': 'table'})
-            self.delayed[col] = delayed
-        else:
-            self.delayed.pop(col, None)
-
-        return pdf_table.current_height
+            delayed['state'] = pdf_table.get_state()
+        return pdf_table.current_height, pdf_table.finished
 
 from .color import PDFColor
 from .content import PDFContent
@@ -970,4 +1000,4 @@ from .fonts import PDFFonts
 from .image import PDFImage
 from .pdf import PDF
 from .text import PDFText
-from .utils import parse_style_str, process_style
+from .utils import parse_style_str, process_style, copy
