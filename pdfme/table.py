@@ -664,6 +664,8 @@ class PDFTable:
                     self.fills_mem[col]['add_later'] = False
                 if self.heights_mem.get(col, 0) > self.max_height:
                     self.max_height = self.heights_mem[col]
+                if self.colspan == 0:
+                    self.is_rowspan = False
             can_continue = True
         return can_continue
 
