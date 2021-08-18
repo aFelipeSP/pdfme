@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add possibility of embedding ttf and unicode fonts.
 - Add possibility to embed png files.
 
+## [0.4.2] - 2021-08-18
+### Fixed
+- Fixed issues #3 and #5 related with footnotes and incomplete sections.
+
 ## [0.4.1] - 2021-07-26
 ### Fixed
 - An alternative for deepcopy was created, and some modifications were made in 
