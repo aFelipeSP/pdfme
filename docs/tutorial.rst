@@ -224,7 +224,7 @@ Next we will add an image to the document, located in the relative path
     })
 
     
-In ``style`` dict we set ``margin_left`` and ``margin_right`` to 70
+In ``style`` dict we set ``margin_left`` and ``margin_right`` to 100
 to make our image narrower and center it in the page.
 
 Next we will add our first table to the document, a table with summary
