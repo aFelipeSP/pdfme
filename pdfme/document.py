@@ -341,6 +341,7 @@ class PDFDocument:
 
             if section_state is not None:
                 self.section.set_state(**section_state)
+                self.section.finished = False
             self.pdf._content(self.section, height=new_height)
 
             footnotes_obj = self._process_footnotes()
