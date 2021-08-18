@@ -347,6 +347,7 @@ class PDFDocument:
 
             if footnotes_obj is not None:
                 self.pdf.page._y = self.pdf.margin['bottom'] + footnotes_height
+                self.pdf.page.x = self.x
 
                 x_line = round(self.pdf.page.x, 3)
                 y_line = round(self.pdf.page._y + self.footnotes_margin/2, 3)
