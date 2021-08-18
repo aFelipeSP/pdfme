@@ -8,9 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add possibility of embedding ttf and unicode fonts.
 - Add possibility to embed png files.
 
-## [0.4.3] - 2021-08-18
+## [0.4.4] - 2021-08-18
 ### Added
 - Numbers in paragraph parts are now converted to strings. PR #9
+
+## [0.4.3] - 2021-08-18
+### Added
+- Fixed issues #7 related with incomplete borders when combining cells.
 
 ## [0.4.2] - 2021-08-18
 ### Fixed
