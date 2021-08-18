@@ -1239,7 +1239,9 @@ class PDFText(PDFTextBase):
         for key, value in content.items():
             if key.startswith('.'):
                 style.update(parse_style_str(key[1:], self.fonts))
-                if isinstance(value, str):
+                if isinstance(value, (int, float)):
+                    value = [str(value)]
+                elif isinstance(value, str):
                     value = [value]
                 if not isinstance(value, (list, tuple)):
                     raise TypeError(
@@ -1281,6 +1283,8 @@ class PDFText(PDFTextBase):
         is_last_string = False
 
         for element in elements:
+            if isinstance(element, (int, float)):
+                element = str(element)
             if isinstance(element, str):
                 if element == '':
                     continue
