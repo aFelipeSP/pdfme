@@ -58,8 +58,8 @@ classes) in the ``document`` dict like this:
 .. code-block::
 
     document['formats'] = {
-        "url": {"c": "blue", "u": 1},
-        "title": {"b": 1, "s": 13}
+        'url': {'c': 'blue', 'u': 1},
+        'title': {'b': 1, 's': 13}
     }
 
 Every key in ``formats`` dict will be the name of a format that you will be able
@@ -77,15 +77,15 @@ our document using running sections:
 .. code-block::
 
     document['running_sections'] = {
-        "header": {
-            "x": "left", "y": 20, "height": "top",
-            "style": {"text_align": "r"},
-            "content": [{".b": "This is a header"}]
+        'header': {
+            'x': 'left', 'y': 20, 'height': 'top',
+            'style': {'text_align': 'r'},
+            'content': [{'.b': 'This is a header'}]
         },
-        "footer": {
-            "x": "left", "y": 800, "height": "bottom",
-            "style": {"text_align": "c"},
-            "content": [{".": ["Page ", {"var": "$page"}]}]
+        'footer': {
+            'x': 'left', 'y': 800, 'height': 'bottom',
+            'style': {'text_align': 'c'},
+            'content': [{'.': ['Page ', {'var': '$page'}]}]
         }
     }
 
@@ -130,7 +130,7 @@ properties of the document.
 .. code-block::
 
     section1['style'] = {
-        "page_numbering_style": 'roman'
+        'page_numbering_style': 'roman'
     }
 
 Here we overwrite only ``page_numbering_style``, a property that sets the style
@@ -161,8 +161,8 @@ We will first add a title for this section:
 .. code-block::
 
     content1.append({
-        ".": "A Title", "style": "title", "label": "title1",
-        "outline": {"level": 1, "text": "A different title 1"}
+        '.': 'A Title', 'style': 'title', 'label': 'title1',
+        'outline': {'level': 1, 'text': 'A different title 1'}
     })
 
 We added a paragraph dict, and it's itself what we call a paragraph part. A
@@ -192,26 +192,40 @@ Now we will add our first paragraph.
 .. code-block::
 
     content1.append(
-        ["This is a paragraph with a ", {".b;c:green": "bold green part"}, ", a ",
-        {".": "link", "style": "url", "uri": "https://some.url.com"},
-        ", a footnote", {"footnote": "description of the footnote"},
-        " and a reference to ",
-        {".": "Title 2.", "style": "url", "ref": "title2"}]
+        ['This is a paragraph with a ', {'.b;c:green': 'bold green part'}, ', a ',
+        {'.': 'link', 'style': 'url', 'uri': 'https://some.url.com'},
+        ', a footnote', {'footnote': 'description of the footnote'},
+        ' and a reference to ',
+        {'.': 'Title 2.', 'style': 'url', 'ref': 'title2'}]
     )
 
-Note that this paragraph is not a dict, like the title we add before. Here we
+Note that this paragraph is not a dict, like the title we added before. Here we
 use a list of paragraph parts, a shortcut when you have a paragraph with 
 different styles or with labels, references, urls, outlines or footnotes.
 
 We give format to the second paragraph part by using its dot key. This way of
 giving format to a paragraph part is something like the inline styles in HTML
 elements, and in particular in this example we are making the text inside this
-part bold and gray.
+part bold and green.
 
 The rest of this list paragraph parts are examples of how to add a url,
 a footnote and a reference (clickable links to go to the location in the
 document of the label we reference) to the second title of this document (
 located in the second section).
+
+Next we will add an image to the document, located in the relative path
+``path/to/some_image.jpg``.
+
+.. code-block::
+
+    content1.append({
+        'image': 'path/to/some_image.jpg',
+        'style': {'margin_left': 100, 'margin_right': 100}
+    })
+
+    
+In ``style`` dict we set ``margin_left`` and ``margin_right`` to 70
+to make our image narrower and center it in the page.
 
 Next we will add our first table to the document, a table with summary
 statistics from a database table.
@@ -244,7 +258,7 @@ in our table the first column is 1.5 times larger than the second one, and
 the third and fourth one are the same length as the second one.
 
 In ``style`` dict we set the ``border_width`` of the table to 0, thus hiding
-all of this table lines. We also set ``margin_left`` and ``margin_left`` to 70
+all of this table lines. We also set ``margin_left`` and ``margin_right`` to 70
 to make our table narrower and center it in the page.
 
 In ``fills`` we overwrite the default value of ``cell_fill``, for some of the
@@ -259,7 +273,8 @@ definition too, but in short, we are setting the border width of the first,
 second and last horizontal borders to 0.5.
 
 And finally we are adding the table contents in the ``table`` key. Each list,
-in this ``table`` list, represents a row of the table.
+in this ``table`` list, represents a row of the table, and each element in a row
+list represents a cell.
 
 Next we will add our second table to the document, a form table with some
 cells combined.
@@ -271,12 +286,12 @@ cells combined.
         'table': [
             [
                 {
-                    "colspan": 4,
-                    "style": {
-                        "cell_fill": [0.8, 0.53, 0.3],
-                        "text_align": "c"
+                    'colspan': 4,
+                    'style': {
+                        'cell_fill': [0.8, 0.53, 0.3],
+                        'text_align': 'c'
                     },
-                    ".b;c:1;s:12": 'Fake Form'
+                    '.b;c:1;s:12': 'Fake Form'
                 },None, None, None
             ],
             [
@@ -285,7 +300,7 @@ cells combined.
             ],
             [
                 [{'.b': 'Email\n'}, 'fakeuser@fakemail.com'],
-                [{'.b': 'Age\n'}, 35],
+                [{'.b': 'Age\n'}, '35'],
                 [{'.b': 'City of Residence\n'}, 'Fake City'],
                 [{'.b': 'Cell Number\n'}, '33333333333'],
             ]
@@ -300,28 +315,30 @@ the second row we combine the first 2 columns for the first name, and the other
 rest of the information.
 
 Notice that cells that are below or to the right of a merged cell must be equal
-to ``None``.
+to ``None``, and that instead of using strings inside the cells, like we did
+in the first table, we used paragraph parts in the cells. And besides paragraphs
+you can add a content box, an image or even another table to a cell. 
 
 Now we will add a second section.
 
 .. code-block::
 
     document['sections'].append({
-        "style": {
-            "page_numbering_reset": True, "page_numbering_style": "arabic"
+        'style': {
+            'page_numbering_reset': True, 'page_numbering_style': 'arabic'
         },
-        "running_sections": ["header", "footer"],
-        "content": [
+        'running_sections': ['header', 'footer'],
+        'content': [
 
             {
-                ".": "Title 2", "style": "title", "label": "title2",
-                "outline": {}
+                '.': 'Title 2', 'style': 'title', 'label': 'title2',
+                'outline': {}
             },
 
             {
-                "style": {"list_text": "1.  "},
-                ".": ["This is a list paragraph with a reference to ",
-                {".": "Title 1.", "style": "url", "ref": "title1"}]
+                'style': {'list_text': '1.  '},
+                '.': ['This is a list paragraph with a reference to ',
+                {'.': 'Title 1.', 'style': 'url', 'ref': 'title1'}]
             }
         ]
     })

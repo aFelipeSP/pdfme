@@ -59,6 +59,8 @@ almost all of the functionalities of this library.
                     " and a reference to ",
                     {".": "Title 2.", "style": "url", "ref": "title2"}],
 
+                    {"image": "path/to/some/image.jpg"},
+
                     *gen_paragraphs(7),
 
                     {
