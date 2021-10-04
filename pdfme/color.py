@@ -241,9 +241,9 @@ def parse_color(color: ColorType) -> list:
 
             n = len(color)
             if n in [4, 5]:
-                return [int(color[i:1+i] + color[i:1+i], 16) for i in range(1,4)]
+                return [int(color[i:1+i] + color[i:1+i], 16)/255 for i in range(1,4)]
             else:
-                return [int(color[i:2+i], 16) for i in range(1,7,2)]
+                return [int(color[i:2+i], 16)/255 for i in range(1,7,2)]
         else:
             color = re.split(',| ', color)
 
