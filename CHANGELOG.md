@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add possibility of embedding ttf and unicode fonts.
 - Add possibility to embed png files.
 
+## [0.4.5] - 2021-10-04
+### Fixed
+- Fixed issue #10 related with error with hexagesimal colors.
+
 ## [0.4.4] - 2021-08-18
 ### Added
 - Numbers in paragraph parts are now converted to strings. PR #9
