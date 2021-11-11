@@ -479,10 +479,12 @@ class PDFTable:
 
         can_continue = True
         if len(self.delayed) > 0:
+            can_continue = False
             row = [self.delayed.get(i) for i in range(self.cols_count)]
             action = self.add_row(row, True)
             if action == 'continue':
                 self.current_index += 1
+                can_continue = True
 
         cancel = False
         if can_continue:
