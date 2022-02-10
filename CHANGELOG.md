@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add possibility of embedding ttf and unicode fonts.
 - Add possibility to embed png files.
 
+
+## [0.4.7] - 2022-02-10
+### Added
+- Added group elements.
+- Added per page running sections.
+### Fixed
+- Fixed some typos in the docs.
+
 ## [0.4.6] - 2021-11-11
 ### Fixed
 - Fixed issue found in table module.
