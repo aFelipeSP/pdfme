@@ -122,6 +122,24 @@ class PDFContent:
       insert a new section with more columns (for example a 2 columns content
       box, inside another 2 columns content box).
 
+    * A group element that is a list of paragraphs, images or tables that should
+      be placed all in the same page. This can be used for example to place an
+      image with a description, with the guarantee that both will be in the same
+      page. Be careful though, because the group element should fit the
+      width and max height of the containing box, or else an error will be
+      raised.
+      Here is an example of a table dict:
+
+      .. code-block:: python
+
+        {
+            "style": {"margin_left": 80, "margin_right": 80},
+            "group": [
+                {"image": "tests/image_test.jpg"},
+                {".": "Figure 1: Description of figure 1"}
+            ]
+        }
+
     Each element in the content box can have margins to keep it separated from
     the other elements, and these margins can be set inside the ``style`` dict
     of the content box dict with the following keys: ``margin_top``, ``margin_left``,
@@ -430,7 +448,7 @@ class PDFContentPart:
             if ret.get('next', False):
                 return 'next'
 
-            if ret.get('image_flow', False):
+            if ret.get('flow', False):
                 n += 1
 
         if (
@@ -580,7 +598,7 @@ class PDFContentPart:
         is resetting.
 
         Returns:
-            True if this element is the las element of an ancestor that is
+            True if this element is the last element of an ancestor that is
             resetting.
         """
         parent = self.parent
@@ -754,6 +772,19 @@ class PDFContentPart:
         else:
             self.y -=  style.get('margin_top', 0)
 
+    def parse_element(self, element: ProcessElement) -> dict:
+        if not isinstance(element, (dict, str, list, tuple)):
+            return str(element)
+        if isinstance(element, (str, list, tuple)):
+            return {'.': element}
+
+        if not isinstance(element, dict):
+            raise TypeError(
+                'Elements must be of type dict, str, list or tuple:{}'
+                .format(element)
+            )
+        return element        
+
     def process(self, element: ProcessElement, last: bool=False) -> StrOrDict:
         '''Function to add a single child element to the rectangle.
 
@@ -770,16 +801,7 @@ class PDFContentPart:
             last (bool): Wheter or not this is the last child element of the
                 list of child elements of this element.
         '''
-        if not isinstance(element, (dict, str, list, tuple)):
-            element = str(element)
-        if isinstance(element, (str, list, tuple)):
-            element = {'.': element}
-
-        if not isinstance(element, dict):
-            raise TypeError(
-                'Elements must be of type dict, str, list or tuple:{}'
-                .format(element)
-            )
+        element = self.parse_element(element)
 
         keys = [key for key in element.keys() if key.startswith('.')]
 
@@ -800,9 +822,12 @@ class PDFContentPart:
             return self.process_table(element, style, element_style)
         elif 'content' in element:
             return self.process_child(element, style, last)
+        elif 'group' in element:
+            return self.process_group(element, style)
 
     def process_text(
-        self, element: dict, style: dict, element_style: dict
+        self, element: dict, style: dict, element_style: dict,
+        add_parts: bool=True
     ) -> dict:
         """Function that tries to add a paragraph to the current column
         rectangle, and add the remainder to the delayed list
@@ -837,9 +862,11 @@ class PDFContentPart:
         remaining['last_part'] = pdf_text.last_part
         remaining['last_word'] = pdf_text.last_word
         result['type'] = 'paragraph'
-        self.p.parts.append(result)
-        self.y -= pdf_text.current_height
 
+        if add_parts:
+            self.p.parts.append(result)
+
+        self.y -= pdf_text.current_height
         if pdf_text.current_height > 0:
             self.add_top_margin(style)
 
@@ -849,7 +876,9 @@ class PDFContentPart:
             remaining['state'] = pdf_text.get_state()
             return {'delayed': remaining, 'next': True}
 
-    def process_image(self, element: dict, style: dict) -> dict:
+    def process_image(
+        self, element: dict, style: dict, add_parts: bool=True
+    ) -> dict:
         """Function that tries to add an image to the current column rectangle,
         and add it to the delayed list if it can't add it.
 
@@ -868,23 +897,32 @@ class PDFContentPart:
         height = self.width * pdf_image.height / pdf_image.width
 
         if height < self.max_height:
-            self.p.parts.append({
-                'pdf_image': pdf_image, 'type': 'image', 'x': self.x,
-                'y': self.y - height, 'width': self.width, 'height': height
-            })
+            if add_parts:
+                self.p.parts.append({
+                    'pdf_image': pdf_image, 'type': 'image', 'x': self.x,
+                    'y': self.y - height, 'width': self.width, 'height': height
+                })
+
             self.y -= height
             self.add_top_margin(style)
         else:
+            if element.setdefault('tries', 0) >= 50:
+                raise Exception(
+                    'Image element could not be fitted in the document: {}'
+                    .format(element)
+                )
+            element['tries'] += 1
             image_place = style.get('image_place', 'flow')
             ret['delayed'] = element
             if image_place == 'normal':
                 ret['next'] = True
             elif image_place == 'flow':
-                ret['image_flow'] = True
+                ret['flow'] = True
         return ret
 
     def process_table(
-        self, element: dict, style: dict, element_style: dict
+        self, element: dict, style: dict, element_style: dict,
+        add_parts: bool=True
     ) -> dict:
         """Function that tries to add a table to the current column rectangle,
         and add the remainder to the delayed list.
@@ -917,9 +955,11 @@ class PDFContentPart:
             remaining = {'table_delayed': pdf_table, 'style': element_style}
 
         pdf_table.run()
-        self.p.parts.extend(pdf_table.parts)
-        self.p.lines.extend(pdf_table.lines)
-        self.p.fills.extend(pdf_table.fills)
+
+        if add_parts:
+            self.p.parts.extend(pdf_table.parts)
+            self.p.lines.extend(pdf_table.lines)
+            self.p.fills.extend(pdf_table.fills)
 
         self.y -= pdf_table.current_height
         if pdf_table.current_height > 0:
@@ -931,7 +971,9 @@ class PDFContentPart:
         else:
             return {'delayed': None, 'next': False}
 
-    def process_child(self, element: dict, style: dict, last: bool) -> StrOrDict:
+    def process_child(
+        self, element: dict, style: dict, last: bool
+    ) -> StrOrDict:
         """Function that tries to add a child content to the current column
         rectangle.
 
@@ -980,6 +1022,65 @@ class PDFContentPart:
         else:
             self.starting = False
             return {'delayed': None, 'next': False}
+
+    def process_group_element(
+        self, element: dict, inherited_style: dict, add_element: bool=False
+    ):
+        element = self.parse_element(element)
+
+        keys = [key for key in element.keys() if key.startswith('.')]
+
+        style = {}
+        style.update(inherited_style)
+        if len(keys) > 0:
+            style.update(parse_style_str(keys[0][1:], self.p.fonts))
+        element_style = process_style(element.get('style'), self.p.pdf)
+        style.update(element_style)
+
+        self.update_dimensions(style)
+
+        if len(keys) > 0 or 'paragraph' in element:
+            return self.process_text(element, style, element_style, add_element)
+        elif 'image' in element:
+            return self.process_image(element, style, add_element)
+        elif 'table' in element or 'table_delayed' in element:
+            return self.process_table(element, style, element_style, add_element)
+        else:
+            raise Exception(
+                'Element not allowed in a group element: {}'.format(element)
+            )
+
+    def process_group(self, group_element: dict, inherited_style: dict):
+        """Function that tries to add a group element to the current column
+        rectangle, and add it to the delayed list if it can't add it. If after
+        50 tries it can not add the group element, it will throw an exception.
+
+        Args:
+            group_element (dict): The group element to be added
+            inherited_style (dict): The style of the group element, combined
+                with the style of this content element.
+
+        Returns:
+            dict: Containing instructions to the caller.
+        """
+        initial_y = self.y
+        for element in group_element['group']:
+            ans = self.process_group_element(element, inherited_style)
+            if not (isinstance(ans, dict) and ans.get('delayed') is None):
+                if group_element.setdefault('tries', 0) >= 50:
+                    raise Exception(
+                        'Group element could not be fitted in the document: {}'
+                        .format(group_element)
+                    )
+                group_element['tries'] += 1
+                self.y = initial_y
+                return {'delayed': group_element, 'next': False, 'flow': True}
+        
+        self.y = initial_y
+        for element in group_element['group']:
+            self.process_group_element(element, inherited_style, True)
+
+        return {'delayed': None, 'next': False}
 
 from .fonts import PDFFonts
 from .image import PDFImage

@@ -1,4 +1,7 @@
+from collections import defaultdict
 from typing import Any, Iterable, Union
+
+from pdfme.utils import parse_range_string
 
 STYLE_PROPS = dict(
     f='font_family', s='font_size', c='font_color', text_align='text_align',
@@ -58,6 +61,10 @@ class PDFDocument:
       margin, if equal to ``'bottom'`` it takes the value of the whole page
       height minus the bottom margin, and if it is not defined or is None i
       will be 0.
+      You can pass keys ``include`` and ``exclude`` to place the running section
+      in specific pages. For both the value is a string with a comma separated
+      set of ranges with the format ``begin:end:step`` (like regular python
+      ranges).
 
     * ``sections``: an iterable with the sections of the document.
 
@@ -166,6 +173,19 @@ class PDFDocument:
         self.pdf.context.update(context)
 
         self.running_sections = document.get('running_sections', {})
+        self.exclude_running_sections = defaultdict(set)
+        self.include_running_sections = defaultdict(set)
+        for r_section, r_section_data in self.running_sections.items():
+            if 'exclude' in r_section_data:
+                pages_str = r_section_data['exclude']
+                pages = parse_range_string(pages_str)
+                for page_n in pages:
+                    self.exclude_running_sections[page_n].add(r_section)
+            if 'include' in r_section_data:
+                pages_str = r_section_data['include']
+                pages = parse_range_string(pages_str)
+                for page_n in pages:
+                    self.include_running_sections[page_n].add(r_section)
 
         self.sections = document.get('sections', [])
 
@@ -281,16 +301,19 @@ class PDFDocument:
         }
         self.pdf.setup_page(**page_args)
 
-        running_sections = section.get('running_sections', [])
-        self._set_running_sections(running_sections)
+        page_n = len(self.pdf.pages)
 
         if 'page_numbering_offset' in section_style:
             self.pdf.page_numbering_offset = section_style['page_numbering_offset']
         if 'page_numbering_style' in section_style:
             self.pdf.page_numbering_style = section_style['page_numbering_style']
         if section_style.get('page_numbering_reset', False):
-            self.pdf.page_numbering_offset = -len(self.pdf.pages)
+            self.pdf.page_numbering_offset = -page_n
 
+        running_sections = set(section.get('running_sections', []))
+        running_sections -= self.exclude_running_sections[page_n]
+        running_sections.update(self.include_running_sections[page_n])
+        self._set_running_sections(running_sections)
         self.pdf.add_page()
 
         pdf = self.pdf
@@ -306,6 +329,11 @@ class PDFDocument:
         )
         self._add_content()
         while not self.section.finished:
+            page_n = len(self.pdf.pages)
+            running_sections = set(section.get('running_sections', []))
+            running_sections -= self.exclude_running_sections[page_n]
+            running_sections.update(self.include_running_sections[page_n])
+            self._set_running_sections(running_sections)
             self.pdf.add_page()
             self._add_content()
 

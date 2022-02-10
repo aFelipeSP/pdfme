@@ -39,7 +39,7 @@ be the default text alignment for all the paragraphs in the document.
 In this dict you can set the default value for the style properties that affect
 the paragraphs (``text_align``, ``line_height``, ``indent``, ``list_text``,
 ``list_style``, ``list_indent``, ``b``, ``i``, ``s``, ``f``, ``u``, ``c``,
-``bg``, ``r``), images (``image_flow``), tables (``cell_margin``,
+``bg``, ``r``), images (``image_place``), tables (``cell_margin``,
 ``cell_margin_left``, ``cell_margin_top``, ``cell_margin_right``,
 ``cell_margin_bottom``, ``cell_fill``, ``border_width``, ``border_color``,
 ``border_style``) and content boxes (``margin_top``, ``margin_left``,
@@ -80,7 +80,8 @@ our document using running sections:
         'header': {
             'x': 'left', 'y': 20, 'height': 'top',
             'style': {'text_align': 'r'},
-            'content': [{'.b': 'This is a header'}]
+            'content': [{'.b': 'This is a header'}],
+            'include': '0:4:2'
         },
         'footer': {
             'x': 'left', 'y': 800, 'height': 'bottom',
@@ -98,7 +99,12 @@ you can include the number of the page inside a paragraph in pdfme.
 
 Just defining these running sections won't add them to every page of the
 document; you will have to reference them in the section you want to really use
-them. Keep reading to see how we add ``header`` and ``footer`` to our sections.
+them, or set a ``include`` key with a string of comma separated ranges of pages,
+like we just did in the ``header`` running section. In this particular case
+we will add ``header`` to pages 0 and 2.
+To know more about ``include`` and ``exclude`` keys in running sections see
+:class:`pdfme.document.PDFDocument`.
+Keep reading to see how we add ``header`` and ``footer`` to our sections.
 
 Finally we are going to talk about *sections*. These can have their own page
 layout, page numbering, running sections and style, and are the places where we
@@ -226,6 +232,20 @@ Next we will add an image to the document, located in the relative path
     
 In ``style`` dict we set ``margin_left`` and ``margin_right`` to 100
 to make our image narrower and center it in the page.
+
+Next we will add a group element, containing an image and a paragraph with the
+image description. This guarantees that both the image and its description will
+be placed in the same page.
+
+.. code-block::
+
+    content1.append({
+        "style": {"margin_left": 80, "margin_right": 80},
+        "group": [
+            {"image": 'path/to/some_image.jpg'},
+            {".": "Figure 1: Description of figure 1"}
+        ]
+    })
 
 Next we will add our first table to the document, a table with summary
 statistics from a database table.

@@ -26,8 +26,14 @@ Main features
 * You can add rich text paragraphs (paragraphs with text in different sizes,
   fonts, colors and styles).
 
+* You can add images.
+
 * You can add tables and place whatever you want on their cells, span columns
   and rows, and change the fills and borders in the easiest way possible.
+
+* You can add group elements that contain paragraphs, images or tables, and
+  guarantee that all of the children elements in the group element will be in
+  the same page.
 
 * You can add content boxes, a multi-column element where you can add
   paragraphs, images, tables and even content boxes themselves. The elements

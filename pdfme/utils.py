@@ -370,6 +370,33 @@ def copy(obj: Any) -> Any:
     else:
         return obj
 
+def parse_range_string(range_str: str) -> set:
+    """Function to convert a string of comma-separated integers and integer 
+    ranges into a set of all the integers included in those.
+
+    Args:
+        range_str (str): comma-separated list of integers and integer 
+            ranges.
+
+    Returns:
+        set: a set of integers.
+    """
+    integers_set = set()
+    for part in range_str.split(','):
+        range_parts = part.split(':')
+        if len(range_parts) == 1:
+            integers_set.add(int(range_parts[0].strip()))
+        else:
+            first = range_parts[0].strip()
+            range_parts[0] = 0 if first == '' else int(first)
+            if len(range_parts) > 1:
+                range_parts[1] = int(range_parts[1].strip())
+            if len(range_parts) > 2:
+                range_parts[2] = int(range_parts[2].strip())
+            integers_set.update(range(*range_parts))
+
+    return integers_set
+
 from .color import PDFColor
 from .fonts import PDFFonts
 from .pdf import PDF
