@@ -6,8 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 - Add possibility of embedding ttf and unicode fonts.
-- Add possibility to embed png files.
 
+## [0.4.8] - 2022-02-12
+### Added
+- Added support for png images embedding.
+- Added per page running sections and styles.
+### Fixed
+- Added "min_height" style property to make the images downsize to min height
+  when they don't fit in the available height.
 
 ## [0.4.7] - 2022-02-10
 ### Added
