@@ -61,10 +61,17 @@ class PDFDocument:
       margin, if equal to ``'bottom'`` it takes the value of the whole page
       height minus the bottom margin, and if it is not defined or is None i
       will be 0.
-      You can pass keys ``include`` and ``exclude`` to place the running section
-      in specific pages. For both the value is a string with a comma separated
-      set of ranges with the format ``begin:end:step`` (like regular python
-      ranges).
+
+    * ``per_page``: a list of dicts, each with a mandatory key ``pages``, a
+      comma separated string of indexes or ranges (python style), and any of the
+      following optional keys:
+
+      * ``style``: a style dict with page related style properties (page_size,
+        rotate_page, margin) that will be applied to every page in the ``pages``
+        ranges.
+      * ``running_sections``: a dict with optional ``exclude`` and ``include``
+        lists of running sections names to be included and excluded in every
+        page in the ``pages`` ranges.
 
     * ``sections``: an iterable with the sections of the document.
 
@@ -166,28 +173,24 @@ class PDFDocument:
 
         self.style = style
 
+        self.pdf.context.update(context)
+
         self.pdf.formats = {}
         self.pdf.formats['$footnote'] = {'r': 0.5, 's': 6}
         self.pdf.formats['$footnotes'] = {'s': 10, 'c': 0}
         self.pdf.formats.update(document.get('formats', {}))
-        self.pdf.context.update(context)
 
         self.running_sections = document.get('running_sections', {})
-        self.exclude_running_sections = defaultdict(set)
-        self.include_running_sections = defaultdict(set)
-        for r_section, r_section_data in self.running_sections.items():
-            if 'exclude' in r_section_data:
-                pages_str = r_section_data['exclude']
-                pages = parse_range_string(pages_str)
-                for page_n in pages:
-                    self.exclude_running_sections[page_n].add(r_section)
-            if 'include' in r_section_data:
-                pages_str = r_section_data['include']
-                pages = parse_range_string(pages_str)
-                for page_n in pages:
-                    self.include_running_sections[page_n].add(r_section)
+
+        self.per_page = []
+        for range_dict in document.get('per_page', []):
+            new_range_dict = copy(range_dict)
+            new_range_dict['pages'] = parse_range_string(range_dict['pages'])
+            self.per_page.append(new_range_dict)
 
         self.sections = document.get('sections', [])
+
+        self.x = self.y = self.width = self.height = 0
 
         self.footnotes = []
         self._traverse_document_footnotes(self.sections)
@@ -237,7 +240,10 @@ class PDFDocument:
                     if isinstance(value, (list, tuple, dict)):
                         self._traverse_document_footnotes(value)
 
-    def _set_running_sections(self, running_sections: Iterable) -> None:
+    def _set_running_sections(
+        self, running_sections: Iterable, page_width: 'Number',
+        page_height: 'Number', margin: dict
+    ):
         """Method to set the running sections for every section in the document.
 
         Args:
@@ -247,11 +253,6 @@ class PDFDocument:
         self.pdf.running_sections = []
         for name in running_sections:
             section = copy(self.running_sections[name])
-            margin = self.pdf.margin
-
-            page_width, page_height = self.pdf.page_width, self.pdf.page_height
-            if self.pdf.rotate_page:
-                page_width, page_height = page_height, page_width
 
             if section.get('width') in ['left', 'right']:
                 section['width'] = margin[section.get('width')]
@@ -292,50 +293,71 @@ class PDFDocument:
         Args:
             section (dict): a dict representing the section to be processed.
         """
-
         section_style = copy(self.style)
         section_style.update(process_style(section.get('style', {}), self.pdf))
-
-        page_args = {
-            k: section_style[k] for k in PAGE_PROPS if k in section_style
-        }
-        self.pdf.setup_page(**page_args)
-
-        page_n = len(self.pdf.pages)
-
+        
         if 'page_numbering_offset' in section_style:
             self.pdf.page_numbering_offset = section_style['page_numbering_offset']
         if 'page_numbering_style' in section_style:
             self.pdf.page_numbering_style = section_style['page_numbering_style']
         if section_style.get('page_numbering_reset', False):
-            self.pdf.page_numbering_offset = -page_n
-
-        running_sections = set(section.get('running_sections', []))
-        running_sections -= self.exclude_running_sections[page_n]
-        running_sections.update(self.include_running_sections[page_n])
-        self._set_running_sections(running_sections)
-        self.pdf.add_page()
-
-        pdf = self.pdf
-        self.width = pdf.page.width - pdf.margin['right'] - pdf.margin['left']
-        self.y = pdf.page.height - pdf.margin['top']
-        self.height = self.y - pdf.margin['bottom']
-        self.x = pdf.margin['left']
+            self.pdf.page_numbering_offset = -len(self.pdf.pages)
 
         section['style'] = section_style
 
         self.section = self.pdf._create_content(
             section, self.width, self.height, self.x, self.y
         )
-        self._add_content()
-        while not self.section.finished:
+
+        section_page_args = {
+            k: section_style[k] for k in PAGE_PROPS if k in section_style
+        }
+
+        while True:
             page_n = len(self.pdf.pages)
+
+            page_args = section_page_args.copy()
+
             running_sections = set(section.get('running_sections', []))
-            running_sections -= self.exclude_running_sections[page_n]
-            running_sections.update(self.include_running_sections[page_n])
-            self._set_running_sections(running_sections)
+
+            for range_dict in self.per_page:
+                if page_n in range_dict['pages']:
+                    if 'style' in range_dict:
+                        page_style = range_dict['style']
+                        page_args.update({
+                            k: page_style[k] for k in PAGE_PROPS
+                            if k in page_style
+                        })
+                    if 'running_sections' in range_dict:
+                        per_page_rs = range_dict['running_sections']
+                        running_sections -= set(per_page_rs.get('exclude', []))
+                        running_sections.update(
+                            set(per_page_rs.get('include', []))
+                        )
+
+            self.pdf.setup_page(**page_args)
+
+            page_width, page_height = self.pdf.page_width, self.pdf.page_height
+            if self.pdf.rotate_page:
+                page_width, page_height = page_height, page_width
+
+            self.x = self.pdf.margin['left']
+            self.width = page_width - self.pdf.margin['right'] - self.x
+            self.y = page_height - self.pdf.margin['top']
+            self.height = self.y - self.pdf.margin['bottom']
+
+            self.section.setup(self.x, self.y, self.width, self.height)
+
+            self._set_running_sections(
+                running_sections, page_width, page_height, self.pdf.margin
+            )
+
             self.pdf.add_page()
+
             self._add_content()
+
+            if self.section.finished:
+                break
 
     def _add_content(self) -> None:
         """Method to add the section contents to the current page.
@@ -474,6 +496,6 @@ def build_pdf(document: dict, buffer: Any, context: dict=None) -> None:
     doc.run()
     doc.output(buffer)
 
-from .content import PDFContent
+from .content import Number, PDFContent
 from .pdf import PDF
 from .utils import process_style, copy

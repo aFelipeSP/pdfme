@@ -1,10 +1,12 @@
 import struct
 import traceback
-from io import BytesIO, BufferedReader
+from io import BytesIO
 from pathlib import Path
-from typing import Union
+from typing import BinaryIO, Union
 
-ImageType = Union[str, Path, BytesIO]
+ImageType = Union[str, Path, BinaryIO]
+
+
 class PDFImage:
     """Class that represents a PDF image.
 
@@ -12,13 +14,15 @@ class PDFImage:
     image, or pass a file-like object (``io.BytesIO``) with the image bytes, the
     extension of the image, and the image name.
 
-    Only JPEG image format is supported in this moment.
+    Only JPEG and PNG image formats are supported in this moment. PNG images are
+    converted to JPEG, and for this Pillow library is required.
 
     Args:
         image (str, pathlib.Path, BytesIO): The path or file-like object of the
             image.
         extension (str, optional): If ``image`` is path-like object, this
-            argument should contain the extension of the image.
+            argument should contain the extension of the image. Options are
+            [``jpg``, ``jpeg``, ``png``].
         image_name (str, optional): If ``image`` is path-like object, this
             argument should contain the name of the image. This name should be
             unique among the images added to the same PDF document.
@@ -66,6 +70,8 @@ class PDFImage:
 
             if extension in ['jpg', 'jpeg']:
                 self.parse_jpg(image_bytes)
+            elif extension == 'png':
+                self.parse_png(image_bytes)
             else:
                 raise NotImplementedError(
                     'Images of type "{}" are not yet supported'.format(extension)
@@ -74,7 +80,7 @@ class PDFImage:
             if image_bytes is not None:
                 image_bytes.close()
 
-    def parse_jpg(self, bytes_: Union[BytesIO, BufferedReader]) -> None:
+    def parse_jpg(self, bytes_: BinaryIO) -> None:
         """Method to extract metadata from a JPEG image ``bytes_`` needed to
         embed this image in a PDF document.
 
@@ -83,7 +89,7 @@ class PDFImage:
         a PDF Stream object that represents this image.
 
         Args:
-            bytes_ (BytesIO, BufferedReader): A file-like object containing the
+            bytes_ (BinaryIO): A file-like object containing the
                 image.
         """
         try:
@@ -99,7 +105,7 @@ class PDFImage:
                     continue
                 else:
                     data_size, = struct.unpack('>H', bytes_.read(2))
-                    data = bytes_.read(data_size - 2) if data_size > 2 else ''
+                    data = bytes_.read(data_size - 2) if data_size > 2 else b''
                     if (
                         (markerLow >= 0xC0 and markerLow <= 0xC3) or #SOF0-SOF3
                         (markerLow >= 0xC5 and markerLow <= 0xC7) or #SOF4-SOF7
@@ -138,3 +144,24 @@ class PDFImage:
             '__stream__': image_data
         }
 
+    def parse_png(self, bytes_: BinaryIO) -> None:
+        """Method to convert a PNG image to a JPEG image and later parse it as
+        a JPEG image.
+
+        This method creates this instance's attibute ``pdf_obj``, containing
+        a dict that can be added to a :class:`pdfme.base.PDFBase` instance as
+        a PDF Stream object that represents this image.
+
+        Args:
+            bytes_ (BinaryIO): A file-like object containing the
+                image.
+        """
+        from PIL import Image  # type: ignore
+
+        im = Image.open(bytes_).convert('RGB')
+        bytes_io = BytesIO()
+        im.save(bytes_io, "JPEG")
+        bytes_io.seek(0)
+        self.parse_jpg(bytes_io)
+        bytes_io.close()
+        im.close()

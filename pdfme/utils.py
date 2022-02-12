@@ -370,7 +370,19 @@ def copy(obj: Any) -> Any:
     else:
         return obj
 
-def parse_range_string(range_str: str) -> set:
+class MuiltiRange:
+    def __init__(self):
+        self.ranges = []
+
+    def add(self, *range_args):
+        self.ranges.append(range(*range_args))
+
+    def __contains__(self, number: Number):
+        return any(number in range_ for range_ in self.ranges)
+
+
+
+def parse_range_string(range_str: str) -> MuiltiRange:
     """Function to convert a string of comma-separated integers and integer 
     ranges into a set of all the integers included in those.
 
@@ -379,13 +391,14 @@ def parse_range_string(range_str: str) -> set:
             ranges.
 
     Returns:
-        set: a set of integers.
+        MuiltiRange: a set of integers.
     """
-    integers_set = set()
+    multi_range = MuiltiRange()
     for part in range_str.split(','):
         range_parts = part.split(':')
         if len(range_parts) == 1:
-            integers_set.add(int(range_parts[0].strip()))
+            index = int(range_parts[0].strip())
+            multi_range.add(index, index + 1)
         else:
             first = range_parts[0].strip()
             range_parts[0] = 0 if first == '' else int(first)
@@ -393,9 +406,9 @@ def parse_range_string(range_str: str) -> set:
                 range_parts[1] = int(range_parts[1].strip())
             if len(range_parts) > 2:
                 range_parts[2] = int(range_parts[2].strip())
-            integers_set.update(range(*range_parts))
+            multi_range.add(*range_parts)
 
-    return integers_set
+    return multi_range
 
 from .color import PDFColor
 from .fonts import PDFFonts

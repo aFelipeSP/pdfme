@@ -894,13 +894,25 @@ class PDFContentPart:
             element['image'], element.get('extension'),
             element.get('image_name')
         )
-        height = self.width * pdf_image.height / pdf_image.width
-
+        width = self.width
+        height = width * pdf_image.height / pdf_image.width
+        x = self.x
+        min_height = style.get('min_height', float('inf'))
+        can_add = False
         if height < self.max_height:
+            can_add = True
+        elif min_height <= self.max_height:
+            can_add = True
+            height = self.max_height
+            new_width = height * pdf_image.width / pdf_image.height
+            x += (width - new_width) / 2
+            width = new_width
+
+        if can_add:
             if add_parts:
                 self.p.parts.append({
-                    'pdf_image': pdf_image, 'type': 'image', 'x': self.x,
-                    'y': self.y - height, 'width': self.width, 'height': height
+                    'pdf_image': pdf_image, 'type': 'image', 'x': x,
+                    'y': self.y - height, 'width': width, 'height': height
                 })
 
             self.y -= height
@@ -908,7 +920,10 @@ class PDFContentPart:
         else:
             if element.setdefault('tries', 0) >= 50:
                 raise Exception(
-                    'Image element could not be fitted in the document: {}'
+                    'Image element could not be fitted in the document (try '
+                    'adding "min_height" style property to this image for us'
+                    ' to know how much we can downsize the image for it to fit)'
+                    ': {}'
                     .format(element)
                 )
             element['tries'] += 1

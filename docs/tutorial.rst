@@ -80,8 +80,7 @@ our document using running sections:
         'header': {
             'x': 'left', 'y': 20, 'height': 'top',
             'style': {'text_align': 'r'},
-            'content': [{'.b': 'This is a header'}],
-            'include': '0:4:2'
+            'content': [{'.b': 'This is a header'}]
         },
         'footer': {
             'x': 'left', 'y': 800, 'height': 'bottom',
@@ -99,12 +98,23 @@ you can include the number of the page inside a paragraph in pdfme.
 
 Just defining these running sections won't add them to every page of the
 document; you will have to reference them in the section you want to really use
-them, or set a ``include`` key with a string of comma separated ranges of pages,
-like we just did in the ``header`` running section. In this particular case
-we will add ``header`` to pages 0 and 2.
-To know more about ``include`` and ``exclude`` keys in running sections see
-:class:`pdfme.document.PDFDocument`.
-Keep reading to see how we add ``header`` and ``footer`` to our sections.
+them, or add a ``per_page`` dictionary like this:
+
+.. code-block::
+
+    document['per_page'] = [
+        {'pages': '1:1000:2', 'style': {'margin': [60, 100, 60, 60]}},
+        {'pages': '0:1000:2', 'style': {'margin': [60, 60, 60, 100]}},
+        {'pages': '0:4:2', 'running_sections': {'include': ['header']}},
+    ]
+
+This dictionary will style, include or exclude running sections from the pages
+you set in the property ``pages``. This key is a string of comma separated
+ranges of pages, and in this particular case we will add ``header`` to pages 0
+and 2, and will add more left margin in odd pages, and more right margin in even
+pages.
+To know more about ``per_page`` dict see :class:`pdfme.document.PDFDocument`.
+Keep reading to see how we add ``header`` and ``footer`` per sections.
 
 Finally we are going to talk about *sections*. These can have their own page
 layout, page numbering, running sections and style, and are the places where we
