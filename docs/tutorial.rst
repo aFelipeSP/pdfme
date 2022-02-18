@@ -245,7 +245,8 @@ to make our image narrower and center it in the page.
 
 Next we will add a group element, containing an image and a paragraph with the
 image description. This guarantees that both the image and its description will
-be placed in the same page.
+be placed in the same page. To know more about group elements, and how to
+control the its height check :class:`pdfme.content.PDFContent`.
 
 .. code-block::
 

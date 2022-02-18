@@ -1,4 +1,4 @@
-from typing import Union
+from typing import Optional, Union
 
 TABLE_PROPERTIES = ('widths', 'borders', 'fills')
 PARAGRAPH_PROPERTIES = (
@@ -117,7 +117,7 @@ class PDFContent:
             'borders': [{'pos': 'h0,1,3;:', 'width': 2, 'color': 0}]
         }
 
-    * A content box that can be a dict like the one being explained here, and can
+    * A content box that can be a dict like the one being explained here, and
       can contain other elements inside it recursively. This can be used to
       insert a new section with more columns (for example a 2 columns content
       box, inside another 2 columns content box).
@@ -127,24 +127,33 @@ class PDFContent:
       image with a description, with the guarantee that both will be in the same
       page. Be careful though, because the group element should fit the
       width and max height of the containing box, or else an error will be
-      raised.
-      Here is an example of a table dict:
+      raised. This can be "relaxed" by setting ``min_height`` property style in
+      the images inside the group. If an image does not have this property it
+      will take as much space as possible, and if it does it will be shrinked as
+      much as possible (without shrinking it beyond ``min_height``) to make the
+      other elements in the group fit in the available height. If there are more
+      than one images in the group with ``min_height`` style property they will
+      be shrinked together proportionally. If you want to ensure that some image
+      will be shrinked until its ``min_height``, use the ``shrink`` style
+      property.
+      Here is an example of a group element:
 
       .. code-block:: python
 
         {
             "style": {"margin_left": 80, "margin_right": 80},
             "group": [
-                {"image": "tests/image_test.jpg"},
+                {"image": "tests/image_test.jpg", "min_height": 200},
                 {".": "Figure 1: Description of figure 1"}
             ]
         }
 
     Each element in the content box can have margins to keep it separated from
     the other elements, and these margins can be set inside the ``style`` dict
-    of the content box dict with the following keys: ``margin_top``, ``margin_left``,
-    ``margin_bottom`` and ``margin_right``. Default value for all of them is 0,
-    except for ``margin_bottom`` that have a default value of 5.
+    of the content box dict with the following keys: ``margin_top``,
+    ``margin_left``, ``margin_bottom`` and ``margin_right``. Default value for
+    all of them is 0, except for ``margin_bottom`` that have a default value of
+    5.
 
     All of the children elements in the content box will inherit the
     the content box style.
@@ -264,7 +273,7 @@ class PDFContent:
         children_memory: list=None
     ) -> None:
         """Method to set the state of this content box.
-        
+
         The 3 arguments of this method define the current state of this content
         box, and with this method you can change that state.
 
@@ -405,7 +414,7 @@ class PDFContentPart:
         children_memory: list=None
     ) -> None:
         """Method to set the state of this content box part.
-        
+
         The arguments of this method define the current state of this content
         box part, and with this method you can change that state.
 
@@ -758,7 +767,6 @@ class PDFContentPart:
             self.y -= self.last_bottom
 
         self.max_height = max(0, self.y - self.max_y)
-        self.last_bottom = s.get('margin_bottom', 0)
 
     def add_top_margin(self, style: dict) -> None:
         """Function that adds the top margin of the current child element.
@@ -783,7 +791,7 @@ class PDFContentPart:
                 'Elements must be of type dict, str, list or tuple:{}'
                 .format(element)
             )
-        return element        
+        return element
 
     def process(self, element: ProcessElement, last: bool=False) -> StrOrDict:
         '''Function to add a single child element to the rectangle.
@@ -802,18 +810,9 @@ class PDFContentPart:
                 list of child elements of this element.
         '''
         element = self.parse_element(element)
+        style, element_style = self.get_element_styles(element, self.style)
 
         keys = [key for key in element.keys() if key.startswith('.')]
-
-        style = {}
-        style.update(self.style)
-        if len(keys) > 0:
-            style.update(parse_style_str(keys[0][1:], self.p.fonts))
-        element_style = process_style(element.get('style'), self.p.pdf)
-        style.update(element_style)
-
-        self.update_dimensions(style)
-
         if len(keys) > 0 or 'paragraph' in element:
             return self.process_text(element, style, element_style)
         elif 'image' in element:
@@ -827,7 +826,7 @@ class PDFContentPart:
 
     def process_text(
         self, element: dict, style: dict, element_style: dict,
-        add_parts: bool=True
+        add_parts: bool=True, add_top_margin: bool=True
     ) -> dict:
         """Function that tries to add a paragraph to the current column
         rectangle, and add the remainder to the delayed list
@@ -841,6 +840,12 @@ class PDFContentPart:
         Returns:
             dict: Containing instructions to the caller.
         """
+        initial_y = self.y
+        if not self.starting and add_top_margin:
+            self.y -=  style.get('margin_top', 0)
+
+        self.update_dimensions(style)
+
         if 'paragraph' in element:
             pdf_text = element['paragraph']
             pdf_text.setup(self.x, self.y, self.width, self.max_height)
@@ -866,9 +871,12 @@ class PDFContentPart:
         if add_parts:
             self.p.parts.append(result)
 
-        self.y -= pdf_text.current_height
         if pdf_text.current_height > 0:
-            self.add_top_margin(style)
+            self.y -= pdf_text.current_height
+            self.starting = False
+            self.last_bottom = style.get('margin_bottom', 0)
+        else:
+            self.y = initial_y
 
         if pdf_text.finished:
             return {'delayed': None, 'next': False}
@@ -877,7 +885,8 @@ class PDFContentPart:
             return {'delayed': remaining, 'next': True}
 
     def process_image(
-        self, element: dict, style: dict, add_parts: bool=True
+        self, element: dict, style: dict, add_parts: bool=True,
+        add_top_margin: bool=True
     ) -> dict:
         """Function that tries to add an image to the current column rectangle,
         and add it to the delayed list if it can't add it.
@@ -889,6 +898,12 @@ class PDFContentPart:
         Returns:
             dict: Containing instructions to the caller.
         """
+        initial_y = self.y
+        if not self.starting and add_top_margin:
+            self.y -=  style.get('margin_top', 0)
+
+        self.update_dimensions(style)
+
         ret = {'delayed': None, 'next': False}
         pdf_image = PDFImage(
             element['image'], element.get('extension'),
@@ -898,26 +913,28 @@ class PDFContentPart:
         height = width * pdf_image.height / pdf_image.width
         x = self.x
         min_height = style.get('min_height', float('inf'))
+
         can_add = False
         if height < self.max_height:
             can_add = True
         elif min_height <= self.max_height:
             can_add = True
-            height = self.max_height
+            height = min_height if style.get('shrink', 0) else self.max_height
             new_width = height * pdf_image.width / pdf_image.height
             x += (width - new_width) / 2
             width = new_width
 
         if can_add:
+            self.y -= height
+            self.starting = False
+            self.last_bottom = style.get('margin_bottom', 0)
             if add_parts:
                 self.p.parts.append({
                     'pdf_image': pdf_image, 'type': 'image', 'x': x,
-                    'y': self.y - height, 'width': width, 'height': height
+                    'y': self.y, 'width': width, 'height': height
                 })
-
-            self.y -= height
-            self.add_top_margin(style)
         else:
+            self.y = initial_y
             if element.setdefault('tries', 0) >= 50:
                 raise Exception(
                     'Image element could not be fitted in the document (try '
@@ -937,7 +954,7 @@ class PDFContentPart:
 
     def process_table(
         self, element: dict, style: dict, element_style: dict,
-        add_parts: bool=True
+        add_parts: bool=True, add_top_margin: bool=True
     ) -> dict:
         """Function that tries to add a table to the current column rectangle,
         and add the remainder to the delayed list.
@@ -951,6 +968,12 @@ class PDFContentPart:
         Returns:
             dict: Containing instructions to the caller.
         """
+        initial_y = self.y
+        if not self.starting and add_top_margin:
+            self.y -=  style.get('margin_top', 0)
+
+        self.update_dimensions(style)
+
         if 'table_delayed' in element:
             pdf_table = element['table_delayed']
             pdf_table.setup(self.x, self.y, self.width, self.max_height)
@@ -976,9 +999,12 @@ class PDFContentPart:
             self.p.lines.extend(pdf_table.lines)
             self.p.fills.extend(pdf_table.fills)
 
-        self.y -= pdf_table.current_height
         if pdf_table.current_height > 0:
-            self.add_top_margin(style)
+            self.y -= pdf_table.current_height
+            self.starting = False
+            self.last_bottom = style.get('margin_bottom', 0)
+        else:
+            self.y = initial_y
 
         if not pdf_table.finished:
             remaining['state'] = pdf_table.get_state()
@@ -987,7 +1013,7 @@ class PDFContentPart:
             return {'delayed': None, 'next': False}
 
     def process_child(
-        self, element: dict, style: dict, last: bool
+        self, element: dict, style: dict, last: bool, add_top_margin: bool=True
     ) -> StrOrDict:
         """Function that tries to add a child content to the current column
         rectangle.
@@ -1001,6 +1027,12 @@ class PDFContentPart:
         Returns:
             str, dict: Containing instructions to the caller.
         """
+        initial_y = self.y
+        if not self.starting and add_top_margin:
+            self.y -=  style.get('margin_top', 0)
+
+        self.update_dimensions(style)
+
         pdf_content = PDFContentPart(
             element, self.p, self.get_min_x(), self.col_width, self.y,
             self.max_y, self, last, style.copy()
@@ -1027,10 +1059,12 @@ class PDFContentPart:
             current_height = pdf_content.min_y - (
                 pdf_content.max_y if pdf_content.cols_n > 1 else pdf_content.y
             )
-            self.y -= current_height
-
             if current_height > 0:
-                self.add_top_margin(style)
+                self.y -= current_height
+                self.starting = False
+                self.last_bottom = style.get('margin_bottom', 0)
+            else:
+                self.y = initial_y
 
         if action in ['interrupt', 'break', 'partial_next']:
             return action
@@ -1038,11 +1072,7 @@ class PDFContentPart:
             self.starting = False
             return {'delayed': None, 'next': False}
 
-    def process_group_element(
-        self, element: dict, inherited_style: dict, add_element: bool=False
-    ):
-        element = self.parse_element(element)
-
+    def get_element_styles(self, element: dict, inherited_style: dict):
         keys = [key for key in element.keys() if key.startswith('.')]
 
         style = {}
@@ -1051,36 +1081,69 @@ class PDFContentPart:
             style.update(parse_style_str(keys[0][1:], self.p.fonts))
         element_style = process_style(element.get('style'), self.p.pdf)
         style.update(element_style)
+        return style, element_style
 
-        self.update_dimensions(style)
+    def process_group_element(
+        self, element: dict, inherited_style: dict, add_element: bool=False,
+        add_top_margin: bool=True, min_height: Optional[Number] = None
+    ):
+        element = self.parse_element(element)
+        style, element_style = self.get_element_styles(element, inherited_style)
 
+        if min_height is not None:
+            style['min_height'] = min_height
+
+        keys = [key for key in element.keys() if key.startswith('.')]
         if len(keys) > 0 or 'paragraph' in element:
-            return self.process_text(element, style, element_style, add_element)
+            return self.process_text(
+                element, style, element_style, add_element, add_top_margin
+            )
         elif 'image' in element:
-            return self.process_image(element, style, add_element)
+            style['shrink'] = True
+            return self.process_image(
+                element, style, add_element, add_top_margin
+            )
         elif 'table' in element or 'table_delayed' in element:
-            return self.process_table(element, style, element_style, add_element)
+            return self.process_table(
+                element, style, element_style, add_element, add_top_margin
+            )
         else:
             raise Exception(
                 'Element not allowed in a group element: {}'.format(element)
             )
 
-    def process_group(self, group_element: dict, inherited_style: dict):
+    def process_group(self, group_element: dict, style: dict):
         """Function that tries to add a group element to the current column
         rectangle, and add it to the delayed list if it can't add it. If after
         50 tries it can not add the group element, it will throw an exception.
 
         Args:
             group_element (dict): The group element to be added
-            inherited_style (dict): The style of the group element, combined
-                with the style of this content element.
+            style (dict): The style of the group element, combined with the
+                style of this content element.
 
         Returns:
             dict: Containing instructions to the caller.
         """
         initial_y = self.y
-        for element in group_element['group']:
-            ans = self.process_group_element(element, inherited_style)
+
+        if not self.starting:
+            self.y -=  style.get('margin_top', 0)
+
+        images = {}
+        images_size = 0
+
+        for i, element in enumerate(group_element['group']):
+            if isinstance(element, dict) and 'image' in element:
+                image_style, _ = self.get_element_styles(element, style)
+                if 'min_height' in image_style:
+                    min_height = image_style['min_height']
+                    images[i] = min_height
+                    images_size += min_height
+
+            ans = self.process_group_element(
+                element, style, add_element=False, add_top_margin=i != 0
+            )
             if not (isinstance(ans, dict) and ans.get('delayed') is None):
                 if group_element.setdefault('tries', 0) >= 50:
                     raise Exception(
@@ -1090,10 +1153,20 @@ class PDFContentPart:
                 group_element['tries'] += 1
                 self.y = initial_y
                 return {'delayed': group_element, 'next': False, 'flow': True}
-        
+
+        new_images_size = images_size + self.y - self.max_y
+        image_ratio = new_images_size / images_size if len(images) else 1
         self.y = initial_y
-        for element in group_element['group']:
-            self.process_group_element(element, inherited_style, True)
+
+        for i, element in enumerate(group_element['group']):
+            min_height = None
+            if i in images:
+                min_height = images[i]
+                min_height *= 1 if style.get('shrink', 0) else image_ratio
+            self.process_group_element(
+                element, style, add_element=True, add_top_margin=i != 0,
+                min_height=min_height
+            )
 
         return {'delayed': None, 'next': False}
 
