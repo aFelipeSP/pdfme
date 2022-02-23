@@ -410,6 +410,9 @@ def parse_range_string(range_str: str) -> MuiltiRange:
 
     return multi_range
 
+def format_round(template: str, format_args):
+    return template.format(*[round(el, 3) for el in format_args])
+
 from .color import PDFColor
 from .fonts import PDFFonts
 from .pdf import PDF

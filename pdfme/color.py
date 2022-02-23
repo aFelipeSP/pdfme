@@ -1,5 +1,7 @@
 import re
-from typing import Union
+from typing import Iterator, Optional, Union
+
+from pdfme.types import Number
 
 colors = {
     'aliceblue': [0.941, 0.973, 1.0],
@@ -152,7 +154,7 @@ colors = {
     'yellowgreen': [0.605, 0.805, 0.199]
 }
 
-ColorType = Union[int, float, str, list, tuple]
+ColorType = Union[int, float, str, list, tuple, None]
 class PDFColor:
     """Class that generates a PDF color string (with function ``str()``)
     using the rules described in :func:`pdfme.color.parse_color`.
@@ -166,7 +168,7 @@ class PDFColor:
 
     def __init__(
         self, color: Union[ColorType, 'PDFColor'], stroke: bool=False
-    ) -> None:
+    ):
         if isinstance(color, PDFColor):
             self.color = copy(color.color)
         else:
@@ -198,7 +200,7 @@ class PDFColor:
                 'RG' if self.stroke else 'rg'
             )
 
-def parse_color(color: ColorType) -> list:
+def parse_color(color: ColorType) -> Optional[Iterator[Number]]:
     """Function to parse ``color`` into a list representing a PDF color.
 
     The scale of the colors is between 0 and 1, instead of 0 and 256, so all the
