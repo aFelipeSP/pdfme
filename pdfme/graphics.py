@@ -1,9 +1,8 @@
 from abc import ABC, abstractmethod
 from enum import Enum
-from multiprocessing.sharedctypes import Value
-from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-from pdfme.color import ColorType, PDFColor, parse_color
+from pdfme.color import ColorType, parse_color
 from pdfme.types import Number
 from pdfme.utils import format_round
 
@@ -160,17 +159,42 @@ def build_line_style(
         raise TypeError("style must be a LineStyleEnum option.")
 
 
+class BoundingRect:
+    def __init__(self):
+        self.x1 = None
+        self.y1 = None
+        self.x2 = None
+        self.y2 = None
+
+    def update(self, x: Number , y: Number):
+        self.x1 = x if self.x1 is None else min(self.x1, x)
+        self.y1 = y if self.y1 is None else min(self.y1, y)
+        self.x2 = x if self.x2 is None else max(self.x2, x)
+        self.y2 = y if self.y2 is None else max(self.y2, y)
+
+    @property
+    def width(self):
+        return self.x2 - self.x1
+
+    @property
+    def height(self):
+        return self.y2 - self.y1
+
+    @property
+    def all(self):
+        return [self.x1, self.y1, self.x2, self.y2, self.width, self.height]
+
 class PDFGraphic(ABC):
     def __init__(
         self,
-        fill: Optional[FillColor] = None,
-        stroke: Optional[StrokeColor] = None,
+        stroke: ColorType = 0,
+        fill: Optional[ColorType] = None,
         line_width: Number = 1,
         line_style: LineStyleEnum = LineStyleEnum.SOLID,
         line_join: LineJoinEnum = LineJoinEnum.MILTER,
     ):
-        self.fill = FillColor(None) if fill is None else fill
-        self.stroke = FillColor(0) if stroke is None else stroke
+        self.fill = FillColor(fill)
+        self.stroke = StrokeColor(stroke)
         self.line_width = LineWidth(line_width)
         self.line_cap, self.dash_pattern = build_line_style(
             line_style, line_width
@@ -191,7 +215,77 @@ class PDFGraphic(ABC):
     def definition(self) -> str:
         pass
 
+    @abstractmethod
+    def bounding_rect(self) -> BoundingRect:
+        pass
 
+
+def path_move(x, y):
+    return format_round('{} {} m', (x, y))
+
+
+def path_line(x, y):
+    return format_round('{} {} l', (x, y))
+
+
+def path_curve(x1, y1, x2, y2, x3, y3):
+    return format_round('{} {} {} {} {} {} c', (x1, y1, x2, y2, x3, y3))
+
+
+def path_close():
+    return 'h'
+
+
+class Path(PDFGraphic):
+    def __init__(
+        self,
+        path: str,
+        stroke: ColorType = 0,
+        fill: Optional[ColorType] = None,
+        line_width: Number = 1,
+        line_style: LineStyleEnum = LineStyleEnum.SOLID,
+        line_join: LineJoinEnum = LineJoinEnum.MILTER
+    ):
+        super().__init__(stroke, fill, line_width, line_style, line_join)
+        self.path = path
+
+    def definition(self) -> str:
+        path = self.path
+        if self.stroke.color is not None and self.fill.color is not None:
+            path += ' B'
+        elif self.stroke.color is not None:
+            path += ' S'
+        elif self.fill.color is not None:
+            path += ' f'
+
+        return path
+
+    def bounding_rect(self) -> BoundingRect:
+        rect = BoundingRect()
+        parts = self.path.split(' ')
+        args = []
+        for part in parts:
+            part = part.strip()
+            if part.isnumeric():
+                args.append(float(part))
+                continue
+            elif part == 'm' and len(args) == 2:
+                rect.update(*args)
+            elif part == 'l' and len(args) == 2:
+                rect.update(*args)
+            elif part == 'c' and len(args) == 6:
+                rect.update(*args[4:])
+            elif part == 'v' and len(args) == 4:
+                rect.update(*args[2:])
+            elif part == 'y' and len(args) == 4:
+                rect.update(*args[2:])
+            elif part == 'h':
+                pass
+            else:
+                raise ValueError('incorrect format path:' + self.path)
+            args = []
+
+        return rect
 class Line(PDFGraphic):
     def __init__(
         self,
@@ -199,12 +293,12 @@ class Line(PDFGraphic):
         y1: Number,
         x2: Number,
         y2: Number,
-        stroke: Optional[StrokeColor] = None,
+        stroke: ColorType = 0,
         line_width: Number = 1,
         line_style: LineStyleEnum = LineStyleEnum.SOLID,
         line_join: LineJoinEnum = LineJoinEnum.MILTER
     ):
-        super().__init__(None, stroke, line_width, line_style, line_join)
+        super().__init__(stroke, None, line_width, line_style, line_join)
         self.x1 = x1
         self.y1 = y1
         self.x2 = x2
@@ -213,6 +307,12 @@ class Line(PDFGraphic):
     def definition(self) -> str:
         coords = self.x1, self.y1, self.x2, self.y2
         return format_round('{} {} m {} {} l S', coords)
+
+    def bounding_rect(self) -> BoundingRect:
+        rect = BoundingRect()
+        rect.update(self.x1, self.y1)
+        rect.update(self.x2, self.y2)
+        return rect
 
 
 class PDFBoxSizing(Enum):
@@ -227,15 +327,15 @@ class Rectangle(PDFGraphic):
         y: Number,
         width: Number,
         height: Number,
-        fill: Optional[FillColor] = None,
-        stroke: Optional[StrokeColor] = None,
+        stroke: ColorType = 0,
+        fill: Optional[ColorType] = None,
         line_width: Number = 1,
         line_style: LineStyleEnum = LineStyleEnum.SOLID,
         line_join: LineJoinEnum = LineJoinEnum.MILTER,
         box_sizing: PDFBoxSizing = PDFBoxSizing.BORDER,
         border_radius: Number = 0
     ):
-        super().__init__(fill, stroke, line_width, line_style, line_join)
+        super().__init__(stroke, fill, line_width, line_style, line_join)
         self.x = x
         self.y = y
         self.width = width
@@ -243,16 +343,23 @@ class Rectangle(PDFGraphic):
         self.box_sizing = box_sizing
         self.border_radius = border_radius
 
-    def definition(self) -> str:
-        w, h = self.width, self.height
+    def _get_real_coords(self):
+        x, y, w, h= self.x, self.y, self.width, self.height
+        line_width = 0 if self.stroke.color is None else self.line_width.width
         if self.box_sizing == PDFBoxSizing.BORDER:
-            w -= self.line_width.width
-            h -= self.line_width.width
+            w -= line_width
+            h -= line_width
+            x += line_width / 2
+            y += line_width / 2
         elif self.box_sizing == PDFBoxSizing.CONTENT:
-            w += self.line_width.width
-            h += self.line_width.width
+            w += line_width
+            h += line_width
 
-        x, y = self.x, self.y
+        return x, y, w, h, line_width
+
+
+    def definition(self) -> str:
+        x, y, w, h, line_width = self._get_real_coords()
 
         if self.border_radius == 0:
             path = format_round('{} {} {} {} re', (x, y, w, h))
@@ -262,37 +369,44 @@ class Rectangle(PDFGraphic):
             w -= r * 2
             h -= r * 2
             y += r
-            path = format_round('{} {} m', (x, y))
+            path = ' ' + path_move(x, y)
             y += h
-            path += format_round(' {} {} l {} {}', (x, y, x, y + c))
-            y += r
-            x += r
-            path += format_round(' {} {} {} {} c', (x - c, y, x, y))
+            path += ' ' + path_line(x, y)
+            x += r; y += r
+            path += ' ' + path_curve(x-r, y-r+c, x-c, y, x, y)
             x += w
-            path += format_round(' {} {} l {} {}', (x, y, x + c, y))
-            y -= r
-            x += r
-            path += format_round(' {} {} {} {} c', (x, y + c, x, y))
+            path += ' ' + path_line(x, y)
+            x += r; y -= r
+            path += ' ' + path_curve(x-r+c, y+r, x, y+c, x, y)
             y -= h
-            path += format_round(' {} {} l {} {}', (x, y, x, y - c))
-            y -= r
-            x -= r
-            path += format_round(' {} {} {} {} c', (x + c, y, x, y))
+            path += ' ' + path_line(x, y)
+            x -= r; y -= r
+            path += ' ' + path_curve(x+r, y+r-c, x+c, y, x, y)
             x -= w
-            path += format_round(' {} {} l {} {}', (x, y, x - c, y))
-            y += r
-            x -= r
-            path += format_round(' {} {} {} {} c', (x, y - c, x, y))
+            path += ' ' + path_line(x, y)
+            x -= r; y += r
+            path += ' ' + path_curve(x+r-c, y-r, x, y-c, x, y)
 
-        if self.stroke.color is not None and self.fill.color is not None:
+        if line_width > 0 and self.fill.color is not None:
             path += ' b'
-        elif self.stroke.color is not None:
+        elif line_width > 0:
             path += ' s'
         elif self.fill.color is not None:
             path += ' h f'
 
         return path
 
+    def bounding_rect(self) -> BoundingRect:
+        rect = BoundingRect()
+        x, y, w, h, line_width = self._get_real_coords()
+        line_width_half = line_width / 2
+        x1 = x - line_width_half
+        y1 = y - line_width_half
+        x2 = x + w + line_width_half
+        y2 = y + h + line_width_half
+        rect.update(x1, y1)
+        rect.update(x2, y2)
+        return rect
 
 class Ellipse(PDFGraphic):
     def __init__(
@@ -301,151 +415,145 @@ class Ellipse(PDFGraphic):
         cy: Number,
         rx: Number,
         ry: Number,
-        fill: Optional[FillColor] = None,
-        stroke: Optional[StrokeColor] = None,
+        stroke: ColorType = 0,
+        fill: Optional[ColorType] = None,
         line_width: Number = 1,
         line_style: LineStyleEnum = LineStyleEnum.SOLID,
         line_join: LineJoinEnum = LineJoinEnum.MILTER,
         box_sizing: PDFBoxSizing = PDFBoxSizing.BORDER
     ):
-        super().__init__(fill, stroke, line_width, line_style, line_join)
+        super().__init__(stroke, fill, line_width, line_style, line_join)
         self.cx = cx
         self.cy = cy
         self.rx = rx
         self.ry = ry
         self.box_sizing = box_sizing
 
-    def definition(self) -> str:
+    def _get_real_coords(self):
         rx, ry = self.rx, self.ry
+        line_width = 0 if self.stroke.color is None else self.line_width.width
         if self.box_sizing == PDFBoxSizing.BORDER:
-            rx -= self.line_width.width / 2
-            ry -= self.line_width.width / 2
+            rx -= line_width / 2
+            ry -= line_width / 2
         elif self.box_sizing == PDFBoxSizing.CONTENT:
-            rx += self.line_width.width / 2
-            ry += self.line_width.width / 2
+            rx += line_width / 2
+            ry += line_width / 2
 
+        return rx, ry, line_width
+
+    def definition(self) -> str:
+        rx, ry, line_width = self._get_real_coords()
         cx, cy = self.cx, self.cy
 
         kx = CIRCLE_BEZIER_K * rx
         ky = CIRCLE_BEZIER_K * ry
-        x = cx - rx
-        y = cy
-        path = format_round('{} {} m {} {}', (x, y, x, y+ky))
-        y += ry
-        x += rx
-        path += format_round(' {} {} {} {} c {} {}', (x-kx, y, x, y, x+kx, y))
-        y -= ry
-        x += rx
-        path += format_round(' {} {} {} {} c {} {}', (x, y+ky, x, y, x, y-ky))
-        y -= ry
-        x -= rx
-        path += format_round(' {} {} {} {} c {} {}', (x+kx, y, x, y, x-kx, y))
-        y += ry
-        x -= rx
-        path += format_round(' {} {} {} {} c', (x, y-ky, x, y))
-
-        if self.stroke.color is not None and self.fill.color is not None:
+        path = ' '.join([
+            path_move(cx - rx, cy),
+            path_curve(cx - rx, cy + ky, cx - kx, cy + ry, cx, cy + ry),
+            path_curve(cx + kx, cy + ry, cx + rx, cy + ky, cx + rx, cy),
+            path_curve(cx + rx, cy - ky, cx + kx, cy - ry, cx, cy - ry),
+            path_curve(cx - kx, cy - ry, cx - rx, cy - ky, cx - rx, cy)
+        ])
+        if line_width > 0 and self.fill.color is not None:
             path += ' b'
-        elif self.stroke.color is not None:
+        elif line_width > 0:
             path += ' s'
         elif self.fill.color is not None:
             path += ' h f'
 
         return path
 
-class PathPart:
-    pass
+    def bounding_rect(self) -> BoundingRect:
+        rect = BoundingRect()
+        rx, ry, line_width = self._get_real_coords()
+        line_width_half = line_width / 2
+        x1 = self.cx - rx - line_width_half
+        y1 = self.cy - ry - line_width_half
+        x2 = self.cx + rx + line_width_half
+        y2 = self.cy + ry + line_width_half
+        rect.update(x1, y1)
+        rect.update(x2, y2)
+        return rect
 
-class PathMove(PathPart):
-    def __init__(self, x: Number, y: Number):
-        self.x = x
-        self.y = y
+class PDFGraphics:
+    def __init__(self, graphics: Iterable[PDFGraphic]):
+        self.graphics = graphics
+        self.result: Optional[str] = None
+        self.rect = BoundingRect()
+        self.run()
 
-    def __str__(self):
-        return format_round('{} {} m', (self.x, self.y))
+    def run(self) -> str:
+        """Function to transform a list of graphics objects into a PDF stream,
+        ready to be added to a PDF page stream.
 
-class PathLine(PathPart):
-    def __init__(self, x: Number, y: Number):
-        self.x = x
-        self.y = y
+        Args:
+            graphics (List[PDFGraphic]): list of graphics dicts.
 
-    def __str__(self):
-        return format_round('{} {} l', (self.x, self.y))
+        Returns:
+            str: a PDF stream containing the passed graphics.
+        """
 
-class PathCurve(PathPart):
-    def __init__(
-        self,
-        x1: Number,
-        y1: Number,
-        x2: Number,
-        y2: Number,
-        x3: Number,
-        y3: Number
-    ):
-        self.x1 = x1
-        self.y1 = y1
-        self.x2 = x2
-        self.y2 = y2
-        self.x3 = x3
-        self.y3 = y3
+        styles: Dict[Any, PDFGraphicStyle] = {}
+        stream = []
+        self.rect = BoundingRect()
+        for graphic in self.graphics:
+            for style in graphic.style_list():
+                style_class = style.__class__
+                if style_class not in styles or (styles[style_class] != style):
+                    style_str = str(style)
+                    if style_str != '':
+                        stream.append(str(style))
+                        styles[style_class] = style            
 
-    def __str__(self):
-        coords = (self.x1, self.y1, self.x2, self.y2, self.x3, self.y3)
-        return format_round('{} {} {} {} {} {} c', coords)
+            stream.append(graphic.definition())
+            element_rect = graphic.bounding_rect()
+            self.rect.update(*element_rect.all[:2])
+            self.rect.update(*element_rect.all[2:4])
 
-class PathEnd(PathPart):
-    def __str__(self):
-        return 'h'
+        self.result = ' '.join(stream)
+        return self.result
 
-class Path(PDFGraphic):
-    def __init__(
-        self,
-        path_parts: List[PathPart],
-        fill: Optional[FillColor] = None,
-        stroke: Optional[StrokeColor] = None,
-        line_width: Number = 1,
-        line_style: LineStyleEnum = LineStyleEnum.SOLID,
-        line_join: LineJoinEnum = LineJoinEnum.MILTER
-    ):
-        super().__init__(fill, stroke, line_width, line_style, line_join)
-        self.path_parts = path_parts
+    @property
+    def width(self):
+        return self.rect.width
 
-    def definition(self) -> str:
-        path = ' '.join(str(path_part) for path_part in self.path_parts)
-        if self.stroke.color is not None and self.fill.color is not None:
-            path += ' B'
-        elif self.stroke.color is not None:
-            path += ' S'
-        elif self.fill.color is not None:
-            path += ' f'
-
-        return path
+    @property
+    def height(self):
+        return self.rect.height
 
 
-def create_graphics(graphics: List[PDFGraphic]) -> str:
-    """Function to transform a list of graphics dicts (with lines and fill
-    rectangles) into a PDF stream, ready to be added to a PDF page stream.
+def create_graphics_from_dicts(items: Iterable[Dict[str, Any]]) -> PDFGraphics:
+    """Function to transform a list of graphics dicts into a PDF stream, ready
+    to be added to a PDF page stream.
 
     Args:
-        graphics (list): list of graphics dicts.
+        items (Iterable[Dict[str, Any]]): list of graphics dicts.
 
     Returns:
         str: a PDF stream containing the passed graphics.
     """
+    graphics: List[Any] = []
+    for graphic_dict_original in items:
+        graphic_dict = graphic_dict_original.copy()
 
-    styles: Dict[Any, PDFGraphicStyle] = {}
-    stream = []
+        if 'line_style' in graphic_dict:
+            option = graphic_dict['line_style'].upper()
+            graphic_dict['line_style'] = LineStyleEnum[option]
+        if 'line_join' in graphic_dict:
+            option = graphic_dict['line_join'].upper()
+            graphic_dict['line_join'] = LineJoinEnum[option]
+        if 'box_sizing' in graphic_dict:
+            option = graphic_dict['box_sizing'].upper()
+            graphic_dict['box_sizing'] = PDFBoxSizing[option]
 
-    for graphic in graphics:
-        for style in graphic.style_list():
-            style_class = style.__class__
-            if style_class not in styles or (styles[style_class] != style):
-                stream.append(str(style))
-                styles[style_class] = style
+        type_ = graphic_dict.pop("type")
+        if type_ == 'line':
+            graphics.append(Line(**graphic_dict))
+        elif type_ == 'ellipse':
+            graphics.append(Ellipse(**graphic_dict))
+        elif type_ == 'rect':
+            graphics.append(Rectangle(**graphic_dict))
+        elif type_ == 'path':
+            graphics.append(Path(**graphic_dict))
 
-        stream.append(graphic.definition())
-
-    if len(stream):
-        return 'q' + (' '.join(stream))+ ' Q'
-    else:
-        return ''
+    return PDFGraphics(graphics)
