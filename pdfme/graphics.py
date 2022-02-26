@@ -3,6 +3,7 @@ from enum import Enum
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from pdfme.color import ColorType, parse_color
+from pdfme.text import PDFText
 from pdfme.types import Number
 from pdfme.utils import format_round
 
@@ -77,7 +78,7 @@ class DashPattern(PDFGraphicStyle):
     def __init__(self, on_units: Number, off_units: Number, phase: Number):
         if on_units < 0 or off_units < 0 or phase < 0:
             raise ValueError('Negative numbers not allowed.')
-        
+
         self.on_units, self.off_units, self.phase = on_units, off_units, phase
 
 
@@ -192,6 +193,8 @@ class PDFGraphic(ABC):
         line_width: Number = 1,
         line_style: LineStyleEnum = LineStyleEnum.SOLID,
         line_join: LineJoinEnum = LineJoinEnum.MILTER,
+        line_cap: Optional[LineCapEnum] = None,
+        dash_pattern: Optional[DashPattern] = None
     ):
         self.fill = FillColor(fill)
         self.stroke = StrokeColor(stroke)
@@ -199,6 +202,11 @@ class PDFGraphic(ABC):
         self.line_cap, self.dash_pattern = build_line_style(
             line_style, line_width
         )
+        if line_cap is not None:
+            self.line_cap = LineCap(line_cap)
+        if dash_pattern is not None:
+            self.dash_pattern = dash_pattern
+
         self.line_join = LineJoin(line_join)
 
     def style_list(self) -> List[PDFGraphicStyle]:
@@ -244,9 +252,14 @@ class Path(PDFGraphic):
         fill: Optional[ColorType] = None,
         line_width: Number = 1,
         line_style: LineStyleEnum = LineStyleEnum.SOLID,
-        line_join: LineJoinEnum = LineJoinEnum.MILTER
+        line_join: LineJoinEnum = LineJoinEnum.MILTER,
+        line_cap: Optional[LineCapEnum] = None,
+        dash_pattern: Optional[DashPattern] = None
     ):
-        super().__init__(stroke, fill, line_width, line_style, line_join)
+        super().__init__(
+            stroke, fill, line_width, line_style, line_join, line_cap,
+            dash_pattern
+        )
         self.path = path
 
     def definition(self) -> str:
@@ -296,9 +309,14 @@ class Line(PDFGraphic):
         stroke: ColorType = 0,
         line_width: Number = 1,
         line_style: LineStyleEnum = LineStyleEnum.SOLID,
-        line_join: LineJoinEnum = LineJoinEnum.MILTER
+        line_join: LineJoinEnum = LineJoinEnum.MILTER,
+        line_cap: Optional[LineCapEnum] = None,
+        dash_pattern: Optional[DashPattern] = None
     ):
-        super().__init__(stroke, None, line_width, line_style, line_join)
+        super().__init__(
+            stroke, None, line_width, line_style, line_join, line_cap,
+            dash_pattern
+        )
         self.x1 = x1
         self.y1 = y1
         self.x2 = x2
@@ -316,8 +334,9 @@ class Line(PDFGraphic):
 
 
 class PDFBoxSizing(Enum):
-    CONTENT = 0
-    BORDER = 1
+    BORDER = 0
+    NORMAL = 1
+    CONTENT = 2
 
 
 class Rectangle(PDFGraphic):
@@ -332,10 +351,15 @@ class Rectangle(PDFGraphic):
         line_width: Number = 1,
         line_style: LineStyleEnum = LineStyleEnum.SOLID,
         line_join: LineJoinEnum = LineJoinEnum.MILTER,
+        line_cap: Optional[LineCapEnum] = None,
+        dash_pattern: Optional[DashPattern] = None,
         box_sizing: PDFBoxSizing = PDFBoxSizing.BORDER,
         border_radius: Number = 0
     ):
-        super().__init__(stroke, fill, line_width, line_style, line_join)
+        super().__init__(
+            stroke, fill, line_width, line_style, line_join, line_cap,
+            dash_pattern
+        )
         self.x = x
         self.y = y
         self.width = width
@@ -354,6 +378,8 @@ class Rectangle(PDFGraphic):
         elif self.box_sizing == PDFBoxSizing.CONTENT:
             w += line_width
             h += line_width
+            x -= line_width / 2
+            y -= line_width / 2
 
         return x, y, w, h, line_width
 
@@ -420,9 +446,14 @@ class Ellipse(PDFGraphic):
         line_width: Number = 1,
         line_style: LineStyleEnum = LineStyleEnum.SOLID,
         line_join: LineJoinEnum = LineJoinEnum.MILTER,
+        line_cap: Optional[LineCapEnum] = None,
+        dash_pattern: Optional[DashPattern] = None,
         box_sizing: PDFBoxSizing = PDFBoxSizing.BORDER
     ):
-        super().__init__(stroke, fill, line_width, line_style, line_join)
+        super().__init__(
+            stroke, fill, line_width, line_style, line_join, line_cap,
+            dash_pattern
+        )
         self.cx = cx
         self.cy = cy
         self.rx = rx
@@ -503,12 +534,19 @@ class PDFGraphics:
                     style_str = str(style)
                     if style_str != '':
                         stream.append(str(style))
-                        styles[style_class] = style            
+                        styles[style_class] = style
 
             stream.append(graphic.definition())
             element_rect = graphic.bounding_rect()
             self.rect.update(*element_rect.all[:2])
             self.rect.update(*element_rect.all[2:4])
+
+        # pdf_text = PDFText(content, fonts=self.fonts, pdf=self)
+        # stream = get_paragraph_stream(x, y, **pdf_text.result)
+        # self.page.add(stream)
+
+        # for font in used_fonts:
+        #     self._used_font(*font)
 
         self.result = ' '.join(stream)
         return self.result
@@ -520,6 +558,14 @@ class PDFGraphics:
     @property
     def height(self):
         return self.rect.height
+
+
+GRAPHIC_STYLE_MAP = {
+    'line_style': LineStyleEnum,
+    'line_join': LineJoinEnum,
+    'box_sizing': PDFBoxSizing,
+    'line_cap': LineCapEnum
+}
 
 
 def create_graphics_from_dicts(items: Iterable[Dict[str, Any]]) -> PDFGraphics:
@@ -536,15 +582,14 @@ def create_graphics_from_dicts(items: Iterable[Dict[str, Any]]) -> PDFGraphics:
     for graphic_dict_original in items:
         graphic_dict = graphic_dict_original.copy()
 
-        if 'line_style' in graphic_dict:
-            option = graphic_dict['line_style'].upper()
-            graphic_dict['line_style'] = LineStyleEnum[option]
-        if 'line_join' in graphic_dict:
-            option = graphic_dict['line_join'].upper()
-            graphic_dict['line_join'] = LineJoinEnum[option]
-        if 'box_sizing' in graphic_dict:
-            option = graphic_dict['box_sizing'].upper()
-            graphic_dict['box_sizing'] = PDFBoxSizing[option]
+        for graphic_style_name, graphic_style in GRAPHIC_STYLE_MAP.items():
+            if graphic_style_name in graphic_dict:
+                option = graphic_dict[graphic_style_name].upper()
+                graphic_dict[graphic_style_name] = graphic_style[option]
+
+        if 'dash_pattern' in graphic_dict:
+            option = graphic_dict['dash_pattern']
+            graphic_dict['dash_pattern'] = DashPattern(**option)
 
         type_ = graphic_dict.pop("type")
         if type_ == 'line':

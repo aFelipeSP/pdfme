@@ -369,6 +369,15 @@ class PDF:
         """
         return PDFImage(image, extension, image_name)
 
+    def _add_image_to_base(self, pdf_image: 'PDFImage'):
+        if pdf_image.image_name not in self.images:
+            image_obj = self.base.add(pdf_image.pdf_obj)
+            self.images[pdf_image.image_name] = image_obj.id
+        else:
+            image_obj = self.base[self.images[pdf_image.image_name]]
+
+        return image_obj
+
     def add_image(
         self, pdf_image: 'PDFImage', x: Number=None, y: Number=None,
         width: Number=None, height:Number=None, move: str='bottom'
@@ -394,11 +403,7 @@ class PDF:
                 page y coordinate to the bottom of the image (``bottom``)
                 (default).
         """
-        if pdf_image.image_name not in self.images:
-            image_obj = self.base.add(pdf_image.pdf_obj)
-            self.images[pdf_image.image_name] = image_obj.id
-        else:
-            image_obj = self.base[self.images[pdf_image.image_name]]
+        image_obj = self._add_image_to_base(pdf_image)
 
         h = pdf_image.height
         w = pdf_image.width

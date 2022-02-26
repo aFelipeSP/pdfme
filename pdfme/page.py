@@ -145,6 +145,13 @@ class PDFPage:
         """
         self.add_annot({'Dest': dest}, rect)
 
+    def add_image_resource(self, image_obj_id: 'PDFRef'):
+        self.page['Resources'].setdefault('XObject', {})
+        if not image_obj_id in self.x_objects:
+            image_id = 'Im{}'.format(len(self.page['Resources']['XObject']))
+            self.page['Resources']['XObject'][image_id] = image_obj_id
+            self.x_objects[image_obj_id] = image_id
+
     def add_image(
         self, image_obj_id: 'PDFRef', width: Number, height: Number
     ) -> None:
@@ -158,12 +165,7 @@ class PDFPage:
             width (int, float): the width of the image.
             height (int, float): the height of the image.
         """
-        self.page['Resources'].setdefault('XObject', {})
-        if not image_obj_id in self.x_objects:
-            image_id = 'Im{}'.format(len(self.page['Resources']['XObject']))
-            self.page['Resources']['XObject'][image_id] = image_obj_id
-            self.x_objects[image_obj_id] = image_id
-
+        self.add_image_resource(image_obj_id)
         self.add(
             ' q {} 0 0 {} {} {} cm /{} Do Q'.format(
                 round(width, 3), round(height, 3), round(self.x, 3),
