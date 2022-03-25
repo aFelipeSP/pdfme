@@ -1,14 +1,17 @@
 import json
-from io import BytesIO
-from pathlib import Path
-from typing import Any, Iterable, Union
+from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 
-Number = Union[int, float]
-PageType = Union[Number, str, Iterable[Number]]
-MarginType = Union[int, float, Iterable[Number], dict]
-ColorType = Union[int, float, str, list, tuple]
-ImageType = Union[str, Path, BytesIO]
-TextType = Union[str, list, tuple, dict]
+from pdfme.types import (
+    Number,
+    DictStr,
+    MarginType,
+    PageType,
+    ColorType,
+    ImageType,
+    TextType,
+)
+
+
 class PDF:
     """Class that represents a PDF document, and has methods to add pages,
     and to add paragraphs, images, tables and a mix of this, a content box,
@@ -143,12 +146,21 @@ class PDF:
         outlines_level (int, optional): the level of the outlines to be
             displayed on the outlines panel when the PDF document is opened.
     """
+
     def __init__(
-        self, page_size: PageType='a4', rotate_page: bool=False,
-        margin: MarginType=56.693, page_numbering_offset: Number=0,
-        page_numbering_style: str='arabic', font_family: str='Helvetica',
-        font_size: Number=11, font_color: ColorType=0.1, text_align: str='l',
-        line_height: Number=1.1, indent: Number=0, outlines_level: int=1
+        self,
+        page_size: PageType = "a4",
+        rotate_page: bool = False,
+        margin: MarginType = 56.693,
+        page_numbering_offset: int = 0,
+        page_numbering_style: str = "arabic",
+        font_family: str = "Helvetica",
+        font_size: Number = 11,
+        font_color: ColorType = 0.1,
+        text_align: str = "l",
+        line_height: Number = 1.1,
+        indent: Number = 0,
+        outlines_level: int = 1,
     ) -> None:
         self.setup_page(page_size, rotate_page, margin)
         self.page_numbering_offset = page_numbering_offset
@@ -162,26 +174,26 @@ class PDF:
         self.indent = indent
         self.outlines_level = outlines_level
 
-        self.formats = {}
-        self.context = {}
+        self.formats: Dict[str, DictStr] = {}
+        self.context: DictStr = {}
 
-        self.dests = {}
-        self.uris = {}
-        self.pages = []
-        self.running_sections = []
-        self.outlines = []
+        self.dests: Dict[str, List[Any]] = {}
+        self.uris: Dict[str, "PDFRef"] = {}
+        self.pages: List["PDFPage"] = []
+        self.running_sections: List[DictStr] = []
+        self.outlines: List[Any] = []
 
         self.base = PDFBase()
-        self.root = self.base.add({ 'Type': b'/Catalog'})
-        self.base.trailer['Root'] = self.root.id
+        self.root = self.base.add({"Type": b"/Catalog"})
+        self.base.trailer["Root"] = self.root.id
 
         self.fonts = PDFFonts()
-        self.used_fonts = {}
-        self.images = {}
-        self._add_or_get_font('Helvetica', 'n')
+        self.used_fonts: Dict[Tuple[str, str], Tuple[str, "PDFRef"]] = {}
+        self.images: Dict[str, "PDFRef"] = {}
+        self._add_or_get_font("Helvetica", "n")
 
     @property
-    def page(self) -> 'PDFPage':
+    def page(self) -> "PDFPage":
         """
         Returns:
             PDFPage: current page
@@ -199,7 +211,7 @@ class PDF:
     @page_index.setter
     def page_index(self, page_index):
         self._page_index = page_index
-        self.context['$page'] = self.get_page_number()
+        self.context["$page"] = self.get_page_number()
 
     @property
     def width(self) -> float:
@@ -218,8 +230,10 @@ class PDF:
         return self.page.height
 
     def setup_page(
-        self, page_size: PageType=None, rotate_page: bool=None,
-        margin: MarginType=None
+        self,
+        page_size: PageType = None,
+        rotate_page: bool = None,
+        margin: MarginType = None,
     ) -> None:
         """Method to set the page features defaults. These values will be used
         from now on when adding new pages.
@@ -241,8 +255,10 @@ class PDF:
             self.margin = parse_margin(margin)
 
     def add_page(
-        self, page_size: PageType=None, rotate_page: bool=None,
-        margin: MarginType=None
+        self,
+        page_size: PageType = None,
+        rotate_page: bool = None,
+        margin: MarginType = None,
     ) -> None:
         """Method to add a new page. If provided, arguments will only apply for
         the page being added.
@@ -268,8 +284,11 @@ class PDF:
         if margin is not None:
             margin_.update(parse_margin(margin))
 
-        page = PDFPage(self.base, page_width, page_height,
-            **{'margin_' + side: value for side, value in margin_.items()}
+        page = PDFPage(
+            self.base,
+            page_width,
+            page_height,
+            **{"margin_" + side: value for side, value in margin_.items()}
         )
 
         self.pages.append(page)
@@ -281,7 +300,7 @@ class PDF:
         page.go_to_beginning()
 
     def add_running_section(
-        self, content: dict, width: Number, height: Number, x: Number, y:Number
+        self, content: dict, width: Number, height: Number, x: Number, y: Number
     ) -> None:
         """Method to add running sections, like a header and a footer, to this
         document.
@@ -301,13 +320,11 @@ class PDF:
             y (int, float, optional): The y position of the top of the
                 rectangle.
         """
-        self.running_sections.append(dict(
-            content=content, width=width, height=height, x=x, y=y
-        ))
+        self.running_sections.append(
+            dict(content=content, width=width, height=height, x=x, y=y)
+        )
 
-    def add_font(
-        self, fontfile: str, font_family: str, mode: str='n'
-    ) -> None:
+    def add_font(self, fontfile: str, font_family: str, mode: str = "n") -> None:
         """Method to add a new font to this document. This functionality is not
         ready yet.
 
@@ -358,8 +375,8 @@ class PDF:
         self.page.add_font(*font_args)
 
     def create_image(
-        self, image: ImageType, extension: str=None, image_name: str=None
-    ) -> 'PDFImage':
+        self, image: ImageType, extension: str = None, image_name: str = None
+    ) -> "PDFImage":
         """Method to create a PDF image.
 
         Arguments for this method are the same as :class:`pdfme.image.PDFImage`.
@@ -369,7 +386,7 @@ class PDF:
         """
         return PDFImage(image, extension, image_name)
 
-    def _add_image_to_base(self, pdf_image: 'PDFImage'):
+    def _add_image_to_base(self, pdf_image: "PDFImage"):
         if pdf_image.image_name not in self.images:
             image_obj = self.base.add(pdf_image.pdf_obj)
             self.images[pdf_image.image_name] = image_obj.id
@@ -379,8 +396,13 @@ class PDF:
         return image_obj
 
     def add_image(
-        self, pdf_image: 'PDFImage', x: Number=None, y: Number=None,
-        width: Number=None, height:Number=None, move: str='bottom'
+        self,
+        pdf_image: "PDFImage",
+        x: Optional[Number] = None,
+        y: Optional[Number] = None,
+        width: Optional[Number] = None,
+        height: Optional[Number] = None,
+        move: str = "bottom",
     ) -> None:
         """Method to add a PDF image to the current page.
 
@@ -410,11 +432,11 @@ class PDF:
 
         if width is None and height is None:
             width = self.page.content_width
-            height = width * h/w
+            height = width * h / w
         elif width is None:
-            width = height * w/h
+            width = height * w / h
         elif height is None:
-            height = width * h/w
+            height = width * h / w
 
         if x is not None:
             self.page.x = x
@@ -423,15 +445,21 @@ class PDF:
 
         self.page.add_image(image_obj.id, width, height)
 
-        if move == 'bottom':
+        if move == "bottom":
             self.page.y += height
-        if move == 'next':
+        if move == "next":
             self.page.x += width
 
     def image(
-        self, image: ImageType, extension: str=None, image_name: str=None,
-        x: Number=None, y: Number=None, width: Number=None, height:Number=None,
-        move: str='bottom'
+        self,
+        image: ImageType,
+        extension: str = None,
+        image_name: str = None,
+        x: Number = None,
+        y: Number = None,
+        width: Number = None,
+        height: Number = None,
+        move: str = "bottom",
     ) -> None:
         """Method to create and add a PDF image to the current page.
 
@@ -457,13 +485,15 @@ class PDF:
                 (default).
         """
         pdf_image = self.create_image(image, extension, image_name)
-        self.add_image(
-            pdf_image, x=x, y=y, width=width, height=height, move=move
-        )
+        self.add_image(pdf_image, x=x, y=y, width=width, height=height, move=move)
 
     def _default_paragraph_style(
-        self, width: Number=None, height:Number=None, text_align: str=None,
-        line_height: Number=None, indent: Number=None
+        self,
+        width: Number = None,
+        height: Number = None,
+        text_align: str = None,
+        line_height: Number = None,
+        indent: Number = None,
     ) -> dict:
         """This method returns a dict with each of the arguments as the keys.
         If they are None, the PDF default value for each of them is used.
@@ -482,14 +512,15 @@ class PDF:
             dict: dict with the default and the given parameters combined.
         """
         return dict(
-            width = self.page.width - self.page.margin_right - self.page.x \
-                if width is None else width,
-            height = self.page.height - self.page.margin_bottom - self.page.y \
-                if height is None else height,
-            text_align = self.text_align if text_align is None else text_align,
-            line_height = self.line_height if line_height is None \
-                else line_height,
-            indent = self.indent if indent is None else indent,
+            width=self.page.width - self.page.margin_right - self.page.x
+            if width is None
+            else width,
+            height=self.page.height - self.page.margin_bottom - self.page.y
+            if height is None
+            else height,
+            text_align=self.text_align if text_align is None else text_align,
+            line_height=self.line_height if line_height is None else line_height,
+            indent=self.indent if indent is None else indent,
         )
 
     def _init_text(self, content: TextType) -> dict:
@@ -502,24 +533,25 @@ class PDF:
         Returns:
             dict: dict with the prepared paragraph.
         """
-        style = {
-            'f': self.font_family, 's': self.font_size, 'c': self.font_color
-        }
+        style = {"f": self.font_family, "s": self.font_size, "c": self.font_color}
         if isinstance(content, str):
-            content = {'style': style, '.': [content]}
+            content = {"style": style, ".": [content]}
         elif isinstance(content, (list, tuple)):
-            content = {'style': style, '.': content}
+            content = {"style": style, ".": content}
         elif isinstance(content, dict):
-            style_str = [k[1:] for k in content.keys() if k.startswith('.')]
+            style_str = [k[1:] for k in content.keys() if k.startswith(".")]
             if len(style_str) > 0:
                 style.update(parse_style_str(style_str[0], self.fonts))
-            style.update(process_style(content.get('style'), self))
-            content['style'] = style
+            style.update(process_style(content.get("style"), self))
+            content["style"] = style
         return content
 
     def _position_and_size(
-        self, x: Number=None, y: Number=None, width: Number=None,
-        height: Number=None
+        self,
+        x: Number = None,
+        y: Number = None,
+        width: Number = None,
+        height: Number = None,
     ) -> tuple:
         """Method that returns a tuple with the arguments passed, with default
         values if they are None.
@@ -554,14 +586,20 @@ class PDF:
             ``page_numbering_offset`` and ``page_numbering_style``.
         """
         page = self.page_index + 1 + self.page_numbering_offset
-        return to_roman(page) if self.page_numbering_style == 'roman'\
-            else str(page)
+        return to_roman(page) if self.page_numbering_style == "roman" else str(page)
 
     def _create_text(
-        self, content: TextType, width: Number=None, height: Number=None,
-        text_align: str=None, line_height: Number=1.1, indent: Number=0,
-        list_text: str=None, list_indent: Number=None, list_style: dict=None
-    ) -> 'PDFText':
+        self,
+        content: TextType,
+        width: Number = None,
+        height: Number = None,
+        text_align: str = None,
+        line_height: Number = 1.1,
+        indent: Number = 0,
+        list_text: str = None,
+        list_indent: Number = None,
+        list_style: dict = None,
+    ) -> "PDFText":
         """Method to create a paragraph.
 
         For more information about the arguments see
@@ -573,18 +611,28 @@ class PDF:
         par_style = self._default_paragraph_style(
             width, height, text_align, line_height, indent
         )
-        par_style.update({
-            'list_text': list_text, 'list_indent': list_indent,
-            'list_style': list_style
-        })
+        par_style.update(
+            {
+                "list_text": list_text,
+                "list_indent": list_indent,
+                "list_style": list_style,
+            }
+        )
         content = self._init_text(content)
         pdf_text = PDFText(content, fonts=self.fonts, pdf=self, **par_style)
         return pdf_text
 
     def _add_text(
-        self, text_stream: str, x: Number=None, y: Number=None,
-        width: Number=None, height: Number=None, graphics_stream: str=None,
-        used_fonts: tuple=None, ids: dict=None, move: str='bottom'
+        self,
+        text_stream: str,
+        width: Number,
+        height: Number,
+        x: Number,
+        y: Number,
+        graphics_stream: str,
+        used_fonts: tuple,
+        ids: dict,
+        move: str = "bottom",
     ) -> None:
         """Method to add a paragraph to the current page. The arguments for this
         method are obtained from the attribute ``result`` of class
@@ -602,58 +650,71 @@ class PDF:
         for id_, rects in ids.items():
             if len(rects) == 0:
                 continue
-            if id_.startswith('$label:'):
+            if id_.startswith("$label:"):
                 d = rects[0]
                 x_ref = x + d[0]
                 self.dests[id_[7:]] = [
-                    self.page.page.id, b'/XYZ', round(x_ref, 3),
-                    round(y + d[3], 3), round(x_ref/self.page.width, 3) + 1
+                    self.page.page.id,
+                    b"/XYZ",
+                    round(x_ref, 3),
+                    round(y + d[3], 3),
+                    round(x_ref / self.page.width, 3) + 1,
                 ]
-            elif id_.startswith('$ref:'):
+            elif id_.startswith("$ref:"):
                 for r in rects:
                     self.page.add_reference(
                         id_[5:],
                         [
-                            round(x + r[0], 3), round(y + r[1], 3),
-                            round(x + r[2], 3), round(y + r[3], 3)
-                        ]
+                            round(x + r[0], 3),
+                            round(y + r[1], 3),
+                            round(x + r[2], 3),
+                            round(y + r[3], 3),
+                        ],
                     )
-            elif id_.startswith('$uri:'):
+            elif id_.startswith("$uri:"):
                 link = id_[5:]
                 if not link in self.uris:
-                    uri = self.base.add(
-                        {'Type': b'/Action', 'S': b'/URI', 'URI': link}
-                    )
+                    uri = self.base.add({"Type": b"/Action", "S": b"/URI", "URI": link})
                     self.uris[link] = uri.id
 
                 for r in rects:
                     self.page.add_link(
                         self.uris[link],
                         [
-                            round(x + r[0], 3), round(y + r[1], 3),
-                            round(x + r[2], 3), round(y + r[3], 3)
-                        ]
+                            round(x + r[0], 3),
+                            round(y + r[1], 3),
+                            round(x + r[2], 3),
+                            round(y + r[3], 3),
+                        ],
                     )
-            elif id_.startswith('$outline:'):
+            elif id_.startswith("$outline:"):
                 outline_data = json.loads(id_[9:])
                 outline = self.outlines
-                for _ in range(outline_data['level'] - 1):
-                    outline = outline[-1].setdefault('children', [])
+                for _ in range(outline_data["level"] - 1):
+                    outline = outline[-1].setdefault("children", [])
 
                 outline.append(outline_data)
 
-        if move == 'bottom':
+        if move == "bottom":
             self.page.y += height
-        if move == 'next':
+        if move == "next":
             self.page.x += width
 
     def _text(
-        self, content: Union[TextType, 'PDFText'], width: Number=None,
-        height: Number=None, x: Number=None, y: Number=None,
-        text_align: str=None, line_height: Number=1.1, indent: Number=0,
-        list_text: str=None, list_indent: Number=None, list_style: dict=None,
-        move: str='bottom'
-    ) -> 'PDFText':
+        self,
+        content: Union[TextType, "PDFText"],
+        width: Number = None,
+        height: Number = None,
+        x: Number = None,
+        y: Number = None,
+        text_align: str = None,
+        line_height: Number = 1.1,
+        indent: Number = 0,
+        list_text: str = None,
+        list_indent: Number = None,
+        list_style: dict = None,
+        move: str = "bottom",
+    ) -> "PDFText":
         """Method to create and add a paragraph to the current page.
 
         If ``content`` is a PDFText, the method ``run`` for this instance will
@@ -673,8 +734,15 @@ class PDF:
             pdf_text.run(x, y, width, height)
         else:
             pdf_text = self._create_text(
-                content, width, height, text_align, line_height, indent,
-                list_text, list_indent, list_style
+                content,
+                width,
+                height,
+                text_align,
+                line_height,
+                indent,
+                list_text,
+                list_indent,
+                list_style,
             )
             pdf_text.run(x, y)
 
@@ -682,9 +750,14 @@ class PDF:
         return pdf_text
 
     def text(
-        self, content: TextType, text_align: str=None, line_height: Number=1.1,
-        indent: Number=0, list_text: str=None, list_indent: Number=None,
-        list_style: dict=None
+        self,
+        content: TextType,
+        text_align: str = None,
+        line_height: Number = 1.1,
+        indent: Number = 0,
+        list_text: str = None,
+        list_indent: Number = None,
+        list_style: dict = None,
     ) -> None:
         """Method to create and add a paragraph to this document. This method
         will keep adding pages to the PDF until all the contents of the
@@ -694,15 +767,24 @@ class PDF:
         :class:`pdfme.text.PDFText`.
         """
         pdf_text = self._text(
-            content, x=self.page.margin_left, width=self.page.content_width,
-            text_align=text_align, line_height=line_height, indent=indent,
-            list_text=list_text, list_indent=list_indent, list_style=list_style
+            content,
+            x=self.page.margin_left,
+            width=self.page.content_width,
+            text_align=text_align,
+            line_height=line_height,
+            indent=indent,
+            list_text=list_text,
+            list_indent=list_indent,
+            list_style=list_style,
         )
         while not pdf_text.finished:
             self.add_page()
-            pdf_text = self._text(pdf_text, self.page.content_width,
-                self.page.content_height, self.page.margin_left,
-                self.page.margin_top
+            pdf_text = self._text(
+                pdf_text,
+                self.page.content_width,
+                self.page.content_height,
+                self.page.margin_left,
+                self.page.margin_top,
             )
 
     def _default_content_style(self) -> dict:
@@ -716,17 +798,26 @@ class PDF:
             dict: dict with the default values.
         """
         return dict(
-            f=self.font_family, s=self.font_size, c=self.font_color,
-            text_align=self.text_align, line_height=self.line_height,
-            indent=self.indent
+            f=self.font_family,
+            s=self.font_size,
+            c=self.font_color,
+            text_align=self.text_align,
+            line_height=self.line_height,
+            indent=self.indent,
         )
 
     def _create_table(
-        self, content: Iterable, width: Number=None, height: Number=None,
-        x: Number=None, y: Number=None, widths: Iterable=None,
-        style: Union[dict, str]=None, borders: Iterable=None,
-        fills: Iterable=None
-    ) -> 'PDFTable':
+        self,
+        content: Iterable,
+        width: Number = None,
+        height: Number = None,
+        x: Number = None,
+        y: Number = None,
+        widths: Iterable = None,
+        style: Union[dict, str] = None,
+        borders: Iterable = None,
+        fills: Iterable = None,
+    ) -> "PDFTable":
         """Method to create a table.
 
         For more information about this method arguments see
@@ -738,17 +829,33 @@ class PDF:
         style_ = self._default_content_style()
         style_.update(process_style(style, self))
         pdf_table = PDFTable(
-            content, self.fonts, x, y, width, height,
-            widths, style_, borders, fills, self
+            content,
+            self.fonts,
+            x,
+            y,
+            width,
+            height,
+            widths,
+            style_,
+            borders,
+            fills,
+            self,
         )
         return pdf_table
 
     def _table(
-        self, content: Union[Iterable, 'PDFTable'], width: Number=None,
-        height: Number=None, x: Number=None, y: Number=None,
-        widths: Iterable=None, style: Union[dict, str]=None,
-        borders: Iterable=None, fills: Iterable=None, move: str='bottom'
-    ) -> 'PDFTable':
+        self,
+        content: Union[Iterable, "PDFTable"],
+        width: Number = None,
+        height: Number = None,
+        x: Number = None,
+        y: Number = None,
+        widths: Iterable = None,
+        style: Union[dict, str] = None,
+        borders: Iterable = None,
+        fills: Iterable = None,
+        move: str = "bottom",
+    ) -> "PDFTable":
         """Method to create and add a table to the current page.
 
         If ``content`` is a PDFTable, the method ``run`` for this instance will
@@ -777,17 +884,20 @@ class PDF:
         self._add_graphics([*pdf_table.fills, *pdf_table.lines])
         self._add_parts(pdf_table.parts)
 
-        if move == 'bottom':
+        if move == "bottom":
             self.page.y += pdf_table.current_height
-        if move == 'next':
+        if move == "next":
             self.page.x += width
 
         return pdf_table
 
     def table(
-        self, content: Iterable, widths: Iterable=None,
-        style: Union[str, dict]=None, borders: Iterable=None,
-        fills: Iterable=None
+        self,
+        content: Iterable,
+        widths: Iterable = None,
+        style: Union[str, dict] = None,
+        borders: Iterable = None,
+        fills: Iterable = None,
     ) -> None:
         """Method to create and add a table to this document. This method
         will keep adding pages to the PDF until all the contents of the
@@ -797,20 +907,32 @@ class PDF:
         :class:`pdfme.table.PDFTable`.
         """
         pdf_table = self._table(
-            content, widths=widths, style=style, borders=borders, fills=fills,
-            x=self.page.margin_left, width=self.page.content_width
+            content,
+            widths=widths,
+            style=style,
+            borders=borders,
+            fills=fills,
+            x=self.page.margin_left,
+            width=self.page.content_width,
         )
         while not pdf_table.finished:
             self.add_page()
             pdf_table = self._table(
-                pdf_table, self.page.content_width, self.page.content_height,
-                self.page.margin_left, self.page.margin_top
+                pdf_table,
+                self.page.content_width,
+                self.page.content_height,
+                self.page.margin_left,
+                self.page.margin_top,
             )
 
     def _create_content(
-        self, content: dict, width: Number=None, height: Number=None,
-        x: Number=None, y: Number=None
-    ) -> 'PDFContent':
+        self,
+        content: dict,
+        width: Number = None,
+        height: Number = None,
+        x: Number = None,
+        y: Number = None,
+    ) -> "PDFContent":
         """Method to create a content box.
 
         For more information about this method arguments see
@@ -821,15 +943,20 @@ class PDF:
         """
         style = self._default_content_style()
         content = content.copy()
-        style.update(process_style(content.get('style'), self))
-        content['style'] = style
+        style.update(process_style(content.get("style"), self))
+        content["style"] = style
         pdf_content = PDFContent(content, self.fonts, x, y, width, height, self)
         return pdf_content
 
     def _content(
-        self, content: Union[dict, 'PDFContent'], width: Number=None,
-        height: Number=None, x: Number=None, y: Number=None, move: str='bottom'
-    ) -> 'PDFContent':
+        self,
+        content: Union[dict, "PDFContent"],
+        width: Number = None,
+        height: Number = None,
+        x: Number = None,
+        y: Number = None,
+        move: str = "bottom",
+    ) -> "PDFContent":
         """Method to create and add a content box to teh current page.
 
         If ``content`` is a PDFContent, the method ``run`` for this instance
@@ -852,12 +979,12 @@ class PDF:
             pdf_content = self._create_content(content, width, height, x, y)
             pdf_content.run()
 
-        self._add_graphics([*pdf_content.fills,*pdf_content.lines])
+        self._add_graphics([*pdf_content.fills, *pdf_content.lines])
         self._add_parts(pdf_content.parts)
 
-        if move == 'bottom':
+        if move == "bottom":
             self.page.y += pdf_content.current_height
-        if move == 'next':
+        if move == "next":
             self.page.x += width
 
         return pdf_content
@@ -875,9 +1002,12 @@ class PDF:
         )
         while not pdf_content.finished:
             self.add_page()
-            pdf_content = self._content(pdf_content,
-                self.page.content_width, self.page.content_height,
-                self.page.margin_left, self.page.margin_top
+            pdf_content = self._content(
+                pdf_content,
+                self.page.content_width,
+                self.page.content_height,
+                self.page.margin_left,
+                self.page.margin_top,
             )
 
     def _add_graphics(self, graphics: Iterable) -> None:
@@ -905,13 +1035,13 @@ class PDF:
         """
         for part in parts:
             part = part.copy()
-            type_ = part.pop('type')
-            if type_ == 'paragraph':
+            type_ = part.pop("type")
+            if type_ == "paragraph":
                 self._add_text(**part)
-            elif type_ == 'image':
+            elif type_ == "image":
                 self.add_image(**part)
 
-    def _build_pages_tree(self, page_list:list, first_level:bool=True) -> None:
+    def _build_pages_tree(self, page_list: list, first_level: bool = True) -> None:
         """Method to build the PDF pages tree.
 
         Args:
@@ -926,26 +1056,26 @@ class PDF:
             if first_level:
                 page_size = [page.width, page.height]
                 page = page.page
-                page['MediaBox'] = [0, 0] + page_size
+                page["MediaBox"] = [0, 0] + page_size
 
             if count % 6 == 0:
                 new_page_list.append(
-                    self.base.add({'Type': b'/Pages', 'Kids': [], 'Count': 0})
+                    self.base.add({"Type": b"/Pages", "Kids": [], "Count": 0})
                 )
                 count += 1
 
             last_parent = new_page_list[-1]
-            page['Parent'] = last_parent.id
-            last_parent['Kids'].append(page.id)
-            last_parent['Count'] += 1
+            page["Parent"] = last_parent.id
+            last_parent["Kids"].append(page.id)
+            last_parent["Count"] += 1
 
         if count == 1:
-            self.root['Pages'] = new_page_list[0].id
+            self.root["Pages"] = new_page_list[0].id
         else:
             self._build_pages_tree(new_page_list, False)
 
     def _build_dests_tree(
-        self, keys: list, vals: list, first_level: bool=True
+        self, keys: list, vals: list, first_level: bool = True
     ) -> None:
         """Method to build the PDF dests tree.
 
@@ -971,33 +1101,35 @@ class PDF:
             if i % k == 0:
                 count += 1
                 obj = self.base.add({})
-                obj['Limits'] = [key if first_level else val[0], None]
-                if first_level: obj['Names'] = []
-                else: obj['Kids'] = []
+                obj["Limits"] = [key if first_level else val[0], None]
+                if first_level:
+                    obj["Names"] = []
+                else:
+                    obj["Kids"] = []
 
             if first_level:
-                obj['Names'].append(key)
-                obj['Names'].append(val)
+                obj["Names"].append(key)
+                obj["Names"].append(val)
             else:
-                obj['Kids'].append(key)
+                obj["Kids"].append(key)
 
             if (i + 1) % k == 0 or (i + 1) == length:
-                obj['Limits'][1] = key if first_level else val[1]
+                obj["Limits"][1] = key if first_level else val[1]
                 new_keys.append(obj.id)
-                new_vals.append(obj['Limits'])
+                new_vals.append(obj["Limits"])
 
             i += 1
 
         if count == 1:
-            del obj['Limits']
-            if not 'Names' in self.root: self.root['Names'] = {}
-            self.root['Names']['Dests'] = obj.id
+            del obj["Limits"]
+            if not "Names" in self.root:
+                self.root["Names"] = {}
+            self.root["Names"]["Dests"] = obj.id
         else:
             self._build_dests_tree(new_keys, new_vals, False)
 
     def _build_dests(self) -> None:
-        """Method to create and add the dests tree to the document.
-        """
+        """Method to create and add the dests tree to the document."""
         dests = list(self.dests.keys())
         if len(dests) == 0:
             return
@@ -1005,7 +1137,7 @@ class PDF:
         self._build_dests_tree(dests, [self.dests[k] for k in dests])
 
     def _build_outlines_tree(
-        self, outlines: list, parent: 'PDFObject', level: int
+        self, outlines: list, parent: "PDFObject", level: int
     ) -> None:
         """Method to build a PDF outline tree.
 
@@ -1020,45 +1152,44 @@ class PDF:
         for outline in outlines:
             count += 1
 
-            obj = self.base.add({
-                'Title': outline['text'],
-                'Parent': parent.id,
-                'Dest': outline['label']
-            })
+            obj = self.base.add(
+                {
+                    "Title": outline["text"],
+                    "Parent": parent.id,
+                    "Dest": outline["label"],
+                }
+            )
 
             if prev is not None:
-                obj['Prev'] = prev.id
-                prev['Next'] = obj.id
+                obj["Prev"] = prev.id
+                prev["Next"] = obj.id
             else:
-                parent['First'] = obj.id
+                parent["First"] = obj.id
 
             prev = obj
 
-            children = outline.get('children', [])
+            children = outline.get("children", [])
             if len(children) > 0:
                 count_ = self._build_outlines_tree(children, obj, level - 1)
                 if level > 1:
                     count += count_
-                    obj['Count'] = count_
+                    obj["Count"] = count_
                 else:
-                    obj['Count'] = -1
+                    obj["Count"] = -1
 
-        parent['Last'] = obj.id
+        parent["Last"] = obj.id
         return count
 
     def _build_outlines(self) -> None:
-        """Method to create and add the outlines tree to the document.
-        """
+        """Method to create and add the outlines tree to the document."""
         if len(self.outlines) == 0:
             return
 
-        obj = self.base.add({
-            'Type': b'/Outlines'
-        })
-        self.root['PageMode'] = b'/UseOutlines'
-        self.root['Outlines'] = obj.id
+        obj = self.base.add({"Type": b"/Outlines"})
+        self.root["PageMode"] = b"/UseOutlines"
+        self.root["Outlines"] = obj.id
         n = self._build_outlines_tree(self.outlines, obj, self.outlines_level)
-        obj['Count'] = n
+        obj["Count"] = n
 
     def output(self, buffer: Any) -> None:
         """Method to create the PDF file.
@@ -1076,15 +1207,22 @@ class PDF:
         self._build_outlines()
         self.base.output(buffer)
 
+
 from .base import PDFBase
 from .content import PDFContent
 from .fonts import PDFFonts
 from .image import PDFImage
 from .page import PDFPage
-from .parser import PDFObject
+from .parser import PDFObject, PDFRef
 from .table import PDFTable
 from .text import PDFText
 from .utils import (
-    create_graphics, get_page_size, get_paragraph_stream, parse_margin,
-    parse_style_str, process_style, to_roman, copy
+    create_graphics,
+    get_page_size,
+    get_paragraph_stream,
+    parse_margin,
+    parse_style_str,
+    process_style,
+    to_roman,
+    copy,
 )

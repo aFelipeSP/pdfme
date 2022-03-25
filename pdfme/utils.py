@@ -1,21 +1,32 @@
 import re
-from typing import Any, Iterable, Union
+from typing import Any, Iterable, Optional, Union
 
 page_sizes = {
-    'a5': (419.528, 595.276),
-    'a4': (595.276, 841.89),
-    'a3': (841.89, 1190.551),
-    'b5': (498.898, 708.661),
-    'b4': (708.661, 1000.63),
-    'jis-b5': (515.906, 728.504),
-    'jis-b4': (728.504, 1031.812),
-    'letter': (612, 792),
-    'legal': (612, 1008),
-    'ledger': (792, 1224)
+    "a5": (419.528, 595.276),
+    "a4": (595.276, 841.89),
+    "a3": (841.89, 1190.551),
+    "b5": (498.898, 708.661),
+    "b4": (708.661, 1000.63),
+    "jis-b5": (515.906, 728.504),
+    "jis-b4": (728.504, 1031.812),
+    "letter": (612, 792),
+    "legal": (612, 1008),
+    "ledger": (792, 1224),
 }
+
+TABLE_PROPERTIES = ("widths", "borders", "fills")
+PARAGRAPH_PROPERTIES = (
+    "text_align",
+    "line_height",
+    "indent",
+    "list_text",
+    "list_style",
+    "list_indent",
+)
 
 Number = Union[int, float]
 MarginType = Union[int, float, Iterable[Number], dict]
+
 
 def subs(string: str, *args: tuple, **kwargs: dict) -> bytes:
     """Function to take ``string``, format it using ``args`` and ``kwargs`` and
@@ -27,9 +38,10 @@ def subs(string: str, *args: tuple, **kwargs: dict) -> bytes:
     Returns:
         bytes: the resulting bytes.
     """
-    return string.format(*args, **kwargs).encode('latin')
+    return string.format(*args, **kwargs).encode("latin")
 
-def process_style(style: Union[str, dict], pdf: 'PDF'=None) -> dict:
+
+def process_style(style: Union[None, str, dict], pdf: Optional["PDF"] = None) -> dict:
     """Function to use a named style from the PDF instance passed, if ``style``
     is a string or ``style`` itself if this is a dict.
 
@@ -49,7 +61,8 @@ def process_style(style: Union[str, dict], pdf: 'PDF'=None) -> dict:
     elif isinstance(style, dict):
         return style
     else:
-        raise Exception('style must be a str with the name of a style or dict')
+        raise Exception("style must be a str with the name of a style or dict")
+
 
 def get_page_size(size: Union[Number, str, Iterable]) -> tuple:
     """Function to get tuple with the width and height of a page, from the value
@@ -76,11 +89,13 @@ def get_page_size(size: Union[Number, str, Iterable]) -> tuple:
     elif isinstance(size, (list, tuple)):
         return tuple(size)
     else:
-        raise Exception('Page size must be a two numbers list or tuple, a'
-            'number (for a square page) or any of the following strings: {}'
-            .format(
-                ', '. join('"{}"'.format(name) for name in page_sizes.keys())
-            ))
+        raise Exception(
+            "Page size must be a two numbers list or tuple, a"
+            "number (for a square page) or any of the following strings: {}".format(
+                ", ".join('"{}"'.format(name) for name in page_sizes.keys())
+            )
+        )
+
 
 def parse_margin(margin: MarginType) -> dict:
     """Function to transform ``margin`` into a dict containing keys ``top``,
@@ -111,7 +126,7 @@ def parse_margin(margin: MarginType) -> dict:
         return margin
 
     if isinstance(margin, str):
-        margin = re.split(',| ', margin)
+        margin = re.split(",| ", margin)
         if len(margin) == 1:
             margin = float(margin)
         else:
@@ -132,12 +147,12 @@ def parse_margin(margin: MarginType) -> dict:
         elif len(margin) > 4:
             margin = margin[0:4]
 
-        return {k: v for k, v in zip(['top', 'right', 'bottom', 'left'], margin)}
+        return {k: v for k, v in zip(["top", "right", "bottom", "left"], margin)}
     else:
-        raise TypeError('margin property must be of type str, int, list or dict')
+        raise TypeError("margin property must be of type str, int, list or dict")
 
 
-def parse_style_str(style_str: str, fonts: 'PDFFonts') -> dict:
+def parse_style_str(style_str: str, fonts: "PDFFonts") -> dict:
     """Function to parse a style string into a style dict.
 
     It parses a string with a semi-colon separeted list of the style attributes
@@ -170,13 +185,13 @@ def parse_style_str(style_str: str, fonts: 'PDFFonts') -> dict:
     """
 
     style = {}
-    for attrs_str in style_str.split(';'):
-        attrs = attrs_str.split(':')
+    for attrs_str in style_str.split(";"):
+        attrs = attrs_str.split(":")
         if len(attrs) == 1:
-            if attrs[0] == '':
+            if attrs[0] == "":
                 continue
             attr = attrs[0].strip()
-            if not attr in ['b', 'i', 'u']:
+            if not attr in ["b", "i", "u"]:
                 raise ValueError(
                     'Style elements with no paramter must be whether "b" for '
                     'bold, "i" for italics(Oblique) or "u" for underline.'
@@ -186,56 +201,55 @@ def parse_style_str(style_str: str, fonts: 'PDFFonts') -> dict:
             attr = attrs[0].strip()
             value = attrs[1].strip()
 
-            if attr in ['b', 'i', 'u']:
-                if value == '1':
+            if attr in ["b", "i", "u"]:
+                if value == "1":
                     style[attr] = True
-                elif value == '0':
+                elif value == "0":
                     style[attr] = False
                 else:
                     raise ValueError(
-                        'Style element "{}" must be 0 or 1: {}'
-                        .format(attr, value)
+                        'Style element "{}" must be 0 or 1: {}'.format(attr, value)
                     )
             if attr == "f":
                 if value not in fonts.fonts:
                     raise ValueError(
                         'Style element "f" must have the name of a font family'
-                        ' already added.'
+                        " already added."
                     )
 
-                style['f'] = value
+                style["f"] = value
             elif attr == "c":
-                style['c'] = PDFColor(value)
+                style["c"] = PDFColor(value)
             elif attr == "bg":
-                style['bg'] = PDFColor(value)
+                style["bg"] = PDFColor(value)
             elif attrs[0] == "s":
                 try:
                     v = float(value)
                     if int(v) == v:
                         v = int(v)
-                    style['s'] = v
+                    style["s"] = v
                 except:
                     raise ValueError(
-                        'Style element value for "s" is wrong:'
-                        ' {}'.format(value)
+                        'Style element value for "s" is wrong:' " {}".format(value)
                     )
-            elif attrs[0] == 'r':
-                try: style['r'] = float(value)
+            elif attrs[0] == "r":
+                try:
+                    style["r"] = float(value)
                 except:
                     raise ValueError(
-                        'Style element value for "r" is wrong:'
-                        ' {}'.format(value)
+                        'Style element value for "r" is wrong:' " {}".format(value)
                     )
             else:
                 raise ValueError(
-                    'Style elements with arguments must be '
+                    "Style elements with arguments must be "
                     '"b", "u", "i", "f", "s", "c", "r"'
                 )
 
         else:
-            raise ValueError('Invalid Style string: {}'.format(attrs_str))
+            raise ValueError("Invalid Style string: {}".format(attrs_str))
 
     return style
+
 
 def create_graphics(graphics: list) -> str:
     """Function to transform a list of graphics dicts (with lines and fill
@@ -248,61 +262,74 @@ def create_graphics(graphics: list) -> str:
         str: a PDF stream containing the passed graphics.
     """
     last_fill = last_color = last_line_width = last_line_style = None
-    stream = ''
+    stream = ""
     for g in graphics:
-        if g['type'] == 'fill':
-            if g['color'] != last_fill:
-                last_fill = g['color']
-                stream += ' ' + str(last_fill)
+        if g["type"] == "fill":
+            if g["color"] != last_fill:
+                last_fill = g["color"]
+                stream += " " + str(last_fill)
 
-            stream += ' {} {} {} {} re F'.format(
-                round(g['x'], 3), round(g['y'], 3),
-                round(g['width'], 3), round(g['height'], 3)
+            stream += " {} {} {} {} re F".format(
+                round(g["x"], 3),
+                round(g["y"], 3),
+                round(g["width"], 3),
+                round(g["height"], 3),
             )
 
-        if g['type'] == 'line':
-            if g['color'] != last_color:
-                last_color = g['color']
-                stream += ' ' + str(last_color)
+        if g["type"] == "line":
+            if g["color"] != last_color:
+                last_color = g["color"]
+                stream += " " + str(last_color)
 
-            if g['width'] != last_line_width:
-                last_line_width = g['width']
-                stream += ' {} w'.format(round(g['width'], 3))
+            if g["width"] != last_line_width:
+                last_line_width = g["width"]
+                stream += " {} w".format(round(g["width"], 3))
 
-            if g['style'] == 'dashed':
-                line_style = ' 0 J [{} {}] 0 d'.format(round(g['width']*3, 3),
-                    round(g['width']*1.5, 3))
-            elif g['style'] == 'dotted':
-                line_style = ' 1 J [0 {}] {} d'.format(round(g['width']*2, 3),
-                    round(g['width'], 3)*0.5)
-            elif g['style'] == 'solid':
-                line_style = ' 0 J [] 0 d'
+            if g["style"] == "dashed":
+                line_style = " 0 J [{} {}] 0 d".format(
+                    round(g["width"] * 3, 3), round(g["width"] * 1.5, 3)
+                )
+            elif g["style"] == "dotted":
+                line_style = " 1 J [0 {}] {} d".format(
+                    round(g["width"] * 2, 3), round(g["width"], 3) * 0.5
+                )
+            elif g["style"] == "solid":
+                line_style = " 0 J [] 0 d"
             else:
                 raise Exception(
-                    'line style should be dotted, dashed or solid: {}'
-                    .format(g['style'])
+                    "line style should be dotted, dashed or solid: {}".format(
+                        g["style"]
+                    )
                 )
 
             if line_style != last_line_style:
                 last_line_style = line_style
                 stream += line_style
 
-            stream += ' {} {} m {} {} l S'.format(
-                round(g['x1'], 3), round(g['y1'], 3),
-                round(g['x2'], 3), round(g['y2'], 3),
+            stream += " {} {} m {} {} l S".format(
+                round(g["x1"], 3),
+                round(g["y1"], 3),
+                round(g["x2"], 3),
+                round(g["y2"], 3),
             )
 
-    if stream != '':
-        stream = ' q' + stream + ' Q'
+    if stream != "":
+        stream = " q" + stream + " Q"
 
     return stream
+
 
 def _roman_five(n, one, five):
     return one * n if n < 4 else (one + five if n == 4 else five)
 
+
 def _roman_ten(n, one, five, ten):
-    return _roman_five(n, one, five) if n < 5 else ((five if n < 9 else '')
-        + _roman_five(n - 5, one, ten) if n > 5 else five)
+    return (
+        _roman_five(n, one, five)
+        if n < 5
+        else ((five if n < 9 else "") + _roman_five(n - 5, one, ten) if n > 5 else five)
+    )
+
 
 def to_roman(n: int) -> str:
     """Function to transform ``n`` integer into a string with its corresponding
@@ -315,18 +342,19 @@ def to_roman(n: int) -> str:
         str: the Roman representation of the integer passed.
     """
     if not (0 < n < 4000):
-        raise Exception('0 < n < 4000')
-    roman = ''
+        raise Exception("0 < n < 4000")
+    roman = ""
     n = str(int(n))
     if len(n) > 0:
-        roman = _roman_ten(int(n[-1]), 'I', 'V', 'X')
+        roman = _roman_ten(int(n[-1]), "I", "V", "X")
     if len(n) > 1:
-        roman = _roman_ten(int(n[-2]), 'X', 'L', 'C') + roman
+        roman = _roman_ten(int(n[-2]), "X", "L", "C") + roman
     if len(n) > 2:
-        roman = _roman_ten(int(n[-3]), 'C', 'D', 'M') + roman
+        roman = _roman_ten(int(n[-3]), "C", "D", "M") + roman
     if len(n) > 3:
-        roman = _roman_ten(int(n[-4]), 'M', '', '') + roman
+        roman = _roman_ten(int(n[-4]), "M", "", "") + roman
     return roman
+
 
 def get_paragraph_stream(
     x: Number, y: Number, text_stream: str, graphics_stream: str
@@ -344,13 +372,13 @@ def get_paragraph_stream(
         str: the whole stream of the paragraph.
     """
 
-    stream = ''
     x, y = round(x, 3), round(y, 3)
-    if graphics_stream != '':
-        stream += ' q 1 0 0 1 {} {} cm{} Q'.format(x, y, graphics_stream)
-    if text_stream != '':
-        stream += ' BT 1 0 0 1 {} {} Tm{} ET'.format(x, y, text_stream)
+    stream = " q 1 0 0 1 {} {} cm{}".format(x, y, graphics_stream)
+    if text_stream != "":
+        stream += " BT 1 0 0 1 0 0 Tm{} ET".format(text_stream)
+    stream += " Q"
     return stream
+
 
 def copy(obj: Any) -> Any:
     """Function to copy objects like the ones used in this project: dicts,
@@ -370,6 +398,7 @@ def copy(obj: Any) -> Any:
     else:
         return obj
 
+
 class MuiltiRange:
     def __init__(self):
         self.ranges = []
@@ -381,27 +410,26 @@ class MuiltiRange:
         return any(number in range_ for range_ in self.ranges)
 
 
-
 def parse_range_string(range_str: str) -> MuiltiRange:
-    """Function to convert a string of comma-separated integers and integer 
+    """Function to convert a string of comma-separated integers and integer
     ranges into a set of all the integers included in those.
 
     Args:
-        range_str (str): comma-separated list of integers and integer 
+        range_str (str): comma-separated list of integers and integer
             ranges.
 
     Returns:
         MuiltiRange: a set of integers.
     """
     multi_range = MuiltiRange()
-    for part in range_str.split(','):
-        range_parts = part.split(':')
+    for part in range_str.split(","):
+        range_parts = part.split(":")
         if len(range_parts) == 1:
             index = int(range_parts[0].strip())
             multi_range.add(index, index + 1)
         else:
             first = range_parts[0].strip()
-            range_parts[0] = 0 if first == '' else int(first)
+            range_parts[0] = 0 if first == "" else int(first)
             if len(range_parts) > 1:
                 range_parts[1] = int(range_parts[1].strip())
             if len(range_parts) > 2:
@@ -410,8 +438,10 @@ def parse_range_string(range_str: str) -> MuiltiRange:
 
     return multi_range
 
+
 def format_round(template: str, format_args):
     return template.format(*[round(el, 3) for el in format_args])
+
 
 from .color import PDFColor
 from .fonts import PDFFonts
