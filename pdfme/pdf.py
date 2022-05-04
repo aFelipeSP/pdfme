@@ -387,11 +387,11 @@ class PDF:
         return PDFImage(image, extension, image_name)
 
     def _add_image_to_base(self, pdf_image: "PDFImage"):
-        if pdf_image.image_name not in self.images:
+        if pdf_image.image_name in self.images:
+            image_obj = self.base[self.images[pdf_image.image_name]]
+        else:
             image_obj = self.base.add(pdf_image.pdf_obj)
             self.images[pdf_image.image_name] = image_obj.id
-        else:
-            image_obj = self.base[self.images[pdf_image.image_name]]
 
         return image_obj
 

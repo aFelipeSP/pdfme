@@ -152,6 +152,8 @@ class PDFPage:
             self.page['Resources']['XObject'][image_id] = image_obj_id
             self.x_objects[image_obj_id] = image_id
 
+        return self.x_objects[image_obj_id]
+
     def add_image(
         self, image_obj_id: 'PDFRef', width: Number, height: Number
     ) -> None:
@@ -165,11 +167,11 @@ class PDFPage:
             width (int, float): the width of the image.
             height (int, float): the height of the image.
         """
-        self.add_image_resource(image_obj_id)
+        image_id = self.add_image_resource(image_obj_id)
         self.add(
             ' q {} 0 0 {} {} {} cm /{} Do Q'.format(
                 round(width, 3), round(height, 3), round(self.x, 3),
-                round(self._y, 3), self.x_objects[image_obj_id]
+                round(self._y, 3), image_id
             )
         )
 
