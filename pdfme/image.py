@@ -77,7 +77,7 @@ class PDFImage:
                     'Images of type "{}" are not yet supported'.format(extension)
                 )
         finally:
-            if image_bytes is not None:
+            if not isinstance(image, BytesIO) and image_bytes is not None:
                 image_bytes.close()
 
     def parse_jpg(self, bytes_: BinaryIO) -> None:
