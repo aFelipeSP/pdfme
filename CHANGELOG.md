@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 - Add possibility of embedding ttf and unicode fonts.
 
+## [0.4.10] - 2022-04-05
+### Fixed
+- Fixed error when using in-memory images in tables and error when in-memory images
+overflow to a new section.
+
 ## [0.4.9] - 2022-02-18
 ### Changed
 - Improved how group elements work, with "min_height" and "shrink" style
