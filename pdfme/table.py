@@ -893,7 +893,10 @@ class PDFTable:
         if 'delayed' in element:
             pdf_image = element['delayed']
         else:
-            pdf_image = PDFImage(element['image'])
+            pdf_image = PDFImage(
+                element['image'], element.get('extension'),
+                element.get('image_name')
+            )
         img_width = width
         img_height = img_width * pdf_image.height / pdf_image.width
 
