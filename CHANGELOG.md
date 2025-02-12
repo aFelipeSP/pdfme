@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 - Add possibility of embedding ttf and unicode fonts.
 
+## [0.4.12] - 2025-02-13
+### Fixed
+- Fixed error when using empty string as color.
+
 ## [0.4.11] - 2022-04-05
 ### Fixed
 - Fixed error when using in-memory images.
