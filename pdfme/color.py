@@ -230,7 +230,7 @@ def parse_color(color: ColorType) -> list:
     if isinstance(color, (int, float)):
         return [color]
     if isinstance(color, str):
-        if color is '':
+        if color == '':
             return None
         elif color in colors:
             return colors[color]
