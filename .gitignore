@@ -8,3 +8,6 @@ dist/
 test_*.json
 test_*.pdf
 docs/_build/
+
+venv/
+__pycache__/
