@@ -198,10 +198,18 @@ def parse_style_str(style_str: str, fonts: 'PDFFonts') -> dict:
                     )
             if attr == "f":
                 if value not in fonts.fonts:
-                    raise ValueError(
-                        'Style element "f" must have the name of a font family'
-                        ' already added.'
-                    )
+                    font_found = False
+
+                    for f in PDFFont.registered_fonts:
+                        if f[0] == value:
+                            font_found = True
+                            break
+
+                    if not font_found:
+                        raise ValueError(
+                            'Style element "f" must have the name of a font family'
+                            ' already added.'
+                        )
 
                 style['f'] = value
             elif attr == "c":
@@ -410,6 +418,28 @@ def parse_range_string(range_str: str) -> MuiltiRange:
 
     return multi_range
 
+def as_hex(text: str) -> str:
+    """Takes a text and returns it in UTF-16 Big Endian representation.
+
+    Args:
+        text (str): Input text.
+
+    Returns:
+        str: The transformed text.
+    """
+    return escape_string(text.encode('UTF-16-BE').decode('latin'))
+
+def escape_string(text):
+    '''Takes in a text and returns all special characters escaped.
+
+    Args:
+        text (str): Input text.
+
+    Returns:
+        str: Escaped text.
+    '''
+    return text.replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)')
+
 from .color import PDFColor
-from .fonts import PDFFonts
+from .fonts import PDFFonts, PDFFont
 from .pdf import PDF
