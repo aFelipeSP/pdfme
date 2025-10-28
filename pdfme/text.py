@@ -843,10 +843,32 @@ class PDFTextBase:
                     first_indent += self.list_indent
                     if self.list_state.size > full_line_height:
                         full_line_height = self.list_state.size
+
+                    style = self.list_style
+                    font_family = style.get('f', None)
+                    if not font_family:
+                        current_line_style = self.current_line.line_parts[0].style
+                        font_family = current_line_style.get('f', None)
+
+                    font = None
+                    if font_family not in STANDARD_FONTS:
+                        mode = 'n'
+                        if 'b' in style:
+                            mode = 'b'
+                        if 'i' in style:
+                            if mode == 'b':
+                                mode += 'i'
+                            else:
+                                mode = 'i'
+
+                        font = self.fonts.get_font(font_family, mode)
+
                     self.text += ' 0 -{} Td{} ({})Tj {} 0 Td'.format(
                         round(full_line_height, 3),
                         self.list_state.compare(self.last_state),
-                        self.list_text, first_indent
+                        (font.encode_text(self.list_text) if
+                            font else self.list_text),
+                        first_indent
                     )
                 else:
                     self.text += ' {} -{} Td'.format(
