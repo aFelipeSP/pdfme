@@ -1,12 +1,15 @@
 from pdfme import build_pdf
+from pdfme.fonts import PDFFont
 
-
+PDFFont.register('Open Sans', 'n', './fonts/OpenSans-Regular.ttf')
+PDFFont.register('Open Sans', 'b', './fonts/OpenSans-Bold.ttf')
 
 document = {}
 
 document['style'] = {
     'margin_bottom': 15,
-    'text_align': 'j'
+    'text_align': 'j',
+    'f': 'Open Sans'
 }
 
 document['formats'] = {

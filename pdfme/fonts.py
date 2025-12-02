@@ -35,14 +35,41 @@ STANDARD_FONTS = {
     'ZapfDingbats': {'n': {'base_font': 'ZapfDingbats', 'widths': zapfdingbats}}
 }
 
-to_unicode = (
-    '/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n'
-    '/CIDSystemInfo\n<</Registry (Adobe)\n/Ordering (UCS)\n/Supplement 0\n'
-    '>> def\n/CMapName /Adobe-Identity-UCS def\n/CMapType 2 def\n'
-    '1 begincodespacerange\n<0000> <FFFF>\nendcodespacerange\n1 beginbfrange\n'
-    '<0000> <FFFF> <0000>\nendbfrange\nendcmap\n'
-    'CMapName currentdict /CMap defineresource pop\nend\nend'
-).encode('latin')
+def get_tounicode_cmap(cmap_mappings):
+    '''Method returns cmap for Unicode mappings.'''
+    def cmap_hex_format(hex_str: str) -> str:
+        if hex_str.startswith('0x'):
+            hex_str = hex_str[2:]
+        if len(hex_str) != 4:
+            hex_str = hex_str.zfill(4)
+        return f'<{hex_str.upper()}>'
+
+    mappings = []
+    for (cid, gid) in cmap_mappings.items():
+        mappings.append(
+            f'{cmap_hex_format(hex(int(gid)))} {cmap_hex_format(hex(int(cid)))}')
+
+    return f'''/CIDInit /ProcSet findresource begin
+        12 dict begin
+        begincmap
+        /CIDSystemInfo
+         <</Registry (Adobe)
+           /Ordering (UCS)
+           /Supplement 0
+        >> def
+        /CMapName /Adobe-Identity-UCS def
+        /CMapType 2 def
+        1 begincodespacerange
+        <0000> <FFFF>
+        endcodespacerange
+        {len(mappings)} beginbfchar
+        {'\n'.join(mappings)}
+        endbfchar
+        endcmap
+        CMapName currentdict /CMap defineresource pop
+        end
+        end'''.encode('latin')
+
 
 class PDFFont(abc.ABC):
     """Abstract class that represents a PDF font.
@@ -51,6 +78,10 @@ class PDFFont(abc.ABC):
         ref (str): the name of the font, included in every paragraph and page
             that uses this font.
     """
+
+    registered_fonts = {}
+    loaded_fonts = []
+
     def __init__(self, ref: str) -> None:
         self._ref = ref
 
@@ -62,6 +93,19 @@ class PDFFont(abc.ABC):
             str: the name of this font
         """
         return self._ref
+
+    @staticmethod
+    def register(font_family: str, mode: str, path: str):
+        '''
+        This is useful for registering user defined custom fonts. The registered 
+        font would be loaded when required in the document.
+
+        Args:
+            font_family: The font family name.
+            mode: The font mode. One of n, b, i, bi.
+            path: Font file path.
+        '''
+        PDFFont.registered_fonts[(font_family, mode)] = path
 
     @abc.abstractproperty
     def base_font(self) -> str:
@@ -107,6 +151,7 @@ class PDFFont(abc.ABC):
             base (PDFBase): the base instance to add this font.
         """
         pass
+
 class PDFStandardFont(PDFFont):
     """This class represents a standard PDF font.
 
@@ -147,8 +192,6 @@ class PDFStandardFont(PDFFont):
 
 class PDFTrueTypeFont(PDFFont):
     """This class represents a TrueType PDF font.
-
-    This class is not working yet.
 
     Args:
         ref (str): the name of this font.
@@ -209,13 +252,17 @@ class PDFTrueTypeFont(PDFFont):
                 'pip install fonttools'
             )
         self.filename = str(Path(filename))
-        self.font = ttLib.TTFont(self.filename)
+        font = self.font = ttLib.TTFont(self.filename)
 
-        # TODO: cmap needs to be modifiedfor this to work
-        self.cmap = self.font['cmap'].getcmap(3,1).cmap
+        cmap = self.cmap = self.font['cmap'].getBestCmap()
+
         self.glyph_set = self.font.getGlyphSet()
 
         self.font_descriptor = self._get_font_descriptor()
+        cids2gids = self.cids2gids = {}
+        for c in cmap:
+            cids2gids[c] = font.getGlyphID(cmap[c])
+
 
     def _get_font_descriptor(self) -> dict:
         """Method to extract information needed by the PDF document from the
@@ -230,7 +277,7 @@ class PDFTrueTypeFont(PDFFont):
         self._base_font = self.font['name'].names[6].toStr()
         head = self.font["head"]
         self.units_per_em = head.unitsPerEm
-        scale = 1000 / self.units_per_em
+        scale = self.scale = 1000 / self.units_per_em
         xMax = head.xMax * scale
         xMin = head.xMin * scale
         yMin = head.yMin * scale
@@ -287,7 +334,6 @@ class PDFTrueTypeFont(PDFFont):
             'StemV': stemV
         }
 
-
     def add_font(self, base: 'PDFBase') -> 'PDFObject':
         """See :meth:`pdfme.fonts.PDFFont.add_font`"""
         font_file = BytesIO()
@@ -312,12 +358,13 @@ class PDFTrueTypeFont(PDFFont):
                 'Registry': 'Adobe',
                 'Ordering': 'Identity',
                 'Supplement': 0
-            }
+            },
+            'W': self.compute_char_widths()
         })
 
         to_unicode_stream = base.add({
             'Filter': b'/FlateDecode',
-            '__stream__': to_unicode
+            '__stream__': get_tounicode_cmap(self.cids2gids)
         })
 
         return base.add({
@@ -328,6 +375,37 @@ class PDFTrueTypeFont(PDFFont):
             'DescendantFonts': [font_cid.id],
             'ToUnicode': to_unicode_stream.id
         })
+
+    def encode_text(self, text: str):
+        return ''.join(as_hex(chr(self.cids2gids[ord(c)])) for c in text)
+
+    def compute_char_widths(self):
+        glyph_set = self.glyph_set
+        cmap = self.cmap
+        font = self.font
+        scale = self.scale
+
+        widths = []
+        current_width_group = []
+
+        prev_glyph_id = None
+        for c in cmap:
+            current_glyph_id = font.getGlyphID(cmap[c])
+            if not widths:
+                widths.append(current_glyph_id)
+                prev_glyph_id = current_glyph_id
+            elif (current_glyph_id - prev_glyph_id) != 1:
+                widths.append(current_width_group)
+                widths.append(current_glyph_id)
+                current_width_group = []
+                prev_glyph_id = current_glyph_id
+
+            current_width_group.append(glyph_set[cmap[c]].width * scale)
+
+        widths.append(current_width_group)
+
+        return widths
+
 class PDFFonts:
     """Class that represents the set of all the fonts added to a PDF document.
     """
@@ -353,7 +431,20 @@ class PDFFonts:
         Returns:
             PDFFont: an object that represents a PDF font.
         """
-        family = self.fonts[font_family]
+        if font_family in STANDARD_FONTS:
+            family = self.fonts[font_family]
+        else:
+            font_type = (font_family, mode)
+            if font_type in PDFFont.registered_fonts:
+                if font_type not in PDFFont.loaded_fonts:
+                    self.load_font(PDFFont.registered_fonts[font_type],
+                        font_family,
+                        mode)
+                    PDFFont.loaded_fonts.append(font_type)
+                family = self.fonts[font_family]
+            else:
+                raise ValueError('Unknown font family requested!')
+            
         return family['n'] if mode not in family else family[mode]
 
     def load_font(self, path: str, font_family: str, mode: str='n') -> None:
@@ -373,4 +464,4 @@ class PDFFonts:
 
 from .parser import PDFObject
 from .base import PDFBase
-from .utils import subs
+from .utils import as_hex, subs

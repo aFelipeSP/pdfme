@@ -29,7 +29,10 @@ class PDFState:
             f_mode += 'i'
         if f_mode == '':
             f_mode = 'n'
-        self.font_mode = 'n' if not f_mode in fonts.fonts[style['f']] else f_mode
+        if style['f'] in STANDARD_FONTS:
+            self.font_mode = 'n' if not f_mode in fonts.fonts[style['f']] else f_mode
+        else:
+            self.font_mode = f_mode
 
         self.font = fonts.get_font(self.font_family, self.font_mode)
 
@@ -840,10 +843,32 @@ class PDFTextBase:
                     first_indent += self.list_indent
                     if self.list_state.size > full_line_height:
                         full_line_height = self.list_state.size
+
+                    style = self.list_style
+                    font_family = style.get('f', None)
+                    if not font_family:
+                        current_line_style = self.current_line.line_parts[0].style
+                        font_family = current_line_style.get('f', None)
+
+                    font = None
+                    if font_family not in STANDARD_FONTS:
+                        mode = 'n'
+                        if 'b' in style:
+                            mode = 'b'
+                        if 'i' in style:
+                            if mode == 'b':
+                                mode += 'i'
+                            else:
+                                mode = 'i'
+
+                        font = self.fonts.get_font(font_family, mode)
+
                     self.text += ' 0 -{} Td{} ({})Tj {} 0 Td'.format(
                         round(full_line_height, 3),
                         self.list_state.compare(self.last_state),
-                        self.list_text, first_indent
+                        (font.encode_text(self.list_text) if
+                            font else self.list_text),
+                        first_indent
                     )
                 else:
                     self.text += ' {} -{} Td'.format(
@@ -904,7 +929,7 @@ class PDFTextBase:
 
         text = ''.join(word for word in words)
         if text != '':
-            text = text.replace('\\',r'\\').replace('(','\(').replace(')','\)')
+            text = text.replace('\\',r'\\').replace('(','\\(').replace(')','\\)')
         return text
 
     def output_text(self, part: PDFTextLinePart, text, factor: Number=1) -> str:
@@ -933,8 +958,23 @@ class PDFTextBase:
             self.last_factor = tw
 
         if text != '':
-            # TODO: How can we add unicode to PDF string
-            stream += ' ({})Tj'.format(text)
+            style = part.style
+            if ((font_family := style.get('f', None)) and 
+                font_family not in STANDARD_FONTS):
+            
+                mode = 'n'
+                if 'b' in style:
+                    mode = 'b'
+                if 'i' in style:
+                    if mode == 'b':
+                        mode += 'i'
+                    else:
+                        mode = 'i'
+
+                font = part.fonts.get_font(font_family, mode)
+                stream += ' ({})Tj'.format(font.encode_text(text))
+            else:
+                stream += ' ({})Tj'.format(text)
         return stream
 
     def output_graphics(
@@ -1313,6 +1353,6 @@ class PDFText(PDFTextBase):
             self.content.remove(text_part)
 
 from .color import PDFColor
-from .fonts import PDFFonts
+from .fonts import PDFFonts, STANDARD_FONTS
 from .pdf import PDF
 from .utils import get_paragraph_stream, parse_style_str, process_style, copy
