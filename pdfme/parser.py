@@ -11,6 +11,7 @@ class PDFObject:
     Args:
         id_ (PDFRef): The id of this object inside the PDF document.
         obj (dict, optional): the dict representing the PDF object.
+        
     """
     def __init__(self, id_: 'PDFRef', obj: dict=None) -> None:
         if not isinstance(id_, PDFRef):
