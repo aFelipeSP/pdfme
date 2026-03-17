@@ -22,6 +22,7 @@ project = 'pdfme'
 copyright = '2021, Andres Felipe Sierra Parra'
 author = 'Andres Felipe Sierra Parra'
 
+version = '2.0'
 
 # -- General configuration ---------------------------------------------------
 
