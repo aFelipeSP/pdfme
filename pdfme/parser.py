@@ -58,8 +58,8 @@ def parse_obj(obj: ObjectType) -> bytes:
     corresponding PDF object.
 
     Args:
-        obj (PDFObject, PDFRef, dict, list, tuple, set, bytes, bool, int, float,
-            str): the object to be converted to a PDF object.
+        obj (PDFObject, PDFRef, dict, list, tuple, set, bytes, bool, int, float, str): 
+            the object to be converted to a PDF object.
 
     Returns:
         bytes: bytes representing the corresponding PDF object.
