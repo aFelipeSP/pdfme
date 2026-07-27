@@ -40,6 +40,7 @@ class PDFRef(int):
     """
     def __new__(cls, id_):
         return int.__new__(cls, id_)
+
     @property
     def ref(self) -> bytes:
         """
@@ -145,6 +146,7 @@ def parse_stream(obj: dict) -> bytes:
     stream_ = obj.pop('__stream__')
     skip_filter = obj.pop('__skip_filter__', False)
 
+    # if b'/Metadata' in obj.values(): print('\n Processing metadata:', obj)
     if isinstance(stream_, bytes):
         stream_str = stream_
     elif isinstance(stream_, dict):

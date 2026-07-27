@@ -1,4 +1,5 @@
 from collections import defaultdict
+from math import inf
 from typing import Any, Iterable, Union
 
 from pdfme.utils import parse_range_string
@@ -196,6 +197,28 @@ class PDFDocument:
         self._traverse_document_footnotes(self.sections)
 
         self.footnotes_margin = 10
+
+        self._process_metadata(document.get('metadata', {}))
+
+    def _process_metadata(self, info: dict):
+        '''
+        Method to process the metadata information.
+
+        Args:
+            info (dict): The dictionary used to describe the document's 
+                metadata.
+        '''
+        if not info:
+            return
+
+        self.pdf.add_metadata(
+            title=info.get('title', ''),
+            author=info.get('author', []),
+            subject=info.get('subject', []),
+            description=info.get('description', ''),
+            language=info.get('language', 'en'),
+            create_tool=info.get('create_tool', '')
+        )
 
     def _traverse_document_footnotes(
         self, element: Union[list, tuple, dict]

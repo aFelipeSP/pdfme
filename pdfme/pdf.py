@@ -2,6 +2,7 @@ import json
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Iterable, Union
+from datetime import datetime, timezone
 
 Number = Union[int, float]
 PageType = Union[Number, str, Iterable[Number]]
@@ -180,6 +181,44 @@ class PDF:
         self.images = {}
         self._add_or_get_font('Helvetica', 'n')
 
+    def add_metadata(self, 
+            title: str, author: list, description: str, subject: list, 
+            language: str, create_tool: str, **kwargs
+        ):
+        '''
+        Add metadata to a document.
+
+        Args:
+            title (str): Title of the document.
+            author (list): The document authors.
+            description (str): Document description.
+            subject (list): The document subjects. These are keywords representing
+                the document.
+            language (str): Document language
+            create_tool (str): The application creating the document.
+        '''
+        m = PDFMetadata()
+        if title:       m.add_title(title)
+        if author:      m.add_creator(author)
+        if description: m.add_description(description)
+        if language:    m.add_language(language)
+        if subject:     m.add_subject(subject)
+        if create_tool: m.add_create_tool(create_tool)
+
+        m.add_create_date(datetime.now(timezone.utc).isoformat())
+        m.add_producer('Pdfme v0.5.0')
+
+        read_only = kwargs.get('read_only', False)
+
+        metadata = {
+            'Type': b'/Metadata',
+            'Subtype': b'/XML',
+            '__stream__': m.xmp_packet(True if not read_only else False),
+            '__skip_filter__': True
+        }
+
+        self.base.metadata = metadata
+    
     @property
     def page(self) -> 'PDFPage':
         """
@@ -1083,3 +1122,4 @@ from .utils import (
     create_graphics, get_page_size, get_paragraph_stream, parse_margin,
     parse_style_str, process_style, to_roman, copy
 )
+from .metadata import PDFMetadata
