@@ -61,6 +61,7 @@ class PDFBase:
         else:
             self.trailer = trailer
         self.count = 1
+        self.metadata = None
 
     def add(
         self, py_obj: Union[
@@ -114,6 +115,19 @@ class PDFBase:
     def _trailer_id(self) -> bytes:
         return b'<' + str(uuid4()).replace('-', '').encode('latin') + b'>'
 
+    def process_metadata(self):
+        if self.metadata:
+            m_obj = self.add(self.metadata)
+            # print('document catalog:', [obj.value for obj in self.content])
+            print(self.trailer['Root'])
+            self.content[self.trailer['Root'] - 1].value.update(
+                { 'Metadata': m_obj.id }
+            )
+            # print(locals())
+            return True
+
+        return False
+
     def output(self, buffer: Any) -> None:
         """Create the PDF file.
 
@@ -123,6 +137,8 @@ class PDFBase:
         header = subs('%PDF-{}\n%%\x129\x129\x129\n', self.version)
         count = len(header)
         buffer.write(header)
+
+        self.process_metadata()
 
         xref = '\nxref\n0 {}\n0000000000 65535 f \n'.format(self.count)
 
@@ -146,6 +162,7 @@ class PDFBase:
             (xref + 'trailer\n').encode('latin') + trailer +
             footer.encode('latin')
         )
+        print(trailer)
 
 from .parser import PDFObject, PDFRef, parse_obj
 from .utils import subs
